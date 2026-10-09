@@ -20,8 +20,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(true)
 
   useEffect(() => {
-    const unsub = pb.authStore.onChange((token, model) => {
-      setUser((model as unknown as User) || null)
+    const unsub = pb.authStore.onChange((_token, model) => {
+      const u = (model as unknown as User) || null
+      if (u && u.ativo === false) {
+        pb.authStore.clear()
+        setUser(null)
+      } else {
+        setUser(u)
+      }
     })
 
     // Se tiver token salvo, tenta validar e refrescar
@@ -29,7 +35,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       pb.collection('users')
         .authRefresh<User>()
         .then((res) => {
-          setUser(res.record)
+          if (res.record && res.record.ativo === false) {
+            pb.authStore.clear()
+            setUser(null)
+          } else {
+            setUser(res.record)
+          }
         })
         .catch(() => {
           pb.authStore.clear()
@@ -49,6 +60,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, pass: string) => {
     const res = await pb.collection('users').authWithPassword<User>(email, pass)
+    if (res.record && res.record.ativo === false) {
+      pb.authStore.clear()
+      setUser(null)
+      const err = new Error('Sua conta está desativada. Fale com o RH.')
+      err.name = 'AccountDisabledError'
+      throw err
+    }
     setUser(res.record)
   }
 

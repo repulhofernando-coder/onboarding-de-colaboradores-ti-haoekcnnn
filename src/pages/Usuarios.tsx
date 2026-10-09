@@ -1,0 +1,619 @@
+import React, { useState, useEffect, useMemo } from 'react'
+import { userService } from '@/services/onboarding'
+import { useAuth } from '@/contexts/AuthContext'
+import type { User, UserSetor } from '@/types/onboarding'
+import {
+  Users,
+  Search,
+  Plus,
+  Mail,
+  Calendar,
+  ShieldCheck,
+  UserCheck,
+  Pencil,
+  Trash2,
+  CheckCircle2,
+  XCircle,
+  KeyRound,
+  AlertTriangle,
+  Lock,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { toast } from 'sonner'
+
+export default function Usuarios() {
+  const { user: currentUser } = useAuth()
+  const [users, setUsers] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [filterSetor, setFilterSetor] = useState<'todos' | UserSetor>('todos')
+
+  // Modais de Criação e Edição
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  // Campos do formulário
+  const [formNome, setFormNome] = useState('')
+  const [formEmail, setFormEmail] = useState('')
+  const [formSetor, setFormSetor] = useState<UserSetor>('Gestão')
+  const [formSenha, setFormSenha] = useState('')
+  const [formAtivo, setFormAtivo] = useState(true)
+
+  // Modal de Exclusão
+  const [deleteUser, setDeleteUser] = useState<User | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  const fetchUsers = async () => {
+    try {
+      const list = await userService.getAllUsers()
+      setUsers(list)
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao carregar lista de usuários.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchUsers()
+  }, [])
+
+  const handleOpenCreate = () => {
+    setEditingUser(null)
+    setFormNome('')
+    setFormEmail('')
+    setFormSetor('Gestão')
+    setFormSenha('')
+    setFormAtivo(true)
+    setModalOpen(true)
+  }
+
+  const handleOpenEdit = (u: User) => {
+    setEditingUser(u)
+    setFormNome(u.name || '')
+    setFormEmail(u.email || '')
+    setFormSetor(u.setor || 'Gestão')
+    setFormSenha('')
+    setFormAtivo(u.ativo !== false)
+    setModalOpen(true)
+  }
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!formNome.trim()) {
+      toast.error('Preencha o nome do usuário.')
+      return
+    }
+
+    if (!formEmail.trim()) {
+      toast.error('Preencha o e-mail corporativo.')
+      return
+    }
+
+    // Validação de senha
+    if (!editingUser) {
+      if (!formSenha || formSenha.length < 8) {
+        toast.error('A senha inicial deve ter no mínimo 8 caracteres.')
+        return
+      }
+    } else if (formSenha && formSenha.length < 8) {
+      toast.error('A nova senha deve ter no mínimo 8 caracteres.')
+      return
+    }
+
+    setSaving(true)
+    try {
+      if (!editingUser) {
+        // Criar usuário
+        await userService.create({
+          name: formNome,
+          email: formEmail,
+          password: formSenha,
+          setor: formSetor,
+          ativo: formAtivo,
+        })
+        toast.success(`Usuário ${formNome} criado com sucesso!`)
+      } else {
+        // Editar usuário
+        await userService.update(editingUser.id, {
+          name: formNome,
+          email: formEmail,
+          setor: formSetor,
+          ativo: formAtivo,
+          password: formSenha || undefined,
+        })
+        toast.success(`Usuário ${formNome} atualizado com sucesso!`)
+      }
+
+      setModalOpen(false)
+      await fetchUsers()
+    } catch (err: unknown) {
+      console.error(err)
+      const errorObj = err as {
+        data?: { data?: Record<string, { message?: string }> }
+        message?: string
+      }
+      if (
+        errorObj?.data?.data?.email ||
+        (errorObj?.message && errorObj.message.toLowerCase().includes('email'))
+      ) {
+        toast.error('Este e-mail já está cadastrado no sistema.')
+      } else {
+        toast.error(
+          editingUser
+            ? 'Não foi possível atualizar o usuário. Verifique os dados.'
+            : 'Não foi possível criar o usuário. Verifique os dados.',
+        )
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleToggleAtivo = async (u: User, novoStatus: boolean) => {
+    if (currentUser && currentUser.id === u.id && !novoStatus) {
+      toast.error('Você não pode desativar seu próprio usuário.')
+      return
+    }
+
+    try {
+      await userService.toggleAtivo(u.id, novoStatus)
+      setUsers((prev) =>
+        prev.map((item) => (item.id === u.id ? { ...item, ativo: novoStatus } : item)),
+      )
+      toast.success(novoStatus ? `Usuário ${u.name} ativado!` : `Usuário ${u.name} desativado!`)
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao alterar status do usuário.')
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleteUser) return
+
+    if (currentUser && currentUser.id === deleteUser.id) {
+      toast.error('Você não pode excluir o seu próprio usuário logado.')
+      setDeleteUser(null)
+      return
+    }
+
+    setDeleting(true)
+    try {
+      await userService.delete(deleteUser.id)
+      setUsers((prev) => prev.filter((item) => item.id !== deleteUser.id))
+      toast.success(`Usuário ${deleteUser.name} excluído com sucesso!`)
+      setDeleteUser(null)
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao excluir usuário. Verifique se ele não possui registros vinculados.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const usuariosFiltrados = useMemo(() => {
+    return users.filter((u) => {
+      const q = search.toLowerCase()
+      const matchText =
+        (u.name && u.name.toLowerCase().includes(q)) ||
+        (u.email && u.email.toLowerCase().includes(q))
+      const matchSetor = filterSetor === 'todos' || u.setor === filterSetor
+
+      return matchText && matchSetor
+    })
+  }, [users, search, filterSetor])
+
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '-'
+    const d = new Date(dateStr)
+    return d.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    })
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Top Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-gray-200/90 shadow-sm">
+        <div>
+          <h2 className="text-xl font-bold text-[#1A2233]">Gestão de Usuários</h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Cadastre e gerencie os gestores de área e responsáveis de RH com acesso à plataforma
+          </p>
+        </div>
+
+        <Button
+          onClick={handleOpenCreate}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm shrink-0"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          <span>Novo Usuário</span>
+        </Button>
+      </div>
+
+      {/* Filtros e Busca */}
+      <div className="bg-white p-4 rounded-xl border border-gray-200/90 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+        <div className="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Input
+              placeholder="Buscar por nome ou e-mail..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-10 border-gray-300 text-sm focus-visible:ring-blue-500"
+            />
+          </div>
+
+          <div className="w-full sm:w-48">
+            <Select
+              value={filterSetor}
+              onValueChange={(val) => setFilterSetor(val as 'todos' | UserSetor)}
+            >
+              <SelectTrigger className="h-10 border-gray-300 text-sm">
+                <SelectValue placeholder="Filtrar por setor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os setores</SelectItem>
+                <SelectItem value="Gestão">Gestão</SelectItem>
+                <SelectItem value="RH">RH</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <span className="text-xs text-gray-500 font-medium shrink-0 text-right sm:text-left">
+          Total: {usuariosFiltrados.length}{' '}
+          {usuariosFiltrados.length === 1 ? 'usuário' : 'usuários'}
+        </span>
+      </div>
+
+      {/* Grid de Cards de Usuários */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {usuariosFiltrados.length === 0 ? (
+          <div className="col-span-full py-16 text-center text-gray-400 text-sm bg-white rounded-xl border border-gray-200">
+            {loading ? 'Carregando usuários...' : 'Nenhum usuário encontrado.'}
+          </div>
+        ) : (
+          usuariosFiltrados.map((u) => {
+            const isSelf = currentUser?.id === u.id
+            const isAtivo = u.ativo !== false
+
+            return (
+              <div
+                key={u.id}
+                className={`bg-white rounded-xl border shadow-sm p-5 flex flex-col justify-between transition-shadow hover:shadow-md ${
+                  isAtivo ? 'border-gray-200/90' : 'border-gray-200 bg-gray-50/50 opacity-80'
+                }`}
+              >
+                <div className="space-y-3">
+                  {/* Top do card: nome, avatar e setor */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
+                        {(u.name || u.email || 'U')
+                          .split(' ')
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .map((n) => n[0].toUpperCase())
+                          .join('')}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <h3 className="font-bold text-base text-gray-900 leading-snug">
+                            {u.name || 'Sem nome'}
+                          </h3>
+                          {isSelf && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] py-0 px-1.5 text-blue-700 bg-blue-50 border-blue-200"
+                            >
+                              Você
+                            </Badge>
+                          )}
+                        </div>
+                        <span className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                          <Mail className="w-3 h-3 text-gray-400 shrink-0" />
+                          <span className="truncate max-w-[180px]">{u.email}</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    <span
+                      className={`text-[11px] px-2.5 py-0.5 rounded-full border font-semibold shrink-0 inline-flex items-center gap-1 ${
+                        u.setor === 'RH'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-blue-50 text-blue-700 border-blue-200'
+                      }`}
+                    >
+                      {u.setor === 'RH' ? (
+                        <UserCheck className="w-3 h-3" />
+                      ) : (
+                        <ShieldCheck className="w-3 h-3" />
+                      )}
+                      <span>{u.setor || 'Gestão'}</span>
+                    </span>
+                  </div>
+
+                  {/* Informações complementares */}
+                  <div className="pt-2 border-t border-gray-100 text-xs text-gray-600 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">Status da Conta:</span>
+                      <span
+                        className={`inline-flex items-center gap-1 font-semibold text-[11px] px-2 py-0.5 rounded-full ${
+                          isAtivo
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-red-50 text-red-700 border border-red-200'
+                        }`}
+                      >
+                        {isAtivo ? (
+                          <>
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Ativo</span>
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="w-3 h-3" />
+                            <span>Desativado</span>
+                          </>
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">E-mail verificado:</span>
+                      <span className="font-medium text-gray-700">
+                        {u.verified ? 'Sim' : 'Pendente'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">Cadastrado em:</span>
+                      <span className="font-medium text-gray-700">{formatDate(u.created)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ações do Card */}
+                <div className="pt-4 mt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id={`ativo-${u.id}`}
+                      checked={isAtivo}
+                      disabled={isSelf}
+                      onCheckedChange={(checked) => handleToggleAtivo(u, checked)}
+                      aria-label="Ativar ou desativar usuário"
+                    />
+                    <Label
+                      htmlFor={`ativo-${u.id}`}
+                      className="text-xs text-gray-600 cursor-pointer font-medium"
+                    >
+                      {isAtivo ? 'Ativo' : 'Inativo'}
+                    </Label>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleOpenEdit(u)}
+                      className="h-8 px-2.5 text-xs text-gray-700 border-gray-300 hover:bg-gray-50"
+                      title="Editar usuário"
+                    >
+                      <Pencil className="w-3.5 h-3.5 mr-1 text-gray-500" />
+                      <span>Editar</span>
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={isSelf}
+                      onClick={() => setDeleteUser(u)}
+                      className="h-8 px-2 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-40"
+                      title={
+                        isSelf ? 'Você não pode excluir seu próprio usuário' : 'Excluir usuário'
+                      }
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      {/* Modal Criar / Editar Usuário */}
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <form onSubmit={handleSave}>
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold text-[#1A2233]">
+                {editingUser ? 'Editar Usuário' : 'Novo Usuário do Sistema'}
+              </DialogTitle>
+              <DialogDescription className="text-xs text-gray-500">
+                {editingUser
+                  ? 'Atualize os dados cadastrais, setor ou altere a senha deste usuário.'
+                  : 'Cadastre um novo gestor de TI ou integrante do RH para acessar o sistema.'}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              <div>
+                <Label className="text-xs font-semibold text-gray-700">Nome Completo *</Label>
+                <Input
+                  required
+                  placeholder="Ex.: Carlos Mendes"
+                  value={formNome}
+                  onChange={(e) => setFormNome(e.target.value)}
+                  className="mt-1.5 h-10 text-sm border-gray-300"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs font-semibold text-gray-700">E-mail Corporativo *</Label>
+                <Input
+                  type="email"
+                  required
+                  placeholder="Ex.: carlos.mendes@empresa.com.br"
+                  value={formEmail}
+                  onChange={(e) => setFormEmail(e.target.value)}
+                  className="mt-1.5 h-10 text-sm border-gray-300"
+                />
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Usuários criados internamente já nascem com o e-mail verificado.
+                </p>
+              </div>
+
+              <div>
+                <Label className="text-xs font-semibold text-gray-700">
+                  Setor / Perfil de Acesso *
+                </Label>
+                <Select value={formSetor} onValueChange={(val) => setFormSetor(val as UserSetor)}>
+                  <SelectTrigger className="mt-1.5 h-10 text-sm border-gray-300">
+                    <SelectValue placeholder="Selecione o setor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Gestão">
+                      Gestão (Gestor de TI responsável por onboardings)
+                    </SelectItem>
+                    <SelectItem value="RH">
+                      RH (Recursos Humanos e Apresentação Institucional)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-gray-700">
+                    {editingUser ? 'Redefinir Senha (opcional)' : 'Senha de Acesso *'}
+                  </Label>
+                  {editingUser && (
+                    <span className="text-[11px] text-gray-400">
+                      Deixe em branco para manter a atual
+                    </span>
+                  )}
+                </div>
+                <div className="relative mt-1.5">
+                  <Lock className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Input
+                    type="password"
+                    required={!editingUser}
+                    placeholder={
+                      editingUser ? 'Nova senha (mínimo 8 dígitos)' : 'Mínimo 8 caracteres'
+                    }
+                    value={formSenha}
+                    onChange={(e) => setFormSenha(e.target.value)}
+                    className="pl-9 h-10 text-sm border-gray-300"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-lg border border-gray-200 bg-gray-50/50">
+                <div className="space-y-0.5">
+                  <Label className="text-xs font-semibold text-gray-800">Usuário Ativo</Label>
+                  <p className="text-[11px] text-gray-500">
+                    Usuários inativos não conseguem autenticar nem são listados como gestores.
+                  </p>
+                </div>
+                <Switch
+                  checked={formAtivo}
+                  disabled={editingUser ? currentUser?.id === editingUser.id : false}
+                  onCheckedChange={setFormAtivo}
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={saving}
+                onClick={() => setModalOpen(false)}
+                className="h-10 text-xs"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={saving}
+                className="h-10 text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+              >
+                {saving ? 'Salvando...' : editingUser ? 'Salvar Alterações' : 'Criar Usuário'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmação de Exclusão */}
+      <AlertDialog open={!!deleteUser} onOpenChange={(open) => !open && setDeleteUser(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-2">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <AlertDialogTitle className="text-lg font-bold text-gray-900">
+              Excluir Usuário?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-gray-600 leading-relaxed">
+              Tem certeza que deseja remover o usuário{' '}
+              <strong className="text-gray-900">{deleteUser?.name}</strong> ({deleteUser?.email})?
+              Esta ação não pode ser desfeita e removerá o acesso do usuário ao sistema.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting} className="text-xs h-9">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                handleDelete()
+              }}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700 text-white text-xs h-9 font-semibold"
+            >
+              {deleting ? 'Excluindo...' : 'Sim, Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}

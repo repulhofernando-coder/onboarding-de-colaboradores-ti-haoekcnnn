@@ -18,6 +18,7 @@ import DetalheOnboarding from './pages/DetalheOnboarding'
 import ModelosTarefas from './pages/ModelosTarefas'
 import Avaliacoes from './pages/Avaliacoes'
 import Colaboradores from './pages/Colaboradores'
+import Usuarios from './pages/Usuarios'
 import NotFound from './pages/NotFound'
 
 const App = () => (
@@ -48,6 +49,7 @@ const App = () => (
             <Route path="/colaboradores/:id" element={<DetalheOnboarding />} />
             <Route path="/modelos" element={<ModelosTarefas />} />
             <Route path="/avaliacoes" element={<Avaliacoes />} />
+            <Route path="/usuarios" element={<Usuarios />} />
           </Route>
 
           {/* 404 */}

@@ -20,6 +20,8 @@ export interface User extends RecordModel {
   name: string
   setor?: UserSetor
   avatar?: string
+  ativo?: boolean
+  verified?: boolean
 }
 
 export interface ModeloTarefa extends RecordModel {

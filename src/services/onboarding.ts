@@ -5,6 +5,7 @@ import type {
   ModeloTarefa,
   Avaliacao,
   User,
+  UserSetor,
   Setor,
   AvaliacaoDecisao,
 } from '@/types/onboarding'
@@ -12,7 +13,7 @@ import type {
 export const userService = {
   async getGestores(): Promise<User[]> {
     const records = await pb.collection('users').getFullList<User>({
-      filter: "setor = 'Gestão'",
+      filter: "setor = 'Gestão' && ativo != false",
       sort: 'name',
     })
     return records
@@ -22,6 +23,55 @@ export const userService = {
     return pb.collection('users').getFullList<User>({
       sort: 'name',
     })
+  },
+
+  async create(data: {
+    name: string
+    email: string
+    password: string
+    setor: UserSetor
+    ativo?: boolean
+  }): Promise<User> {
+    return pb.collection('users').create<User>({
+      name: data.name.trim(),
+      email: data.email.trim(),
+      password: data.password,
+      passwordConfirm: data.password,
+      setor: data.setor,
+      ativo: data.ativo ?? true,
+      emailVisibility: true,
+      verified: true,
+    })
+  },
+
+  async update(
+    id: string,
+    data: {
+      name?: string
+      email?: string
+      setor?: UserSetor
+      password?: string
+      ativo?: boolean
+    },
+  ): Promise<User> {
+    const payload: Record<string, unknown> = {}
+    if (data.name !== undefined) payload.name = data.name.trim()
+    if (data.email !== undefined) payload.email = data.email.trim()
+    if (data.setor !== undefined) payload.setor = data.setor
+    if (data.ativo !== undefined) payload.ativo = data.ativo
+    if (data.password && data.password.trim() !== '') {
+      payload.password = data.password
+      payload.passwordConfirm = data.password
+    }
+    return pb.collection('users').update<User>(id, payload)
+  },
+
+  async toggleAtivo(id: string, ativo: boolean): Promise<User> {
+    return pb.collection('users').update<User>(id, { ativo })
+  },
+
+  async delete(id: string): Promise<boolean> {
+    return pb.collection('users').delete(id)
   },
 }
 

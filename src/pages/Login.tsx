@@ -34,8 +34,16 @@ export default function Login() {
       navigate(from, { replace: true })
     } catch (err: unknown) {
       console.error(err)
-      setErrorMsg('E-mail ou senha incorretos. Verifique suas credenciais.')
-      toast.error('Não foi possível entrar. Verifique os dados informados.')
+      if (
+        (err instanceof Error && err.name === 'AccountDisabledError') ||
+        (err instanceof Error && err.message.includes('desativada'))
+      ) {
+        setErrorMsg('Sua conta está desativada. Fale com o RH.')
+        toast.error('Sua conta está desativada. Fale com o RH.')
+      } else {
+        setErrorMsg('E-mail ou senha incorretos. Verifique suas credenciais.')
+        toast.error('Não foi possível entrar. Verifique os dados informados.')
+      }
     } finally {
       setLoading(false)
     }

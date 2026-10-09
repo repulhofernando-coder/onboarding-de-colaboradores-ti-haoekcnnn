@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ShieldCheck,
   UserCheck,
+  Shield,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -37,6 +38,7 @@ const navItems: NavItem[] = [
   { label: 'Colaboradores', path: '/colaboradores', icon: Users },
   { label: 'Modelos de Tarefas', path: '/modelos', icon: Layers },
   { label: 'Avaliações', path: '/avaliacoes', icon: ClipboardCheck },
+  { label: 'Usuários', path: '/usuarios', icon: Shield },
 ]
 
 export default function Layout() {
@@ -60,6 +62,7 @@ export default function Layout() {
     if (p.startsWith('/colaboradores')) return 'Colaboradores em Onboarding'
     if (p.startsWith('/modelos')) return 'Modelos de Tarefas por Setor'
     if (p.startsWith('/avaliacoes')) return 'Avaliações Finais dos Gestores'
+    if (p.startsWith('/usuarios')) return 'Gestão de Usuários'
     return 'Onboarding TI'
   }
 
