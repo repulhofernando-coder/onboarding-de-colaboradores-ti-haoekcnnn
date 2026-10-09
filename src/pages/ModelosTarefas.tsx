@@ -9,7 +9,7 @@ import type {
   SetorModel,
   SetorVisualInfo,
 } from '@/types/onboarding'
-import { SETORES_INFO, getSetorVisual } from '@/types/onboarding'
+import { SETORES_INFO, getSetorVisual, setorToString } from '@/types/onboarding'
 import {
   Video,
   FileText,
@@ -919,10 +919,10 @@ export default function ModelosTarefas() {
               </div>
             ) : (
               materiaisFiltrados.map((item) => {
-                const setorOrigemNome = item.setor_origem
-                  ? setoresList.find(
-                      (s) => s.chave === item.setor_origem || s.nome === item.setor_origem,
-                    )?.nome || getSetorVisual(item.setor_origem).nome
+                const setorOrigemStr = setorToString(item.setor_origem)
+                const setorOrigemNome = setorOrigemStr
+                  ? setoresList.find((s) => s.chave === setorOrigemStr || s.nome === setorOrigemStr)
+                      ?.nome || getSetorVisual(setorOrigemStr).nome
                   : null
 
                 return (

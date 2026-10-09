@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { onboardingService, setorService } from '@/services/onboarding'
 import { useRealtime } from '@/hooks/use-realtime'
 import type { Onboarding, SetorModel } from '@/types/onboarding'
-import { SETORES_INFO, getSetorVisual } from '@/types/onboarding'
+import { SETORES_INFO, getSetorVisual, setorToString } from '@/types/onboarding'
 import {
   Clock,
   CheckCircle2,
@@ -91,18 +91,23 @@ export default function Index() {
     }
 
     for (const o of onboardings) {
+      const setorStr = setorToString(o.setor)
+      const setorRefStr = typeof o.setor_ref === 'string' ? o.setor_ref : ''
+      const setorLower = setorStr.toLowerCase()
+
       const matching = setoresAtivosGrafico.find(
         (s) =>
-          s.id === o.setor_ref ||
-          s.id === o.setor ||
-          s.chave === o.setor ||
-          s.nome.toLowerCase() === (o.setor || '').toLowerCase(),
+          (setorRefStr && s.id === setorRefStr) ||
+          (setorStr && s.id === setorStr) ||
+          (setorStr && s.chave === setorStr) ||
+          (setorLower && (s.chave || '').toLowerCase() === setorLower) ||
+          (setorLower && (s.nome || '').toLowerCase() === setorLower),
       )
       if (matching) {
         const key = matching.chave || matching.nome
         counts[key] = (counts[key] || 0) + 1
-      } else if (o.setor) {
-        counts[o.setor] = (counts[o.setor] || 0) + 1
+      } else if (setorStr) {
+        counts[setorStr] = (counts[setorStr] || 0) + 1
       }
     }
     return counts

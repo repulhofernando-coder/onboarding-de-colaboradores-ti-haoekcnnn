@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { onboardingService } from '@/services/onboarding'
 import { useRealtime } from '@/hooks/use-realtime'
 import type { Onboarding } from '@/types/onboarding'
-import { SETORES_INFO, STATUS_INFO, getSetorVisual } from '@/types/onboarding'
+import { SETORES_INFO, STATUS_INFO, getSetorVisual, setorToString } from '@/types/onboarding'
 import {
   Users,
   Search,
@@ -74,7 +74,7 @@ export default function Colaboradores() {
         nome: maisRecente.colaborador_nome,
         email: maisRecente.colaborador_email,
         cargo: maisRecente.cargo,
-        setor: maisRecente.setor,
+        setor: setorToString(maisRecente.setor),
         onboardingMaisRecente: maisRecente,
         totalOnboardings: lista.length,
       })

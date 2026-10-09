@@ -243,8 +243,41 @@ export const SETORES_INFO: Record<
  * Retorna dados visuais para qualquer setor (cadastrado ou fallback).
  * Garante nunca quebrar a interface mesmo se uma nova área for cadastrada.
  */
+/**
+ * Converte de forma tolerante qualquer valor de setor legado ou novo (string, array, JSON serializado)
+ * em uma string simples, segura para comparações, lookup e toLowerCase().
+ */
+export function setorToString(valor: unknown): string {
+  if (valor === null || valor === undefined) return ''
+  if (Array.isArray(valor)) {
+    return valor.length > 0 ? setorToString(valor[0]) : ''
+  }
+  if (typeof valor === 'string') {
+    const trimmed = valor.trim()
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed)
+        if (Array.isArray(parsed)) {
+          return parsed.length > 0 ? setorToString(parsed[0]) : ''
+        }
+      } catch {
+        // Se não for JSON válido, continua usando a string
+      }
+    }
+    return trimmed
+  }
+  if (typeof valor === 'object') {
+    return ''
+  }
+  return String(valor).trim()
+}
+
+/**
+ * Retorna dados visuais para qualquer setor (cadastrado ou fallback).
+ * Garante nunca quebrar a interface mesmo se uma nova área for cadastrada.
+ */
 export function getSetorVisual(
-  identificador?: string | null,
+  identificador?: unknown,
   setorModel?: SetorModel | null,
 ): SetorVisualInfo {
   if (setorModel) {
@@ -261,7 +294,9 @@ export function getSetorVisual(
     }
   }
 
-  if (!identificador) {
+  const strId = setorToString(identificador)
+
+  if (!strId) {
     return {
       nome: 'Geral',
       cor: '#6B7280',
@@ -271,10 +306,10 @@ export function getSetorVisual(
     }
   }
 
-  const staticInfo = SETORES_INFO[identificador] || SETORES_INFO[identificador.toLowerCase()]
+  const staticInfo = SETORES_INFO[strId] || SETORES_INFO[strId.toLowerCase()]
   if (staticInfo) {
     return {
-      chave: identificador,
+      chave: strId,
       nome: staticInfo.nome,
       cor: staticInfo.cor,
       corBg: staticInfo.corBg,
@@ -285,8 +320,8 @@ export function getSetorVisual(
 
   // Fallback dinâmico para nome ou ID não mapeado
   return {
-    chave: identificador,
-    nome: identificador,
+    chave: strId,
+    nome: strId,
     cor: '#4F46E5',
     corBg: 'bg-indigo-50 text-indigo-700 border-indigo-200',
     corBorder: 'border-indigo-500',

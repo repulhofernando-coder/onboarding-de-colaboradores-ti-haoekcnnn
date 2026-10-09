@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { onboardingService, avaliacaoService, setorService } from '@/services/onboarding'
 import { useRealtime } from '@/hooks/use-realtime'
 import type { Onboarding, AvaliacaoDecisao, SetorModel } from '@/types/onboarding'
-import { SETORES_INFO, getSetorVisual } from '@/types/onboarding'
+import { SETORES_INFO, getSetorVisual, setorToString } from '@/types/onboarding'
 import {
   ClipboardCheck,
   Flame,
@@ -72,9 +72,10 @@ export default function Avaliacoes() {
     return onboardings
       .filter((o) => {
         const matchStatus = o.status === 'avaliacao_pendente'
+        const setorStr = setorToString(o.setor)
         const matchSetor =
           filtroSetor === 'todos' ||
-          o.setor === filtroSetor ||
+          setorStr === filtroSetor ||
           o.setor_ref === filtroSetor ||
           (o.expand?.setor_ref &&
             (o.expand.setor_ref.id === filtroSetor ||

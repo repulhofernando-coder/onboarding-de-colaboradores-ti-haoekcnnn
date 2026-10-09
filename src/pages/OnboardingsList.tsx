@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { onboardingService, setorService } from '@/services/onboarding'
 import { useRealtime } from '@/hooks/use-realtime'
 import type { Onboarding, SetorModel, OnboardingStatus } from '@/types/onboarding'
-import { SETORES_INFO, STATUS_INFO, getSetorVisual } from '@/types/onboarding'
+import { SETORES_INFO, STATUS_INFO, getSetorVisual, setorToString } from '@/types/onboarding'
 import {
   Search,
   Plus,
@@ -111,9 +111,10 @@ export default function OnboardingsList() {
 
       const matchesStatus = selectedStatus === 'todos' || item.status === selectedStatus
 
+      const itemSetorStr = setorToString(item.setor)
       const matchesSetor =
         selectedSetor === 'todos' ||
-        item.setor === selectedSetor ||
+        itemSetorStr === selectedSetor ||
         item.setor_ref === selectedSetor ||
         (item.expand?.setor_ref &&
           (item.expand.setor_ref.id === selectedSetor ||
