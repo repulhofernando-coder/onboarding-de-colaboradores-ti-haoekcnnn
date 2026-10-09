@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-09T18:17:58.905Z",
+  "generatedAt": "2026-10-09T18:28:48.323Z",
   "collections": [
     {
       "name": "users",
@@ -146,6 +146,13 @@
           "type": "text",
           "required": false,
           "system": false
+        },
+        {
+          "name": "material",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "materiais"
         }
       ],
       "indexes": ["CREATE INDEX idx_modelo_tarefas_setor ON modelo_tarefas (setor)"]
@@ -382,6 +389,13 @@
           "type": "number",
           "required": false,
           "system": false
+        },
+        {
+          "name": "material",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "materiais"
         }
       ],
       "indexes": ["CREATE INDEX idx_tarefas_onboarding_id ON tarefas_onboarding (onboarding_id)"]
@@ -442,6 +456,76 @@
       "indexes": [
         "CREATE UNIQUE INDEX idx_avaliacoes_onboarding_id ON avaliacoes (onboarding_id)",
         "CREATE INDEX idx_avaliacoes_avaliador_id ON avaliacoes (avaliador_id)"
+      ]
+    },
+    {
+      "name": "materiais",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "titulo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["video", "manual"]
+        },
+        {
+          "name": "descricao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "arquivo",
+          "type": "file",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "setor_origem",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["windows", "linux_rede", "datacenter", "campo", "infraestrutura"]
+        },
+        {
+          "name": "criado_por",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_materiais_tipo ON materiais (tipo)",
+        "CREATE INDEX idx_materiais_titulo ON materiais (titulo)"
       ]
     }
   ]

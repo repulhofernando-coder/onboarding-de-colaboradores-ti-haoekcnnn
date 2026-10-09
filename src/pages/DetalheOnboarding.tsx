@@ -1,9 +1,20 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
-import { onboardingService, tarefaService, avaliacaoService } from '@/services/onboarding'
+import {
+  onboardingService,
+  tarefaService,
+  avaliacaoService,
+  materialService,
+} from '@/services/onboarding'
 import { useRealtime } from '@/hooks/use-realtime'
-import type { Onboarding, TarefaOnboarding, Avaliacao, TarefaTipo } from '@/types/onboarding'
+import type {
+  Onboarding,
+  TarefaOnboarding,
+  MaterialBiblioteca,
+  Avaliacao,
+  TarefaTipo,
+} from '@/types/onboarding'
 import { SETORES_INFO, STATUS_INFO } from '@/types/onboarding'
 import {
   ArrowLeft,
@@ -62,6 +73,9 @@ export default function DetalheOnboarding() {
   const [novoItemTitulo, setNovoItemTitulo] = useState('')
   const [novoItemDescricao, setNovoItemDescricao] = useState('')
   const [novoItemTipo, setNovoItemTipo] = useState<TarefaTipo>('manual')
+  const [novoItemOrigem, setNovoItemOrigem] = useState<'upload' | 'biblioteca'>('upload')
+  const [novoItemMaterialId, setNovoItemMaterialId] = useState<string>('')
+  const [materiaisBiblioteca, setMateriaisBiblioteca] = useState<MaterialBiblioteca[]>([])
   const [novoItemFile, setNovoItemFile] = useState<File | null>(null)
   const [enviandoItem, setEnviandoItem] = useState(false)
   const [itemError, setItemError] = useState('')
@@ -296,10 +310,31 @@ export default function DetalheOnboarding() {
     setNovoItemTitulo('')
     setNovoItemDescricao('')
     setNovoItemTipo('manual')
+    setNovoItemOrigem('upload')
+    setNovoItemMaterialId('')
     setNovoItemFile(null)
     setItemError('')
     if (fileInputRef.current) fileInputRef.current.value = ''
+
+    // Carregar materiais disponíveis da biblioteca
+    materialService.listAll().then(setMateriaisBiblioteca).catch(console.error)
     setModalItemOpen(true)
+  }
+
+  // Preenche dados ao selecionar um material da biblioteca
+  const handleSelectMaterialModal = (matId: string) => {
+    setNovoItemMaterialId(matId)
+    if (!matId) return
+    const mat = materiaisBiblioteca.find((m) => m.id === matId)
+    if (mat) {
+      if (!novoItemTitulo.trim()) {
+        setNovoItemTitulo(mat.titulo)
+      }
+      if (!novoItemDescricao.trim() && mat.descricao) {
+        setNovoItemDescricao(mat.descricao)
+      }
+      setNovoItemTipo(mat.tipo)
+    }
   }
 
   // Upload de novo item para o onboarding (Etapa 1 ou Etapa 2)
@@ -322,7 +357,7 @@ export default function DetalheOnboarding() {
       return
     }
 
-    if (novoItemFile && novoItemFile.size > 52428800) {
+    if (novoItemOrigem === 'upload' && novoItemFile && novoItemFile.size > 52428800) {
       setItemError('O arquivo não pode exceder 50 MB.')
       return
     }
@@ -338,12 +373,20 @@ export default function DetalheOnboarding() {
       formData.append('concluida', 'false')
       formData.append('criado_automaticamente', 'false')
 
-      if (novoItemFile) {
-        formData.append('conteudo_url', novoItemFile)
+      if (novoItemOrigem === 'biblioteca') {
+        formData.append('material', novoItemMaterialId || '')
+      } else {
+        formData.append('material', '')
+        if (novoItemFile) {
+          formData.append('conteudo_url', novoItemFile)
+        }
       }
 
       const nova = await tarefaService.create(formData)
-      setTarefas((prev) => [...prev, nova])
+      // Atualizar lista completa para garantir expand de material
+      const atualizadas = await tarefaService.listByOnboarding(onboarding.id)
+      setTarefas(atualizadas)
+
       toast.success(
         modalItemEtapa === 1
           ? 'Item adicionado à Apresentação da Empresa (Etapa 1)!'
@@ -353,6 +396,7 @@ export default function DetalheOnboarding() {
       setNovoItemTitulo('')
       setNovoItemDescricao('')
       setNovoItemFile(null)
+      setNovoItemMaterialId('')
       if (fileInputRef.current) fileInputRef.current.value = ''
     } catch (err) {
       console.error(err)
@@ -645,7 +689,11 @@ export default function DetalheOnboarding() {
                             </span>
                             {item.conteudo_url ? (
                               <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">
-                                Arquivo anexado
+                                Arquivo próprio
+                              </span>
+                            ) : item.material ? (
+                              <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-medium">
+                                Material biblioteca
                               </span>
                             ) : (
                               <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-medium">
@@ -893,11 +941,15 @@ export default function DetalheOnboarding() {
                                 >
                                   {tarefa.titulo}
                                 </span>
-                                {tarefa.conteudo_url && (
+                                {tarefa.conteudo_url ? (
                                   <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">
-                                    Arquivo anexado
+                                    Arquivo próprio
                                   </span>
-                                )}
+                                ) : tarefa.material ? (
+                                  <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-medium">
+                                    Material biblioteca
+                                  </span>
+                                ) : null}
                               </div>
                               {tarefa.concluida_em && (
                                 <span className="text-[11px] text-emerald-600 block mt-0.5 font-medium">
@@ -1382,7 +1434,9 @@ export default function DetalheOnboarding() {
                   variant={novoItemTipo === 'manual' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setNovoItemTipo('manual')}
-                  className={novoItemTipo === 'manual' ? 'bg-blue-600' : ''}
+                  className={
+                    novoItemTipo === 'manual' ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''
+                  }
                 >
                   <FileText className="w-3.5 h-3.5 mr-1" />
                   Manual / Documento
@@ -1392,7 +1446,9 @@ export default function DetalheOnboarding() {
                   variant={novoItemTipo === 'video' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setNovoItemTipo('video')}
-                  className={novoItemTipo === 'video' ? 'bg-blue-600' : ''}
+                  className={
+                    novoItemTipo === 'video' ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''
+                  }
                 >
                   <Video className="w-3.5 h-3.5 mr-1" />
                   Vídeo (MP4)
@@ -1400,21 +1456,73 @@ export default function DetalheOnboarding() {
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Arquivo (.mp4, .pdf, .pptx, .docx — máx. 50MB)
+            {/* SELEÇÃO: Escolher material da biblioteca OU upload direto */}
+            <div className="p-3 rounded-lg border border-gray-200 bg-gray-50/70 space-y-2.5">
+              <label className="block text-xs font-semibold text-gray-700">
+                Origem do Material
               </label>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".mp4,.pdf,.pptx,.docx,.doc,.ppt"
-                onChange={(e) => {
-                  const file = e.target.files?.[0] || null
-                  setNovoItemFile(file)
-                }}
-                className="block w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                disabled={enviandoItem}
-              />
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={novoItemOrigem === 'upload' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setNovoItemOrigem('upload')}
+                  className={`text-xs h-8 ${novoItemOrigem === 'upload' ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}`}
+                >
+                  <Upload className="w-3 h-3 mr-1" />
+                  Upload Direto
+                </Button>
+                <Button
+                  type="button"
+                  variant={novoItemOrigem === 'biblioteca' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setNovoItemOrigem('biblioteca')}
+                  className={`text-xs h-8 ${novoItemOrigem === 'biblioteca' ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : ''}`}
+                >
+                  <FileText className="w-3 h-3 mr-1" />
+                  Da Biblioteca
+                </Button>
+              </div>
+
+              {novoItemOrigem === 'biblioteca' ? (
+                <div className="pt-1 space-y-1">
+                  <label className="block text-[11px] font-semibold text-gray-600">
+                    Selecione o material da biblioteca:
+                  </label>
+                  <select
+                    value={novoItemMaterialId}
+                    onChange={(e) => handleSelectMaterialModal(e.target.value)}
+                    className="w-full text-xs border border-gray-300 rounded-md p-2 bg-white"
+                    disabled={enviandoItem}
+                  >
+                    <option value="">-- Escolher material da biblioteca --</option>
+                    {materiaisBiblioteca
+                      .filter((m) => m.tipo === novoItemTipo)
+                      .map((mat) => (
+                        <option key={mat.id} value={mat.id}>
+                          {mat.titulo} {mat.setor_origem ? `[${mat.setor_origem}]` : '[Geral]'}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="pt-1 space-y-1">
+                  <label className="block text-[11px] font-semibold text-gray-600">
+                    Arquivo (.mp4, .pdf, .pptx, .docx — máx. 50MB):
+                  </label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".mp4,.pdf,.pptx,.docx,.doc,.ppt"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null
+                      setNovoItemFile(file)
+                    }}
+                    className="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    disabled={enviandoItem}
+                  />
+                </div>
+              )}
             </div>
 
             <DialogFooter className="pt-2">

@@ -3,6 +3,7 @@ import type {
   Onboarding,
   TarefaOnboarding,
   ModeloTarefa,
+  MaterialBiblioteca,
   Avaliacao,
   User,
   UserRole,
@@ -89,11 +90,60 @@ export const userService = {
   },
 }
 
+export const materialService = {
+  async listAll(filter?: string): Promise<MaterialBiblioteca[]> {
+    return pb.collection('materiais').getFullList<MaterialBiblioteca>({
+      filter,
+      sort: '-created',
+      expand: 'criado_por',
+    })
+  },
+
+  async getById(id: string): Promise<MaterialBiblioteca> {
+    return pb.collection('materiais').getOne<MaterialBiblioteca>(id, {
+      expand: 'criado_por',
+    })
+  },
+
+  async create(data: FormData | Partial<MaterialBiblioteca>): Promise<MaterialBiblioteca> {
+    return pb.collection('materiais').create<MaterialBiblioteca>(data, {
+      expand: 'criado_por',
+    })
+  },
+
+  async update(
+    id: string,
+    data: FormData | Partial<MaterialBiblioteca>,
+  ): Promise<MaterialBiblioteca> {
+    return pb.collection('materiais').update<MaterialBiblioteca>(id, data, {
+      expand: 'criado_por',
+    })
+  },
+
+  async delete(id: string): Promise<boolean> {
+    return pb.collection('materiais').delete(id)
+  },
+
+  getFileUrl(record: MaterialBiblioteca, filename?: string): string {
+    const fn = filename || record.arquivo
+    if (!fn) return ''
+    return pb.files.getURL(record, fn)
+  },
+
+  async countModelosUsingMaterial(materialId: string): Promise<number> {
+    const res = await pb.collection('modelo_tarefas').getList(1, 1, {
+      filter: `material = '${materialId}'`,
+    })
+    return res.totalItems
+  },
+}
+
 export const modeloService = {
   async listBySetor(setor: Setor): Promise<ModeloTarefa[]> {
     return pb.collection('modelo_tarefas').getFullList<ModeloTarefa>({
       filter: `setor = '${setor}' && (etapa = 2 || etapa = null || etapa = 0)`,
       sort: 'ordem,titulo',
+      expand: 'material',
     })
   },
 
@@ -101,21 +151,27 @@ export const modeloService = {
     return pb.collection('modelo_tarefas').getFullList<ModeloTarefa>({
       filter: 'etapa = 1',
       sort: 'ordem,titulo',
+      expand: 'material',
     })
   },
 
   async listAll(): Promise<ModeloTarefa[]> {
     return pb.collection('modelo_tarefas').getFullList<ModeloTarefa>({
       sort: 'etapa,setor,ordem,titulo',
+      expand: 'material',
     })
   },
 
   async create(data: FormData | Partial<ModeloTarefa>): Promise<ModeloTarefa> {
-    return pb.collection('modelo_tarefas').create<ModeloTarefa>(data)
+    return pb.collection('modelo_tarefas').create<ModeloTarefa>(data, {
+      expand: 'material',
+    })
   },
 
   async update(id: string, data: FormData | Partial<ModeloTarefa>): Promise<ModeloTarefa> {
-    return pb.collection('modelo_tarefas').update<ModeloTarefa>(id, data)
+    return pb.collection('modelo_tarefas').update<ModeloTarefa>(id, data, {
+      expand: 'material',
+    })
   },
 
   async delete(id: string): Promise<boolean> {
@@ -123,9 +179,15 @@ export const modeloService = {
   },
 
   getFileUrl(record: ModeloTarefa, filename?: string): string {
-    const fn = filename || record.conteudo_url
-    if (!fn) return ''
-    return pb.files.getURL(record, fn)
+    // Se tiver arquivo próprio, usa o arquivo próprio
+    if (filename || record.conteudo_url) {
+      return pb.files.getURL(record, filename || record.conteudo_url!)
+    }
+    // Caso contrário, se tiver material associado expandido com arquivo, usa a URL do material
+    if (record.expand?.material && record.expand.material.arquivo) {
+      return pb.files.getURL(record.expand.material, record.expand.material.arquivo)
+    }
+    return ''
   },
 }
 
@@ -175,6 +237,7 @@ export const onboardingService = {
     })
 
     // 1. Copia os templates da Etapa 1 (Apresentação RH) para tarefas_onboarding
+    // Se o template referenciar um material da biblioteca, associa a relation sem duplicar arquivo
     const templatesEtapa1 = await modeloService.listEtapa1()
     for (const tpl of templatesEtapa1) {
       await pb.collection('tarefas_onboarding').create({
@@ -186,6 +249,7 @@ export const onboardingService = {
         ordem: tpl.ordem || 1,
         conteudo_url: tpl.conteudo_url || null,
         conteudo_link: tpl.conteudo_link || '',
+        material: tpl.material || null,
         concluida: false,
         criado_automaticamente: true,
       })
@@ -203,6 +267,7 @@ export const onboardingService = {
         ordem: tpl.ordem || 1,
         conteudo_url: tpl.conteudo_url || null,
         conteudo_link: tpl.conteudo_link || '',
+        material: tpl.material || null,
         concluida: false,
         criado_automaticamente: true,
       })
@@ -247,6 +312,7 @@ export const tarefaService = {
     return pb.collection('tarefas_onboarding').getFullList<TarefaOnboarding>({
       filter: `onboarding_id = '${onboardingId}'`,
       sort: 'etapa,ordem,created',
+      expand: 'material',
     })
   },
 
@@ -254,6 +320,7 @@ export const tarefaService = {
     return pb.collection('tarefas_onboarding').getFullList<TarefaOnboarding>({
       filter: `onboarding_id = '${onboardingId}' && etapa = 1`,
       sort: 'ordem,created',
+      expand: 'material',
     })
   },
 
@@ -261,18 +328,27 @@ export const tarefaService = {
     return pb.collection('tarefas_onboarding').getFullList<TarefaOnboarding>({
       filter: `onboarding_id = '${onboardingId}' && (etapa = 2 || etapa = null || etapa = 0)`,
       sort: 'ordem,created',
+      expand: 'material',
     })
   },
 
   async toggleConcluida(id: string, concluida: boolean): Promise<TarefaOnboarding> {
-    return pb.collection('tarefas_onboarding').update<TarefaOnboarding>(id, {
-      concluida,
-      concluida_em: concluida ? new Date().toISOString() : null,
-    })
+    return pb.collection('tarefas_onboarding').update<TarefaOnboarding>(
+      id,
+      {
+        concluida,
+        concluida_em: concluida ? new Date().toISOString() : null,
+      },
+      {
+        expand: 'material',
+      },
+    )
   },
 
   async create(data: FormData | Partial<TarefaOnboarding>): Promise<TarefaOnboarding> {
-    return pb.collection('tarefas_onboarding').create<TarefaOnboarding>(data)
+    return pb.collection('tarefas_onboarding').create<TarefaOnboarding>(data, {
+      expand: 'material',
+    })
   },
 
   async delete(id: string): Promise<boolean> {
@@ -280,9 +356,15 @@ export const tarefaService = {
   },
 
   getFileUrl(record: TarefaOnboarding, filename?: string): string {
-    const fn = filename || record.conteudo_url
-    if (!fn) return ''
-    return pb.files.getURL(record, fn)
+    // Prioridade: arquivo próprio do item do onboarding
+    if (filename || record.conteudo_url) {
+      return pb.files.getURL(record, filename || record.conteudo_url!)
+    }
+    // Se não tiver arquivo próprio, verifica se há material vinculado
+    if (record.expand?.material && record.expand.material.arquivo) {
+      return pb.files.getURL(record.expand.material, record.expand.material.arquivo)
+    }
+    return ''
   },
 }
 

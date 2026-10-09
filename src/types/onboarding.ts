@@ -52,6 +52,18 @@ export const ROLES_INFO: Record<
   },
 }
 
+export interface MaterialBiblioteca extends RecordModel {
+  titulo: string
+  tipo: TarefaTipo
+  descricao?: string
+  arquivo?: string
+  setor_origem?: Setor | ''
+  criado_por?: string
+  expand?: {
+    criado_por?: User
+  }
+}
+
 export interface ModeloTarefa extends RecordModel {
   setor?: Setor
   titulo: string
@@ -62,6 +74,10 @@ export interface ModeloTarefa extends RecordModel {
   conteudo_link?: string
   obrigatorio?: boolean
   ordem?: number
+  material?: string
+  expand?: {
+    material?: MaterialBiblioteca
+  }
 }
 
 export interface Onboarding extends RecordModel {
@@ -96,6 +112,10 @@ export interface TarefaOnboarding extends RecordModel {
   concluida: boolean
   concluida_em?: string
   criado_automaticamente?: boolean
+  material?: string
+  expand?: {
+    material?: MaterialBiblioteca
+  }
 }
 
 export interface Avaliacao extends RecordModel {
