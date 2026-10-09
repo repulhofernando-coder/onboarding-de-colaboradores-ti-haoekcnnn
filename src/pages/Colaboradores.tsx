@@ -165,10 +165,10 @@ export default function Colaboradores() {
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <h3 className="font-bold text-base text-gray-900 group-hover:text-brand-600 transition-colors">
-                        {item.colaborador_nome}
+                        {item.nome}
                       </h3>
                       <span className="text-xs text-gray-500 block">
-                        {item.cargo || item.colaborador_email}
+                        {item.cargo || item.email}
                       </span>
                     </div>
 

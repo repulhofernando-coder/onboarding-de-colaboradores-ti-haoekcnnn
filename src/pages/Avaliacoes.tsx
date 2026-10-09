@@ -582,7 +582,7 @@ export default function Avaliacoes() {
                         : 'bg-brand-600'
                   }`}
                 >
-                  {saving ? 'Registrando...' : 'Confirmar Avaliação'}
+                  {submitting ? 'Registrando...' : 'Confirmar Avaliação'}
                 </Button>{' '}
               </DialogFooter>
             </div>

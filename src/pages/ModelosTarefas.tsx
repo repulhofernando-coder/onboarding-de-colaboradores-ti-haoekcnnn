@@ -1628,7 +1628,7 @@ export default function ModelosTarefas() {
                 disabled={submitting}
                 className="bg-brand-600 hover:bg-brand-700 text-white font-semibold"
               >
-                {salvando ? 'Salvando...' : 'Salvar Modelo'}
+                {submitting ? 'Salvando...' : 'Salvar Modelo'}
               </Button>{' '}
             </DialogFooter>
           </form>
@@ -1926,7 +1926,11 @@ export default function ModelosTarefas() {
                 disabled={setorSubmitting}
                 className="bg-brand-600 hover:bg-brand-700 text-white font-semibold"
               >
-                {salvandoSetor ? 'Salvando...' : setorEditando ? 'Salvar Alterações' : 'Criar Área'}
+                {setorSubmitting
+                  ? 'Salvando...'
+                  : setorEditing
+                    ? 'Salvar Alterações'
+                    : 'Criar Área'}
               </Button>{' '}
             </DialogFooter>
           </form>
