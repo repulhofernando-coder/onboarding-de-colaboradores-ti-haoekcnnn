@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-09T20:18:36.312Z",
+  "generatedAt": "2026-10-09T20:49:04.376Z",
   "collections": [
     {
       "name": "users",
@@ -82,7 +82,16 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["windows", "linux_rede", "datacenter", "campo", "infraestrutura"]
+          "selectValues": [
+            "windows",
+            "linux_rede",
+            "datacenter",
+            "campo",
+            "infraestrutura",
+            "rh",
+            "comercial",
+            "laboratorio"
+          ]
         },
         {
           "name": "titulo",
@@ -199,9 +208,18 @@
         {
           "name": "setor",
           "type": "select",
-          "required": true,
+          "required": false,
           "system": false,
-          "selectValues": ["windows", "linux_rede", "datacenter", "campo", "infraestrutura"]
+          "selectValues": [
+            "windows",
+            "linux_rede",
+            "datacenter",
+            "campo",
+            "infraestrutura",
+            "rh",
+            "comercial",
+            "laboratorio"
+          ]
         },
         {
           "name": "gestor_id",
@@ -542,7 +560,16 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["windows", "linux_rede", "datacenter", "campo", "infraestrutura"]
+          "selectValues": [
+            "windows",
+            "linux_rede",
+            "datacenter",
+            "campo",
+            "infraestrutura",
+            "rh",
+            "comercial",
+            "laboratorio"
+          ]
         },
         {
           "name": "criado_por",
