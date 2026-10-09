@@ -9,16 +9,16 @@ import {
   Plus,
   Trash2,
   Edit2,
-  Upload,
   AlertCircle,
   ExternalLink,
   Info,
-  Play,
   FileCheck2,
+  Building2,
+  ShieldCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
@@ -27,9 +27,15 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function ModelosTarefas() {
-  const [selectedSetor, setSelectedSetor] = useState<Setor>('windows')
+  const { user } = useAuth()
+  const isRH = user?.setor === 'RH'
+  const isGestao = user?.setor === 'Gestão'
+
+  // Aba selecionada: 'etapa1' ou um dos 5 setores (etapa 2)
+  const [selectedTab, setSelectedTab] = useState<'etapa1' | Setor>('etapa1')
   const [modelos, setModelos] = useState<ModeloTarefa[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -38,6 +44,7 @@ export default function ModelosTarefas() {
   const [modalTipo, setModalTipo] = useState<TarefaTipo>('video')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formTitulo, setFormTitulo] = useState('')
+  const [formDescricao, setFormDescricao] = useState('')
   const [formFile, setFormFile] = useState<File | null>(null)
   const [formLink, setFormLink] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -49,6 +56,7 @@ export default function ModelosTarefas() {
     titulo: string
     tipo: TarefaTipo
     url: string
+    descricao?: string
   } | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -56,8 +64,13 @@ export default function ModelosTarefas() {
   const fetchModelos = async () => {
     try {
       setLoading(true)
-      const list = await modeloService.listBySetor(selectedSetor)
-      setModelos(list)
+      if (selectedTab === 'etapa1') {
+        const list = await modeloService.listEtapa1()
+        setModelos(list)
+      } else {
+        const list = await modeloService.listBySetor(selectedTab)
+        setModelos(list)
+      }
     } catch (err) {
       console.error(err)
       toast.error('Erro ao carregar templates de tarefas.')
@@ -68,7 +81,7 @@ export default function ModelosTarefas() {
 
   useEffect(() => {
     fetchModelos()
-  }, [selectedSetor])
+  }, [selectedTab])
 
   const videos = useMemo(() => modelos.filter((m) => m.tipo === 'video'), [modelos])
   const manuais = useMemo(() => modelos.filter((m) => m.tipo === 'manual'), [modelos])
@@ -77,6 +90,7 @@ export default function ModelosTarefas() {
     setEditingId(null)
     setModalTipo(tipo)
     setFormTitulo('')
+    setFormDescricao('')
     setFormFile(null)
     setFormLink('')
     setFormError('')
@@ -88,6 +102,7 @@ export default function ModelosTarefas() {
     setEditingId(item.id)
     setModalTipo(item.tipo)
     setFormTitulo(item.titulo)
+    setFormDescricao(item.descricao || '')
     setFormFile(null)
     setFormLink(item.conteudo_link || '')
     setFormError('')
@@ -112,11 +127,19 @@ export default function ModelosTarefas() {
     try {
       setSubmitting(true)
       const formData = new FormData()
-      formData.append('setor', selectedSetor)
       formData.append('titulo', formTitulo.trim())
+      formData.append('descricao', formDescricao.trim())
       formData.append('tipo', modalTipo)
       formData.append('conteudo_link', formLink.trim())
       formData.append('obrigatorio', 'true')
+
+      if (selectedTab === 'etapa1') {
+        formData.append('etapa', '1')
+        formData.append('setor', '')
+      } else {
+        formData.append('etapa', '2')
+        formData.append('setor', selectedTab)
+      }
 
       if (formFile) {
         formData.append('conteudo_url', formFile)
@@ -126,8 +149,9 @@ export default function ModelosTarefas() {
         await modeloService.update(editingId, formData)
         toast.success('Modelo atualizado com sucesso!')
       } else {
+        formData.append('ordem', String(modelos.length + 1))
         await modeloService.create(formData)
-        toast.success(`${modalTipo === 'video' ? 'Vídeo' : 'Manual'} adicionado ao setor!`)
+        toast.success(`${modalTipo === 'video' ? 'Vídeo' : 'Manual'} adicionado ao template!`)
       }
 
       setModalOpen(false)
@@ -142,9 +166,7 @@ export default function ModelosTarefas() {
 
   const handleDelete = async (id: string, titulo: string) => {
     if (
-      !confirm(
-        `Tem certeza que deseja excluir "${titulo}"? (Afetará apenas futuros onboardings deste setor)`,
-      )
+      !confirm(`Tem certeza que deseja excluir "${titulo}"? (Afetará apenas futuros onboardings)`)
     ) {
       return
     }
@@ -164,12 +186,14 @@ export default function ModelosTarefas() {
     setPreviewItem({
       titulo: item.titulo,
       tipo: item.tipo,
+      descricao: item.descricao,
       url,
     })
     setPreviewOpen(true)
   }
 
-  const currentSetorInfo = SETORES_INFO[selectedSetor]
+  const isEtapa1 = selectedTab === 'etapa1'
+  const currentSetorInfo = !isEtapa1 ? SETORES_INFO[selectedTab as Setor] : null
 
   return (
     <div className="space-y-6">
@@ -177,11 +201,19 @@ export default function ModelosTarefas() {
       <div className="bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold text-[#1A2233]">Modelos de Tarefas por Setor</h2>
+            <div className="flex items-center gap-2 mb-1">
+              <h2 className="text-xl font-bold text-[#1A2233]">Modelos de Tarefas & Treinamento</h2>
+              {isRH ? (
+                <span className="text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3" /> Gestão pelo RH
+                </span>
+              ) : null}
+            </div>
             <p className="text-xs text-gray-500 mt-1 max-w-2xl leading-relaxed">
-              Configure os vídeos e manuais de treinamento pré-carregados para cada um dos 5 setores
-              de TI. O upload de novos arquivos ou alterações refletirá automaticamente em todos os
-              novos onboardings.
+              Configure os materiais institucionais da{' '}
+              <strong>Etapa 1 (Apresentação da Empresa)</strong> e os vídeos/manuais específicos de
+              cada setor para a <strong>Etapa 2 (Vivência Técnica)</strong>. Suba arquivos de vídeo
+              (.mp4) ou documentos (.pdf) de até 50 MB.
             </p>
           </div>
 
@@ -204,17 +236,37 @@ export default function ModelosTarefas() {
         </div>
       </div>
 
-      {/* Grid de Abas dos 5 Setores */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+      {/* Grid de Seleção de Abas: Etapa 1 (Geral RH) + 5 Setores de TI (Etapa 2) */}
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2.5">
+        {/* Aba Etapa 1 */}
+        <button
+          type="button"
+          onClick={() => setSelectedTab('etapa1')}
+          className={`p-3.5 rounded-xl border-2 text-left transition-all col-span-2 sm:col-span-1 ${
+            selectedTab === 'etapa1'
+              ? 'border-blue-600 bg-white shadow-sm scale-[1.01]'
+              : 'border-transparent bg-white/70 hover:bg-white text-gray-600 hover:border-gray-200'
+          }`}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <span className="w-3 h-3 rounded-full bg-blue-600 shrink-0" />
+            <span className="font-bold text-xs text-gray-900 truncate">Etapa 1 — Geral RH</span>
+          </div>
+          <span className="text-[11px] text-gray-400 block truncate">
+            Apresentação institucional & cultura
+          </span>
+        </button>
+
+        {/* Abas dos 5 Setores */}
         {(Object.keys(SETORES_INFO) as Setor[]).map((setorKey) => {
           const info = SETORES_INFO[setorKey]
-          const isSelected = selectedSetor === setorKey
+          const isSelected = selectedTab === setorKey
 
           return (
             <button
               key={setorKey}
               type="button"
-              onClick={() => setSelectedSetor(setorKey)}
+              onClick={() => setSelectedTab(setorKey)}
               className={`p-3.5 rounded-xl border-2 text-left transition-all ${
                 isSelected
                   ? 'border-blue-600 bg-white shadow-sm scale-[1.01]'
@@ -222,7 +274,10 @@ export default function ModelosTarefas() {
               }`}
             >
               <div className="flex items-center gap-2 mb-1">
-                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: info.cor }} />
+                <span
+                  className="w-3 h-3 rounded-full shrink-0"
+                  style={{ backgroundColor: info.cor }}
+                />
                 <span className="font-bold text-xs text-gray-900 truncate">{info.nome}</span>
               </div>
               <span className="text-[11px] text-gray-400 block truncate">{info.descricao}</span>
@@ -231,20 +286,43 @@ export default function ModelosTarefas() {
         })}
       </div>
 
-      {/* Seção do Setor Selecionado */}
+      {/* Seção de Conteúdo da Aba Selecionada */}
       <div className="bg-white rounded-xl border border-gray-200/90 shadow-sm p-6 space-y-7">
         <div className="flex items-center justify-between border-b border-gray-100 pb-4">
           <div className="flex items-center gap-2.5">
-            <span
-              className="w-3.5 h-3.5 rounded-full"
-              style={{ backgroundColor: currentSetorInfo.cor }}
-            />
-            <h3 className="text-base font-bold text-gray-900">
-              Templates do Setor: {currentSetorInfo.nome}
-            </h3>
+            {isEtapa1 ? (
+              <>
+                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs">
+                  E1
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">
+                    Etapa 1 — Apresentação da Empresa (Comum a Todos os Setores)
+                  </h3>
+                  <p className="text-xs text-gray-400">
+                    Itens que o RH apresenta e valida antes de liberar a Vivência Técnica
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <span
+                  className="w-3.5 h-3.5 rounded-full"
+                  style={{ backgroundColor: currentSetorInfo?.cor }}
+                />
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">
+                    Etapa 2 — Templates do Setor: {currentSetorInfo?.nome}
+                  </h3>
+                  <p className="text-xs text-gray-400">
+                    Treinamento técnico pré-carregado no início da vivência
+                  </p>
+                </div>
+              </>
+            )}
           </div>
           <span className="text-xs text-gray-400 font-medium">
-            {modelos.length} itens configurados
+            {modelos.length} {modelos.length === 1 ? 'item configurado' : 'itens configurados'}
           </span>
         </div>
 
@@ -267,9 +345,12 @@ export default function ModelosTarefas() {
           </div>
 
           <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden bg-gray-50/30">
-            {videos.length === 0 ? (
+            {loading ? (
+              <div className="p-6 text-center text-xs text-gray-400">Carregando modelos...</div>
+            ) : videos.length === 0 ? (
               <div className="p-6 text-center text-xs text-gray-400">
-                Nenhum vídeo cadastrado para o setor {currentSetorInfo.nome}.
+                Nenhum vídeo cadastrado{' '}
+                {isEtapa1 ? 'para a Etapa 1' : `para o setor ${currentSetorInfo?.nome}`}.
               </div>
             ) : (
               videos.map((item) => (
@@ -282,12 +363,25 @@ export default function ModelosTarefas() {
                       <Video className="w-4 h-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <span className="font-semibold text-xs text-gray-900 block truncate">
-                        {item.titulo}
-                      </span>
-                      <span className="text-[11px] text-gray-400">
-                        {item.conteudo_url ? 'Arquivo MP4 carregado' : 'Vídeo referencial'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-xs text-gray-900 block truncate">
+                          {item.titulo}
+                        </span>
+                        {item.conteudo_url ? (
+                          <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.2 rounded font-medium shrink-0">
+                            Vídeo anexado
+                          </span>
+                        ) : (
+                          <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.2 rounded font-medium shrink-0">
+                            Sem anexo
+                          </span>
+                        )}
+                      </div>
+                      {item.descricao && (
+                        <p className="text-[11px] text-gray-500 truncate mt-0.5">
+                          {item.descricao}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -344,9 +438,12 @@ export default function ModelosTarefas() {
           </div>
 
           <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden bg-gray-50/30">
-            {manuais.length === 0 ? (
+            {loading ? (
+              <div className="p-6 text-center text-xs text-gray-400">Carregando modelos...</div>
+            ) : manuais.length === 0 ? (
               <div className="p-6 text-center text-xs text-gray-400">
-                Nenhum manual cadastrado para o setor {currentSetorInfo.nome}.
+                Nenhum manual cadastrado{' '}
+                {isEtapa1 ? 'para a Etapa 1' : `para o setor ${currentSetorInfo?.nome}`}.
               </div>
             ) : (
               manuais.map((item) => (
@@ -359,12 +456,25 @@ export default function ModelosTarefas() {
                       <FileText className="w-4 h-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <span className="font-semibold text-xs text-gray-900 block truncate">
-                        {item.titulo}
-                      </span>
-                      <span className="text-[11px] text-gray-400">
-                        {item.conteudo_url ? 'Documento carregado' : 'Documento referencial'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-xs text-gray-900 block truncate">
+                          {item.titulo}
+                        </span>
+                        {item.conteudo_url ? (
+                          <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.2 rounded font-medium shrink-0">
+                            Documento anexado
+                          </span>
+                        ) : (
+                          <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.2 rounded font-medium shrink-0">
+                            Sem anexo
+                          </span>
+                        )}
+                      </div>
+                      {item.descricao && (
+                        <p className="text-[11px] text-gray-500 truncate mt-0.5">
+                          {item.descricao}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -409,8 +519,10 @@ export default function ModelosTarefas() {
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-gray-900">
               {editingId
-                ? 'Editar Item do Template'
-                : `Adicionar ${modalTipo === 'video' ? 'Vídeo' : 'Manual'}`}
+                ? 'Editar Item do Modelo'
+                : `Adicionar ${modalTipo === 'video' ? 'Vídeo' : 'Manual'} (${
+                    isEtapa1 ? 'Etapa 1 — RH' : currentSetorInfo?.nome
+                  })`}
             </DialogTitle>
           </DialogHeader>
 
@@ -425,7 +537,7 @@ export default function ModelosTarefas() {
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">Título *</label>
               <Input
-                placeholder="Ex.: Manual de Procedimentos Movidesk"
+                placeholder="Ex.: Manual de Procedimentos e Atendimento"
                 value={formTitulo}
                 onChange={(e) => setFormTitulo(e.target.value)}
                 className="h-10 text-xs"
@@ -435,7 +547,20 @@ export default function ModelosTarefas() {
 
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Upload de Arquivo (mp4, pdf, pptx, docx — máx. 50MB)
+                Descrição ou Instruções
+              </label>
+              <Textarea
+                placeholder="Ex.: Visão geral dos procedimentos a serem seguidos..."
+                value={formDescricao}
+                onChange={(e) => setFormDescricao(e.target.value)}
+                className="text-xs min-h-[70px]"
+                disabled={submitting}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Upload de Material (vídeo .mp4, documento .pdf, .pptx, .docx — máx. 50 MB)
               </label>
               <input
                 ref={fileInputRef}
@@ -445,6 +570,11 @@ export default function ModelosTarefas() {
                 className="block w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                 disabled={submitting}
               />
+              <p className="text-[11px] text-gray-400 mt-1">
+                {editingId
+                  ? 'Deixe em branco para manter o arquivo atual, ou escolha um novo para substituí-lo.'
+                  : 'Opcional. Se não enviar agora, pode carregar o arquivo posteriormente.'}
+              </p>
             </div>
 
             <DialogFooter className="pt-2">
@@ -463,7 +593,7 @@ export default function ModelosTarefas() {
                 disabled={submitting}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
               >
-                {submitting ? 'Salvando...' : 'Salvar no Template'}
+                {submitting ? 'Salvando...' : 'Salvar no Modelo'}
               </Button>
             </DialogFooter>
           </form>
@@ -484,7 +614,13 @@ export default function ModelosTarefas() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="py-4">
+          <div className="py-2 space-y-4">
+            {previewItem?.descricao && (
+              <p className="text-xs text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-200/80 leading-relaxed">
+                {previewItem.descricao}
+              </p>
+            )}
+
             {previewItem?.url ? (
               previewItem.tipo === 'video' ? (
                 <div className="rounded-lg overflow-hidden bg-black flex items-center justify-center">
@@ -500,7 +636,8 @@ export default function ModelosTarefas() {
                       Documento disponível para leitura
                     </h4>
                     <p className="text-xs text-gray-500 mt-1">
-                      Arquivo anexado ao template do setor {currentSetorInfo.nome}.
+                      Arquivo anexado ao modelo (
+                      {isEtapa1 ? 'Etapa 1 — RH' : currentSetorInfo?.nome}).
                     </p>
                   </div>
                   <Button asChild size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
@@ -519,10 +656,10 @@ export default function ModelosTarefas() {
             ) : (
               <div className="p-8 rounded-lg bg-gray-50 border border-gray-200 text-center space-y-3">
                 <Info className="w-10 h-10 text-gray-400 mx-auto" />
-                <h4 className="text-sm font-bold text-gray-700">Item Pré-carregado no Banco</h4>
+                <h4 className="text-sm font-bold text-gray-700">Nenhum Arquivo Anexado</h4>
                 <p className="text-xs text-gray-500 max-w-md mx-auto leading-relaxed">
-                  Este template foi criado pelo seed do sistema. Você pode carregar o arquivo
-                  oficial (.mp4 ou .pdf) editando este item a qualquer momento.
+                  Este item do modelo ainda não possui um arquivo enviado. Você pode editar este
+                  item a qualquer momento para subir o vídeo (.mp4) ou manual (.pdf).
                 </p>
               </div>
             )}

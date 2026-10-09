@@ -28,14 +28,21 @@ export const userService = {
 export const modeloService = {
   async listBySetor(setor: Setor): Promise<ModeloTarefa[]> {
     return pb.collection('modelo_tarefas').getFullList<ModeloTarefa>({
-      filter: `setor = '${setor}'`,
+      filter: `setor = '${setor}' && (etapa = 2 || etapa = null || etapa = 0)`,
+      sort: 'ordem,titulo',
+    })
+  },
+
+  async listEtapa1(): Promise<ModeloTarefa[]> {
+    return pb.collection('modelo_tarefas').getFullList<ModeloTarefa>({
+      filter: 'etapa = 1',
       sort: 'ordem,titulo',
     })
   },
 
   async listAll(): Promise<ModeloTarefa[]> {
     return pb.collection('modelo_tarefas').getFullList<ModeloTarefa>({
-      sort: 'setor,ordem,titulo',
+      sort: 'etapa,setor,ordem,titulo',
     })
   },
 
@@ -103,13 +110,33 @@ export const onboardingService = {
       etapa3_concluida: false,
     })
 
-    // Copia os templates do setor para tarefas_onboarding
+    // 1. Copia os templates da Etapa 1 (Apresentação RH) para tarefas_onboarding
+    const templatesEtapa1 = await modeloService.listEtapa1()
+    for (const tpl of templatesEtapa1) {
+      await pb.collection('tarefas_onboarding').create({
+        onboarding_id: record.id,
+        titulo: tpl.titulo,
+        tipo: tpl.tipo,
+        descricao: tpl.descricao || '',
+        etapa: 1,
+        ordem: tpl.ordem || 1,
+        conteudo_url: tpl.conteudo_url || null,
+        conteudo_link: tpl.conteudo_link || '',
+        concluida: false,
+        criado_automaticamente: true,
+      })
+    }
+
+    // 2. Copia os templates do setor para tarefas_onboarding (Etapa 2 - Vivência Técnica)
     const templates = await modeloService.listBySetor(data.setor)
     for (const tpl of templates) {
       await pb.collection('tarefas_onboarding').create({
         onboarding_id: record.id,
         titulo: tpl.titulo,
         tipo: tpl.tipo,
+        descricao: tpl.descricao || '',
+        etapa: 2,
+        ordem: tpl.ordem || 1,
         conteudo_url: tpl.conteudo_url || null,
         conteudo_link: tpl.conteudo_link || '',
         concluida: false,
@@ -155,7 +182,21 @@ export const tarefaService = {
   async listByOnboarding(onboardingId: string): Promise<TarefaOnboarding[]> {
     return pb.collection('tarefas_onboarding').getFullList<TarefaOnboarding>({
       filter: `onboarding_id = '${onboardingId}'`,
-      sort: 'created',
+      sort: 'etapa,ordem,created',
+    })
+  },
+
+  async listEtapa1ByOnboarding(onboardingId: string): Promise<TarefaOnboarding[]> {
+    return pb.collection('tarefas_onboarding').getFullList<TarefaOnboarding>({
+      filter: `onboarding_id = '${onboardingId}' && etapa = 1`,
+      sort: 'ordem,created',
+    })
+  },
+
+  async listEtapa2ByOnboarding(onboardingId: string): Promise<TarefaOnboarding[]> {
+    return pb.collection('tarefas_onboarding').getFullList<TarefaOnboarding>({
+      filter: `onboarding_id = '${onboardingId}' && (etapa = 2 || etapa = null || etapa = 0)`,
+      sort: 'ordem,created',
     })
   },
 

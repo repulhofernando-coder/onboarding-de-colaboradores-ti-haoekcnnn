@@ -23,9 +23,11 @@ export interface User extends RecordModel {
 }
 
 export interface ModeloTarefa extends RecordModel {
-  setor: Setor
+  setor?: Setor
   titulo: string
   tipo: TarefaTipo
+  descricao?: string
+  etapa?: number // 1: Apresentação da Empresa (RH), 2: Vivência Técnica (Setor)
   conteudo_url?: string
   conteudo_link?: string
   obrigatorio?: boolean
@@ -56,6 +58,9 @@ export interface TarefaOnboarding extends RecordModel {
   onboarding_id: string
   titulo: string
   tipo: TarefaTipo
+  descricao?: string
+  etapa?: number // 1: Apresentação RH, 2: Vivência Técnica
+  ordem?: number
   conteudo_url?: string
   conteudo_link?: string
   concluida: boolean

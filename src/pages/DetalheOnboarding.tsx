@@ -56,9 +56,11 @@ export default function DetalheOnboarding() {
   const [concluindoEtapa1, setConcluindoEtapa1] = useState(false)
   const [concluindoEtapa2, setConcluindoEtapa2] = useState(false)
 
-  // Modal de Adicionar Item (Etapa 2)
+  // Modal de Adicionar Item (Etapa 1 ou Etapa 2)
   const [modalItemOpen, setModalItemOpen] = useState(false)
+  const [modalItemEtapa, setModalItemEtapa] = useState<1 | 2>(2)
   const [novoItemTitulo, setNovoItemTitulo] = useState('')
+  const [novoItemDescricao, setNovoItemDescricao] = useState('')
   const [novoItemTipo, setNovoItemTipo] = useState<TarefaTipo>('manual')
   const [novoItemFile, setNovoItemFile] = useState<File | null>(null)
   const [enviandoItem, setEnviandoItem] = useState(false)
@@ -142,56 +144,35 @@ export default function DetalheOnboarding() {
   }, [onboarding])
 
   // Itens fixos da Etapa 1 (Apresentação RH)
-  const itensEtapa1 = useMemo(() => {
-    return [
-      {
-        id: 'e1-1',
-        titulo: 'Apresentação Institucional & Cultura da Empresa',
-        tipo: 'manual' as TarefaTipo,
-        descricao:
-          'Visão geral da empresa, valores, conduta ética e estrutura de comunicação interna.',
-      },
-      {
-        id: 'e1-2',
-        titulo: 'Segmentação dos 5 Setores e Fluxo de Atendimento',
-        tipo: 'video' as TarefaTipo,
-        descricao:
-          'Explicação dos setores (Windows, Linux, Datacenter, Campo, Infra), escalonamento e transição de chamados.',
-      },
-      {
-        id: 'e1-3',
-        titulo: 'Regras de Atendimento Remoto (TeamViewer) e Telefone',
-        tipo: 'manual' as TarefaTipo,
-        descricao:
-          'Protocolo de atendimento telefônico, identificação e boas práticas em acessos remotos aos clientes.',
-      },
-    ]
-  }, [])
+  // Separar tarefas da Etapa 1 e Etapa 2
+  const tarefasEtapa1 = useMemo(() => {
+    return tarefas.filter((t) => t.etapa === 1)
+  }, [tarefas])
 
-  // Estado local para checkboxes da Etapa 1 (guardado no localStorage por onboarding)
-  const [etapa1Checks, setEtapa1Checks] = useState<Record<string, boolean>>(() => {
-    if (!id) return {}
+  const tarefasEtapa2 = useMemo(() => {
+    return tarefas.filter((t) => t.etapa === 2 || !t.etapa)
+  }, [tarefas])
+
+  // Toggle de tarefa genérico (serve para Etapa 1 e Etapa 2)
+  const handleToggleTarefa = async (tarefa: TarefaOnboarding) => {
+    if (tarefa.etapa === 1 && onboarding?.etapa1_concluida) return
+    if ((tarefa.etapa === 2 || !tarefa.etapa) && onboarding?.etapa2_concluida) return
+
     try {
-      const saved = localStorage.getItem(`etapa1_checks_${id}`)
-      return saved ? JSON.parse(saved) : {}
-    } catch {
-      return {}
-    }
-  })
-
-  const toggleCheckEtapa1 = (itemId: string) => {
-    if (onboarding?.etapa1_concluida) return
-    const next = { ...etapa1Checks, [itemId]: !etapa1Checks[itemId] }
-    setEtapa1Checks(next)
-    if (id) {
-      localStorage.setItem(`etapa1_checks_${id}`, JSON.stringify(next))
+      const updated = await tarefaService.toggleConcluida(tarefa.id, !tarefa.concluida)
+      setTarefas((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao atualizar status do item.')
     }
   }
 
+  // Verificar se todas as tarefas da Etapa 1 estão marcadas
   const allEtapa1Checked = useMemo(() => {
     if (onboarding?.etapa1_concluida) return true
-    return itensEtapa1.every((item) => etapa1Checks[item.id])
-  }, [onboarding?.etapa1_concluida, itensEtapa1, etapa1Checks])
+    if (tarefasEtapa1.length === 0) return false
+    return tarefasEtapa1.every((t) => t.concluida)
+  }, [onboarding?.etapa1_concluida, tarefasEtapa1])
 
   // Concluir Etapa 1
   const handleConcluirEtapa1 = async () => {
@@ -209,35 +190,23 @@ export default function DetalheOnboarding() {
     }
   }
 
-  // Toggle Tarefa da Etapa 2
-  const handleToggleTarefaEtapa2 = async (tarefa: TarefaOnboarding) => {
-    if (onboarding?.etapa2_concluida) return
-    try {
-      const updated = await tarefaService.toggleConcluida(tarefa.id, !tarefa.concluida)
-      setTarefas((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
-    } catch (err) {
-      console.error(err)
-      toast.error('Erro ao atualizar status da tarefa.')
-    }
-  }
-
-  // Excluir Tarefa customizada da Etapa 2
+  // Excluir Tarefa customizada
   const handleDeleteTarefa = async (tarefaId: string) => {
-    if (!confirm('Deseja realmente remover esta tarefa do onboarding?')) return
+    if (!confirm('Deseja realmente remover este item do onboarding?')) return
     try {
       await tarefaService.delete(tarefaId)
       setTarefas((prev) => prev.filter((t) => t.id !== tarefaId))
-      toast.success('Tarefa removida com sucesso.')
+      toast.success('Item removido com sucesso.')
     } catch (err) {
       console.error(err)
-      toast.error('Erro ao remover tarefa.')
+      toast.error('Erro ao remover item.')
     }
   }
 
   const allEtapa2TarefasChecked = useMemo(() => {
-    if (tarefas.length === 0) return false
-    return tarefas.every((t) => t.concluida)
-  }, [tarefas])
+    if (tarefasEtapa2.length === 0) return false
+    return tarefasEtapa2.every((t) => t.concluida)
+  }, [tarefasEtapa2])
 
   // Concluir Etapa 2
   const handleConcluirEtapa2 = async () => {
@@ -257,14 +226,26 @@ export default function DetalheOnboarding() {
     }
   }
 
-  // Upload de novo item para Etapa 2
-  const handleAddItemEtapa2 = async (e: React.FormEvent) => {
+  // Abrir modal de novo item especificando a etapa (1 ou 2)
+  const openAddItemModal = (etapa: 1 | 2) => {
+    setModalItemEtapa(etapa)
+    setNovoItemTitulo('')
+    setNovoItemDescricao('')
+    setNovoItemTipo('manual')
+    setNovoItemFile(null)
+    setItemError('')
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    setModalItemOpen(true)
+  }
+
+  // Upload de novo item para o onboarding (Etapa 1 ou Etapa 2)
+  const handleAddItemOnboarding = async (e: React.FormEvent) => {
     e.preventDefault()
     setItemError('')
 
     if (!onboarding) return
     if (!novoItemTitulo.trim()) {
-      setItemError('O título da tarefa é obrigatório.')
+      setItemError('O título do item é obrigatório.')
       return
     }
 
@@ -278,7 +259,9 @@ export default function DetalheOnboarding() {
       const formData = new FormData()
       formData.append('onboarding_id', onboarding.id)
       formData.append('titulo', novoItemTitulo.trim())
+      formData.append('descricao', novoItemDescricao.trim())
       formData.append('tipo', novoItemTipo)
+      formData.append('etapa', String(modalItemEtapa))
       formData.append('concluida', 'false')
       formData.append('criado_automaticamente', 'false')
 
@@ -288,9 +271,14 @@ export default function DetalheOnboarding() {
 
       const nova = await tarefaService.create(formData)
       setTarefas((prev) => [...prev, nova])
-      toast.success('Item adicionado à Vivência Técnica!')
+      toast.success(
+        modalItemEtapa === 1
+          ? 'Item adicionado à Apresentação da Empresa (Etapa 1)!'
+          : 'Item adicionado à Vivência Técnica (Etapa 2)!',
+      )
       setModalItemOpen(false)
       setNovoItemTitulo('')
+      setNovoItemDescricao('')
       setNovoItemFile(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
     } catch (err) {
@@ -502,67 +490,125 @@ export default function DetalheOnboarding() {
               )}
             </div>
 
+            {/* Ações de topo da Etapa 1: Adicionar item de upload */}
+            {!onboarding.etapa1_concluida && (isRH || isGestao) && (
+              <div className="flex justify-between items-center mb-3 pt-1">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Materiais & Validações do RH
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => openAddItemModal(1)}
+                  className="h-8 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
+                >
+                  <Upload className="w-3.5 h-3.5 mr-1" />
+                  Adicionar item (upload)
+                </Button>
+              </div>
+            )}
+
             {/* Lista de itens da Etapa 1 */}
             <div className="divide-y divide-gray-100 mb-5">
-              {itensEtapa1.map((item) => {
-                const checked = onboarding.etapa1_concluida || !!etapa1Checks[item.id]
+              {tarefasEtapa1.length === 0 ? (
+                <div className="py-6 text-center text-gray-400 text-xs">
+                  Nenhum item configurado para a Etapa 1.
+                </div>
+              ) : (
+                tarefasEtapa1.map((item) => {
+                  const fileUrl = tarefaService.getFileUrl(item)
+                  const checked = onboarding.etapa1_concluida || item.concluida
 
-                return (
-                  <div key={item.id} className="py-3 flex items-start justify-between gap-3 group">
-                    <div className="flex items-start gap-3 flex-1">
-                      <button
-                        type="button"
-                        disabled={onboarding.etapa1_concluida}
-                        onClick={() => toggleCheckEtapa1(item.id)}
-                        className="mt-0.5 text-gray-400 hover:text-blue-600 transition-transform active:scale-95 disabled:cursor-default"
-                        aria-label="Marcar item"
-                      >
-                        {checked ? (
-                          <CheckCircle2 className="w-5 h-5 text-emerald-600 animate-fade-in" />
-                        ) : (
-                          <Square className="w-5 h-5 text-gray-300" />
-                        )}
-                      </button>
-
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          {item.tipo === 'video' ? (
-                            <Video className="w-4 h-4 text-purple-600 shrink-0" />
+                  return (
+                    <div
+                      key={item.id}
+                      className="py-3 flex items-start justify-between gap-3 group"
+                    >
+                      <div className="flex items-start gap-3 flex-1">
+                        <button
+                          type="button"
+                          disabled={onboarding.etapa1_concluida}
+                          onClick={() => handleToggleTarefa(item)}
+                          className="mt-0.5 text-gray-400 hover:text-blue-600 transition-transform active:scale-95 disabled:cursor-default"
+                          aria-label="Marcar item"
+                        >
+                          {checked ? (
+                            <CheckCircle2 className="w-5 h-5 text-emerald-600 animate-fade-in" />
                           ) : (
-                            <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                            <Square className="w-5 h-5 text-gray-300" />
                           )}
-                          <span
-                            className={`text-sm font-semibold ${
-                              checked ? 'text-gray-500 line-through' : 'text-gray-800'
-                            }`}
-                          >
-                            {item.titulo}
-                          </span>
+                        </button>
+
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {item.tipo === 'video' ? (
+                              <Video className="w-4 h-4 text-purple-600 shrink-0" />
+                            ) : (
+                              <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                            )}
+                            <span
+                              className={`text-sm font-semibold ${
+                                checked ? 'text-gray-500 line-through' : 'text-gray-800'
+                              }`}
+                            >
+                              {item.titulo}
+                            </span>
+                            {item.conteudo_url ? (
+                              <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">
+                                Arquivo anexado
+                              </span>
+                            ) : (
+                              <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-medium">
+                                Sem arquivo
+                              </span>
+                            )}
+                          </div>
+                          {item.descricao && (
+                            <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                              {item.descricao}
+                            </p>
+                          )}
+                          {item.concluida_em && (
+                            <span className="text-[11px] text-emerald-600 block mt-0.5 font-medium">
+                              Visto em: {formatDate(item.concluida_em)}
+                            </span>
+                          )}
                         </div>
-                        <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
-                          {item.descricao}
-                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            openPreview({
+                              titulo: item.titulo,
+                              tipo: item.tipo,
+                              url: fileUrl,
+                            })
+                          }
+                          className="h-8 text-xs text-blue-600 hover:text-blue-700 shrink-0"
+                        >
+                          <Eye className="w-3.5 h-3.5 mr-1" />
+                          Visualizar
+                        </Button>
+
+                        {!item.criado_automaticamente && !onboarding.etapa1_concluida && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteTarefa(item.id)}
+                            className="h-8 w-8 text-gray-400 hover:text-red-600"
+                            aria-label="Excluir item"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
                       </div>
                     </div>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        openPreview({
-                          titulo: item.titulo,
-                          tipo: item.tipo,
-                          url: '',
-                        })
-                      }
-                      className="h-8 text-xs text-blue-600 hover:text-blue-700 shrink-0"
-                    >
-                      <Eye className="w-3.5 h-3.5 mr-1" />
-                      Visualizar
-                    </Button>
-                  </div>
-                )
-              })}
+                  )
+                })
+              )}
             </div>
 
             {/* Ação Concluir Etapa 1 */}
@@ -670,7 +716,7 @@ export default function DetalheOnboarding() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setModalItemOpen(true)}
+                      onClick={() => openAddItemModal(2)}
                       className="h-8 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
                     >
                       <Upload className="w-3.5 h-3.5 mr-1" />
@@ -681,12 +727,12 @@ export default function DetalheOnboarding() {
 
                 {/* Lista de Tarefas da Etapa 2 */}
                 <div className="divide-y divide-gray-100 mb-5">
-                  {tarefas.length === 0 ? (
+                  {tarefasEtapa2.length === 0 ? (
                     <div className="py-6 text-center text-gray-400 text-xs">
                       Nenhum item adicionado para este setor.
                     </div>
                   ) : (
-                    tarefas.map((tarefa) => {
+                    tarefasEtapa2.map((tarefa) => {
                       const fileUrl = tarefaService.getFileUrl(tarefa)
 
                       return (
@@ -698,7 +744,7 @@ export default function DetalheOnboarding() {
                             <button
                               type="button"
                               disabled={onboarding.etapa2_concluida}
-                              onClick={() => handleToggleTarefaEtapa2(tarefa)}
+                              onClick={() => handleToggleTarefa(tarefa)}
                               className="mt-0.5 text-gray-400 hover:text-blue-600 transition-transform active:scale-95 disabled:cursor-default"
                               aria-label="Marcar tarefa"
                             >
@@ -1134,16 +1180,18 @@ export default function DetalheOnboarding() {
         </div>
       </div>
 
-      {/* Modal: Adicionar Item (Etapa 2) */}
+      {/* Modal: Adicionar Item (Etapa 1 ou Etapa 2) */}
       <Dialog open={modalItemOpen} onOpenChange={setModalItemOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-gray-900">
-              Adicionar Item à Vivência Técnica
+              {modalItemEtapa === 1
+                ? 'Adicionar Item à Apresentação da Empresa (Etapa 1)'
+                : 'Adicionar Item à Vivência Técnica (Etapa 2)'}
             </DialogTitle>
           </DialogHeader>
 
-          <form onSubmit={handleAddItemEtapa2} className="space-y-4 py-2">
+          <form onSubmit={handleAddItemOnboarding} className="space-y-4 py-2">
             {itemError && (
               <div className="p-2.5 rounded bg-red-50 text-red-700 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
@@ -1156,10 +1204,27 @@ export default function DetalheOnboarding() {
                 Título do Item *
               </label>
               <Input
-                placeholder="Ex.: Treinamento Específico de Roteador Mikrotik"
+                placeholder={
+                  modalItemEtapa === 1
+                    ? 'Ex.: Apresentação de Benefícios e Convênios'
+                    : 'Ex.: Treinamento Específico de Roteador Mikrotik'
+                }
                 value={novoItemTitulo}
                 onChange={(e) => setNovoItemTitulo(e.target.value)}
                 className="h-10 text-xs"
+                disabled={enviandoItem}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Descrição ou Instruções
+              </label>
+              <Textarea
+                placeholder="Ex.: Visão geral dos procedimentos a serem seguidos..."
+                value={novoItemDescricao}
+                onChange={(e) => setNovoItemDescricao(e.target.value)}
+                className="text-xs min-h-[60px]"
                 disabled={enviandoItem}
               />
             </div>
