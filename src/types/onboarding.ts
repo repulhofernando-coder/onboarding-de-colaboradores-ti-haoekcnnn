@@ -123,6 +123,9 @@ export interface Onboarding extends RecordModel {
   etapa2_concluida_por?: string
   etapa3_concluida?: boolean
   data_conclusao_etapa3?: string
+  email_etapa1_enviado?: boolean
+  email_etapa2_enviado?: boolean
+  email_avaliacao_enviado?: boolean
   expand?: {
     gestor_id?: User
     etapa1_concluida_por?: User

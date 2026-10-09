@@ -137,8 +137,8 @@ export default function Avaliacoes() {
 
       toast.success(
         decisao === 'apto'
-          ? `Decisão registrada! ${selectedOnboarding.colaborador_nome} foi liberado como Apto.`
-          : `Decisão registrada! ${selectedOnboarding.colaborador_nome} marcado como Não Apto.`,
+          ? `Decisão registrada! ${selectedOnboarding.colaborador_nome} marcado como Apto. E-mail de notificação enviado para o RH e Administração.`
+          : `Decisão registrada! ${selectedOnboarding.colaborador_nome} marcado como Não Apto. E-mail de notificação enviado para o RH e Administração.`,
       )
       setModalOpen(false)
       fetchData()

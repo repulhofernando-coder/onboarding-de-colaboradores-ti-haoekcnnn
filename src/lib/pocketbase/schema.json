@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-09T18:44:19.775Z",
+  "generatedAt": "2026-10-09T19:59:53.104Z",
   "collections": [
     {
       "name": "users",
@@ -305,6 +305,24 @@
           "required": false,
           "system": false,
           "collectionRef": "setores"
+        },
+        {
+          "name": "email_etapa1_enviado",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "email_etapa2_enviado",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "email_avaliacao_enviado",
+          "type": "bool",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [

@@ -233,7 +233,9 @@ export default function DetalheOnboarding() {
     try {
       setConcluindoEtapa1(true)
       await onboardingService.concluirEtapa1(onboarding.id, user.id)
-      toast.success('Etapa 1 concluída com sucesso! Processo repassado ao Gestor para a Etapa 2.')
+      toast.success(
+        'Etapa 1 concluída com sucesso! O gestor responsável receberá uma notificação por e-mail com a liberação da Etapa 2.',
+      )
       fetchData()
     } catch (err) {
       console.error(err)
@@ -284,7 +286,7 @@ export default function DetalheOnboarding() {
       setConcluindoEtapa2(true)
       await onboardingService.concluirEtapa2(onboarding.id, user.id)
       toast.success(
-        'Etapa 2 (Vivência Técnica) concluída! Onboarding enviado para Avaliação do Gestor.',
+        'Etapa 2 (Vivência Técnica) concluída! O gestor responsável receberá uma notificação por e-mail para realizar a Avaliação Final.',
       )
       fetchData()
     } catch (err) {
@@ -433,8 +435,8 @@ export default function DetalheOnboarding() {
       setOnboarding(res.onboarding)
       toast.success(
         decisaoAvaliacao === 'apto'
-          ? 'Avaliação registrada! Colaborador liberado como Apto.'
-          : 'Avaliação registrada! Colaborador marcado como Não Apto.',
+          ? 'Avaliação registrada! Colaborador marcado como Apto. Notificação por e-mail enviada para o RH e Administração.'
+          : 'Avaliação registrada! Colaborador marcado como Não Apto. Notificação por e-mail enviada para o RH e Administração.',
       )
     } catch (err) {
       console.error(err)
