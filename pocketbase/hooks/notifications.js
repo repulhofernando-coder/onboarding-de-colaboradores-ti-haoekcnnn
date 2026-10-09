@@ -145,7 +145,9 @@ onRecordUpdate((e) => {
     const setorNome = getSetorLabel(app, record)
     const dataFim = formatBrDate(record.getString('data_fim'))
     const onboardingId = record.id
-    const onboardingUrl = `${appUrl}/onboardings/${onboardingId}`
+    const onboardingUrl = `${appUrl}/colaboradores/${onboardingId}`
+    const tokenColaborador = record.getString('token_acesso_colaborador')
+    const colaboradorPublicUrl = tokenColaborador ? `${appUrl}/colaborador/${tokenColaborador}` : ''
 
     let gestor = null
     if (gestorId) {
@@ -176,6 +178,23 @@ onRecordUpdate((e) => {
         <p style="margin: 16px 0 8px;">
           A <strong>Etapa 2 (Vivência Técnica)</strong> agora está sob sua responsabilidade. Você pode acessar os materiais de apoio e registrar o progresso das atividades diretamente no sistema.
         </p>
+        ${
+          colaboradorPublicUrl
+            ? `
+        <div style="background-color: #eff6ff; border: 1px dashed #3b82f6; border-radius: 6px; padding: 12px 16px; margin: 16px 0;">
+          <p style="margin: 0 0 4px; font-weight: 600; font-size: 13px; color: #1e40af;">
+            🔗 Link Público de Acesso do Colaborador:
+          </p>
+          <p style="margin: 0; font-size: 12px; color: #1d4ed8; word-break: break-all;">
+            <a href="${colaboradorPublicUrl}" style="color: #2563eb; font-weight: 600;">${colaboradorPublicUrl}</a>
+          </p>
+          <p style="margin: 4px 0 0; font-size: 11px; color: #6b7280;">
+            O colaborador utiliza este link público para assistir vídeos/manuais e confirmar a visualização diretamente da tela dele.
+          </p>
+        </div>
+        `
+            : ''
+        }
       `
 
       const html = wrapHtml(
@@ -376,7 +395,7 @@ onRecordCreate((e) => {
     const colaboradorNome = onboarding.getString('colaborador_nome') || 'Colaborador'
     const setorNome = getSetorLabel(app, onboarding)
     const cargo = onboarding.getString('cargo') || 'Não informado'
-    const onboardingUrl = `${appUrl}/onboardings/${onboardingId}`
+    const onboardingUrl = `${appUrl}/colaboradores/${onboardingId}`
 
     let avaliadorNome = 'Gestor Responsável'
     if (avaliadorId) {

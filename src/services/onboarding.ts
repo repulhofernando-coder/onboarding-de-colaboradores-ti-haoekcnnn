@@ -11,7 +11,17 @@ import type {
   Setor,
   AvaliacaoDecisao,
   SetorModel,
+  ConfirmacaoColaborador,
 } from '@/types/onboarding'
+
+function generateRandomToken(length = 32): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  let result = ''
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return result
+}
 
 export const setorService = {
   async listAll(): Promise<SetorModel[]> {
@@ -328,6 +338,42 @@ export const onboardingService = {
     })
   },
 
+  async getByTokenColaborador(token: string): Promise<Onboarding | null> {
+    if (!token || !token.trim()) return null
+    try {
+      return await pb
+        .collection('onboardings')
+        .getFirstListItem<Onboarding>(`token_acesso_colaborador = '${token.trim()}'`, {
+          expand: 'gestor_id,setor_ref',
+        })
+    } catch {
+      return null
+    }
+  },
+
+  /**
+   * Garante que o onboarding possua um token e retorna o link público completo do colaborador.
+   */
+  async getOrGeneratePublicLink(onboarding: Onboarding): Promise<string> {
+    let token = onboarding.token_acesso_colaborador
+    if (!token) {
+      token = generateRandomToken(32)
+      try {
+        await pb.collection('onboardings').update(onboarding.id, {
+          token_acesso_colaborador: token,
+        })
+        onboarding.token_acesso_colaborador = token
+      } catch (err) {
+        console.error('Erro ao gerar token do colaborador:', err)
+      }
+    }
+    const baseUrl =
+      typeof window !== 'undefined' && window.location.origin
+        ? window.location.origin
+        : 'https://onboarding-de-colaboradores-ti-8af12.goskip.app'
+    return `${baseUrl}/colaborador/${token}`
+  },
+
   async create(data: {
     colaborador_nome: string
     colaborador_email: string
@@ -372,6 +418,7 @@ export const onboardingService = {
       etapa1_concluida: false,
       etapa2_concluida: false,
       etapa3_concluida: false,
+      token_acesso_colaborador: generateRandomToken(32),
     }
     if (setorRefId) {
       recordPayload.setor_ref = setorRefId
@@ -510,6 +557,51 @@ export const tarefaService = {
       return pb.files.getURL(record.expand.material, record.expand.material.arquivo)
     }
     return ''
+  },
+}
+
+export const confirmacaoColaboradorService = {
+  async listByOnboarding(onboardingId: string): Promise<ConfirmacaoColaborador[]> {
+    if (!onboardingId) return []
+    try {
+      return await pb.collection('confirmacoes_colaborador').getFullList<ConfirmacaoColaborador>({
+        filter: `onboarding = '${onboardingId}'`,
+        sort: 'created',
+      })
+    } catch (err) {
+      console.warn('Erro ao carregar confirmações do colaborador:', err)
+      return []
+    }
+  },
+
+  async confirmarItem(params: {
+    onboardingId: string
+    tarefaId: string
+    observacao?: string
+  }): Promise<ConfirmacaoColaborador> {
+    const { onboardingId, tarefaId, observacao } = params
+
+    // Idempotência: verifica se já foi confirmado
+    try {
+      const existing = await pb
+        .collection('confirmacoes_colaborador')
+        .getFirstListItem<ConfirmacaoColaborador>(
+          `onboarding = '${onboardingId}' && tarefa = '${tarefaId}'`,
+        )
+      if (existing) {
+        return existing
+      }
+    } catch {
+      // Nenhum existente, continua para criar
+    }
+
+    const agora = new Date().toISOString()
+    return pb.collection('confirmacoes_colaborador').create<ConfirmacaoColaborador>({
+      onboarding: onboardingId,
+      tarefa: tarefaId,
+      confirmado_em: agora,
+      observacao: observacao || '',
+    })
   },
 }
 

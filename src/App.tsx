@@ -19,6 +19,7 @@ import ModelosTarefas from './pages/ModelosTarefas'
 import Avaliacoes from './pages/Avaliacoes'
 import Colaboradores from './pages/Colaboradores'
 import Usuarios from './pages/Usuarios'
+import ColaboradorPublico from './pages/ColaboradorPublico'
 import NotFound from './pages/NotFound'
 
 const App = () => (
@@ -33,6 +34,7 @@ const App = () => (
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/colaborador/:token" element={<ColaboradorPublico />} />
 
           {/* Rotas Protegidas (Exigem Login) */}
           <Route

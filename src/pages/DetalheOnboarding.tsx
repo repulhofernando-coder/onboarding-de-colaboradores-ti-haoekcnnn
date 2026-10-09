@@ -6,6 +6,7 @@ import {
   tarefaService,
   avaliacaoService,
   materialService,
+  confirmacaoColaboradorService,
 } from '@/services/onboarding'
 import { useRealtime } from '@/hooks/use-realtime'
 import type {
@@ -14,6 +15,7 @@ import type {
   MaterialBiblioteca,
   Avaliacao,
   TarefaTipo,
+  ConfirmacaoColaborador,
 } from '@/types/onboarding'
 import { SETORES_INFO, STATUS_INFO, getSetorVisual } from '@/types/onboarding'
 import {
@@ -38,6 +40,9 @@ import {
   Square,
   Eye,
   Info,
+  Copy,
+  Check,
+  Share2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -62,6 +67,9 @@ export default function DetalheOnboarding() {
   const [tarefas, setTarefas] = useState<TarefaOnboarding[]>([])
   const [avaliacao, setAvaliacao] = useState<Avaliacao | null>(null)
   const [loading, setLoading] = useState(true)
+  const [confirmacoes, setConfirmacoes] = useState<Record<string, ConfirmacaoColaborador>>({})
+  const [linkColaborador, setLinkColaborador] = useState<string>('')
+  const [linkCopiado, setLinkCopiado] = useState(false)
 
   // Estados de ações
   const [concluindoEtapa1, setConcluindoEtapa1] = useState(false)
@@ -98,14 +106,25 @@ export default function DetalheOnboarding() {
   const fetchData = async () => {
     if (!id) return
     try {
-      const [onb, tars, aval] = await Promise.all([
+      const [onb, tars, aval, confs] = await Promise.all([
         onboardingService.getById(id),
         tarefaService.listByOnboarding(id),
         avaliacaoService.getByOnboarding(id),
+        confirmacaoColaboradorService.listByOnboarding(id),
       ])
       setOnboarding(onb)
       setTarefas(tars)
       setAvaliacao(aval)
+
+      const mapConfs: Record<string, ConfirmacaoColaborador> = {}
+      for (const c of confs) {
+        mapConfs[c.tarefa] = c
+      }
+      setConfirmacoes(mapConfs)
+
+      if (onb) {
+        onboardingService.getOrGeneratePublicLink(onb).then(setLinkColaborador)
+      }
     } catch (err) {
       console.error(err)
       toast.error('Erro ao carregar detalhes do onboarding.')
@@ -125,6 +144,17 @@ export default function DetalheOnboarding() {
   useRealtime<TarefaOnboarding>('tarefas_onboarding', () => {
     if (id) {
       tarefaService.listByOnboarding(id).then(setTarefas)
+    }
+  })
+  useRealtime<ConfirmacaoColaborador>('confirmacoes_colaborador', () => {
+    if (id) {
+      confirmacaoColaboradorService.listByOnboarding(id).then((confs) => {
+        const mapConfs: Record<string, ConfirmacaoColaborador> = {}
+        for (const c of confs) {
+          mapConfs[c.tarefa] = c
+        }
+        setConfirmacoes(mapConfs)
+      })
     }
   })
 
@@ -166,6 +196,27 @@ export default function DetalheOnboarding() {
   const tarefasEtapa2 = useMemo(() => {
     return tarefas.filter((t) => t.etapa === 2 || !t.etapa)
   }, [tarefas])
+
+  // Contadores de confirmação do colaborador por etapa
+  const confirmacoesEtapa1 = useMemo(() => {
+    return tarefasEtapa1.filter((t) => Boolean(confirmacoes[t.id])).length
+  }, [tarefasEtapa1, confirmacoes])
+
+  const confirmacoesEtapa2 = useMemo(() => {
+    return tarefasEtapa2.filter((t) => Boolean(confirmacoes[t.id])).length
+  }, [tarefasEtapa2, confirmacoes])
+
+  const handleCopiarLinkColaborador = async () => {
+    if (!linkColaborador) return
+    try {
+      await navigator.clipboard.writeText(linkColaborador)
+      setLinkCopiado(true)
+      toast.success('Link do colaborador copiado com sucesso! Envie via WhatsApp ou e-mail.')
+      setTimeout(() => setLinkCopiado(false), 2500)
+    } catch {
+      toast.error('Erro ao copiar link para a área de transferência.')
+    }
+  }
 
   // Verificar se todas as tarefas da Etapa 1 estão marcadas
   const allEtapa1Checked = useMemo(() => {
@@ -510,6 +561,76 @@ export default function DetalheOnboarding() {
         )}
       </div>
 
+      {/* Banner / Card do Link Público do Colaborador */}
+      <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white p-5 sm:p-6 rounded-2xl shadow-sm space-y-3 border border-blue-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider bg-blue-500/25 text-blue-300 px-2.5 py-0.5 rounded-full border border-blue-400/30 inline-flex items-center gap-1">
+                <Share2 className="w-3 h-3" />
+                Link Público do Colaborador (Sem Login)
+              </span>
+            </div>
+            <h3 className="text-base sm:text-lg font-bold text-white">
+              Acesso exclusivo para {onboarding.colaborador_nome}
+            </h3>
+            <p className="text-xs text-blue-200/90 max-w-2xl leading-relaxed">
+              O colaborador assiste aos vídeos e lê os manuais por este link e confirma que já
+              assistiu/leu diretamente da tela dele. O RH e Gestão acompanham o progresso em tempo
+              real.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              type="button"
+              onClick={handleCopiarLinkColaborador}
+              className="bg-white text-blue-900 hover:bg-blue-50 font-bold text-xs h-10 px-4 shadow-sm"
+            >
+              {linkCopiado ? (
+                <>
+                  <Check className="w-4 h-4 mr-1.5 text-emerald-600" />
+                  Link Copiado!
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4 mr-1.5" />
+                  Copiar link do colaborador
+                </>
+              )}
+            </Button>
+
+            {linkColaborador && (
+              <Button
+                asChild
+                variant="outline"
+                className="bg-blue-800/60 border-blue-700 text-white hover:bg-blue-800 text-xs h-10 px-3"
+              >
+                <a
+                  href={linkColaborador}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Abrir página do colaborador em nova guia"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {linkColaborador && (
+          <div className="pt-2 border-t border-blue-800/80 flex items-center gap-2 text-xs text-blue-300 font-mono overflow-hidden">
+            <span className="text-blue-400 select-none shrink-0 font-sans font-medium">
+              URL direta:
+            </span>
+            <span className="truncate select-all bg-blue-950/60 px-2.5 py-1 rounded border border-blue-800/60 flex-1">
+              {linkColaborador}
+            </span>
+          </div>
+        )}
+      </div>
+
       {/* Header do Colaborador */}
       <div className="bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -593,10 +714,18 @@ export default function DetalheOnboarding() {
                   {onboarding.etapa1_concluida ? <CheckCircle2 className="w-5 h-5" /> : '1'}
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-[#1A2233]">
-                    Etapa 1 — Apresentação da Empresa
-                  </h3>
-                  <p className="text-xs text-gray-500">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-bold text-[#1A2233]">
+                      Etapa 1 — Apresentação da Empresa
+                    </h3>
+                    <Badge
+                      variant="outline"
+                      className="text-[11px] font-semibold bg-indigo-50/70 text-indigo-700 border-indigo-200"
+                    >
+                      {confirmacoesEtapa1} de {tarefasEtapa1.length} confirmados pelo colaborador
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">
                     Conduzida e validada pelo setor de RH • Integração institucional
                   </p>
                 </div>
@@ -710,11 +839,30 @@ export default function DetalheOnboarding() {
                               {item.descricao}
                             </p>
                           )}
-                          {item.concluida_em && (
-                            <span className="text-[11px] text-emerald-600 block mt-0.5 font-medium">
-                              Visto em: {formatDate(item.concluida_em)}
-                            </span>
-                          )}
+                          {/* Estado de Confirmação do Colaborador vs. Marcação do RH */}
+                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                            {confirmacoes[item.id] ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                Confirmado pelo colaborador em{' '}
+                                {formatDate(
+                                  confirmacoes[item.id].confirmado_em ||
+                                    confirmacoes[item.id].created,
+                                )}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-medium">
+                                <Clock className="w-3 h-3" />
+                                Aguardando confirmação do colaborador
+                              </span>
+                            )}
+
+                            {item.concluida_em && (
+                              <span className="text-[11px] text-gray-500">
+                                • Validado RH em {formatDate(item.concluida_em)}
+                              </span>
+                            )}
+                          </div>{' '}
                         </div>
                       </div>
 
@@ -826,10 +974,18 @@ export default function DetalheOnboarding() {
                   )}
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-[#1A2233]">
-                    Etapa 2 — Vivência Técnica ({setorInfo.nome})
-                  </h3>
-                  <p className="text-xs text-gray-500">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-bold text-[#1A2233]">
+                      Etapa 2 — Vivência Técnica ({setorInfo.nome})
+                    </h3>
+                    <Badge
+                      variant="outline"
+                      className="text-[11px] font-semibold bg-indigo-50/70 text-indigo-700 border-indigo-200"
+                    >
+                      {confirmacoesEtapa2} de {tarefasEtapa2.length} confirmados pelo colaborador
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">
                     Movidesk (chamados), Passportal (documentação), shadow técnico e atuação
                     assistida
                   </p>
@@ -955,11 +1111,31 @@ export default function DetalheOnboarding() {
                                   </span>
                                 ) : null}
                               </div>
-                              {tarefa.concluida_em && (
-                                <span className="text-[11px] text-emerald-600 block mt-0.5 font-medium">
-                                  Concluído em: {formatDate(tarefa.concluida_em)}
-                                </span>
-                              )}
+
+                              {/* Confirmação do Colaborador na Etapa 2 */}
+                              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                {confirmacoes[tarefa.id] ? (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                    Confirmado pelo colaborador em{' '}
+                                    {formatDate(
+                                      confirmacoes[tarefa.id].confirmado_em ||
+                                        confirmacoes[tarefa.id].created,
+                                    )}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-medium">
+                                    <Clock className="w-3 h-3" />
+                                    Aguardando confirmação do colaborador
+                                  </span>
+                                )}
+
+                                {tarefa.concluida_em && (
+                                  <span className="text-[11px] text-gray-500">
+                                    • Validado Gestão em {formatDate(tarefa.concluida_em)}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
 

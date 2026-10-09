@@ -104,6 +104,18 @@ export interface ModeloTarefa extends RecordModel {
   }
 }
 
+export interface ConfirmacaoColaborador extends RecordModel {
+  onboarding: string
+  tarefa: string
+  confirmado_em?: string
+  ip?: string
+  observacao?: string
+  expand?: {
+    onboarding?: Onboarding
+    tarefa?: TarefaOnboarding
+  }
+}
+
 export interface Onboarding extends RecordModel {
   colaborador_nome: string
   colaborador_email: string
@@ -126,6 +138,7 @@ export interface Onboarding extends RecordModel {
   email_etapa1_enviado?: boolean
   email_etapa2_enviado?: boolean
   email_avaliacao_enviado?: boolean
+  token_acesso_colaborador?: string
   expand?: {
     gestor_id?: User
     etapa1_concluida_por?: User

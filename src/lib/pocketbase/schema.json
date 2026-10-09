@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-09T19:59:53.104Z",
+  "generatedAt": "2026-10-09T20:18:36.312Z",
   "collections": [
     {
       "name": "users",
@@ -171,8 +171,8 @@
       "name": "onboardings",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
+        "list": "",
+        "view": "",
         "create": "@request.auth.id != ''",
         "update": "@request.auth.id != ''",
         "delete": "@request.auth.id != ''"
@@ -323,6 +323,12 @@
           "type": "bool",
           "required": false,
           "system": false
+        },
+        {
+          "name": "token_acesso_colaborador",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -330,15 +336,16 @@
         "CREATE INDEX idx_onboardings_status ON onboardings (status)",
         "CREATE INDEX idx_onboardings_gestor ON onboardings (gestor_id)",
         "CREATE INDEX idx_onboardings_data_fim ON onboardings (data_fim)",
-        "CREATE INDEX `idx_onboardings_setor_ref` ON `onboardings` (setor_ref)"
+        "CREATE INDEX `idx_onboardings_setor_ref` ON `onboardings` (setor_ref)",
+        "CREATE INDEX `idx_onboardings_token_acesso` ON `onboardings` (token_acesso_colaborador)"
       ]
     },
     {
       "name": "tarefas_onboarding",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
+        "list": "",
+        "view": "",
         "create": "@request.auth.id != ''",
         "update": "@request.auth.id != ''",
         "delete": "@request.auth.id != ''"
@@ -498,8 +505,8 @@
       "name": "materiais",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
+        "list": "",
+        "view": "",
         "create": "@request.auth.id != ''",
         "update": "@request.auth.id != ''",
         "delete": "@request.auth.id != ''"
@@ -576,8 +583,8 @@
       "name": "setores",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
+        "list": "",
+        "view": "",
         "create": "@request.auth.id != ''",
         "update": "@request.auth.id != ''",
         "delete": "@request.auth.id != ''"
@@ -638,6 +645,70 @@
         "CREATE UNIQUE INDEX idx_setores_nome ON setores (nome)",
         "CREATE INDEX idx_setores_chave ON setores (chave)",
         "CREATE INDEX idx_setores_ativo_ordem ON setores (ativo, ordem)"
+      ]
+    },
+    {
+      "name": "confirmacoes_colaborador",
+      "type": "base",
+      "apiRules": {
+        "list": "",
+        "view": "",
+        "create": "",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "onboarding",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "onboardings"
+        },
+        {
+          "name": "tarefa",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "tarefas_onboarding"
+        },
+        {
+          "name": "confirmado_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ip",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_conf_onboarding ON confirmacoes_colaborador (onboarding)",
+        "CREATE INDEX idx_conf_tarefa ON confirmacoes_colaborador (tarefa)",
+        "CREATE UNIQUE INDEX idx_conf_onb_tarefa ON confirmacoes_colaborador (onboarding, tarefa)"
       ]
     }
   ]
