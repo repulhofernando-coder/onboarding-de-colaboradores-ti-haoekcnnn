@@ -5,9 +5,10 @@ import {
   onboardingService,
   tarefaService,
   avaliacaoService,
-  materialService,
   confirmacaoColaboradorService,
+  materialService,
 } from '@/services/onboarding'
+import { getErrorMessage } from '@/lib/pocketbase/errors'
 import { useRealtime } from '@/hooks/use-realtime'
 import type {
   Onboarding,
@@ -453,7 +454,9 @@ export default function DetalheOnboarding() {
       if (fileInputRef.current) fileInputRef.current.value = ''
     } catch (err) {
       console.error(err)
-      toast.error('Falha ao adicionar item.')
+      const msg = getErrorMessage(err)
+      setItemError(msg || 'Falha ao adicionar item.')
+      toast.error(msg ? `Falha ao adicionar item: ${msg}` : 'Falha ao adicionar item.')
     } finally {
       setEnviandoItem(false)
     }
@@ -491,7 +494,8 @@ export default function DetalheOnboarding() {
       )
     } catch (err) {
       console.error(err)
-      toast.error('Erro ao registrar avaliação.')
+      const msg = getErrorMessage(err)
+      toast.error(msg ? `Erro ao registrar avaliação: ${msg}` : 'Erro ao registrar avaliação.')
     } finally {
       setSalvandoAvaliacao(false)
     }

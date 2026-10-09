@@ -266,7 +266,8 @@ export const materialService = {
 export const modeloService = {
   async listBySetor(setor: Setor, setorId?: string): Promise<ModeloTarefa[]> {
     // Busca por relation setor_ref ou por setor chave/string para total retrocompatibilidade
-    let filter = `(setor = '${setor}'`
+    const setorLower = (setor || '').toLowerCase()
+    let filter = `(setor = '${setorLower}' || setor = '${setor}'`
     if (setorId) {
       filter += ` || setor_ref = '${setorId}'`
     }

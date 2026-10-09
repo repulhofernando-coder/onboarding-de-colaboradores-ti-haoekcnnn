@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { onboardingService, userService, setorService } from '@/services/onboarding'
+import { getErrorMessage } from '@/lib/pocketbase/errors'
 import type { Setor, User, SetorModel } from '@/types/onboarding'
 import { SETORES_INFO, getSetorVisual } from '@/types/onboarding'
 import {
@@ -153,7 +154,10 @@ export default function NovoOnboarding() {
       navigate(`/colaboradores/${novo.id}`)
     } catch (err: unknown) {
       console.error(err)
-      toast.error('Falha ao criar onboarding. Tente novamente.')
+      const msg = getErrorMessage(err)
+      toast.error(
+        msg ? `Falha ao criar onboarding: ${msg}` : 'Falha ao criar onboarding. Tente novamente.',
+      )
     } finally {
       setSubmitting(false)
     }

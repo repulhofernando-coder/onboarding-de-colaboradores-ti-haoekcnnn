@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { modeloService, materialService, setorService } from '@/services/onboarding'
+import { getErrorMessage } from '@/lib/pocketbase/errors'
 import type {
   ModeloTarefa,
   MaterialBiblioteca,
@@ -157,7 +158,11 @@ export default function ModelosTarefas() {
     if (selectedTab === 'biblioteca' || selectedTab === 'etapa1') return null
     return (
       setoresList.find(
-        (s) => s.id === selectedTab || s.chave === selectedTab || s.nome === selectedTab,
+        (s) =>
+          s.id === selectedTab ||
+          s.chave === selectedTab ||
+          s.chave?.toLowerCase() === selectedTab.toLowerCase() ||
+          s.nome.toLowerCase() === selectedTab.toLowerCase(),
       ) || null
     )
   }, [selectedTab, setoresList])
@@ -293,7 +298,11 @@ export default function ModelosTarefas() {
       }
     } catch (err) {
       console.error(err)
-      toast.error('Erro ao salvar material na biblioteca.')
+      const msg = getErrorMessage(err)
+      setMaterialError(msg || 'Erro ao salvar material na biblioteca.')
+      toast.error(
+        msg ? `Erro ao salvar material: ${msg}` : 'Erro ao salvar material na biblioteca.',
+      )
     } finally {
       setMaterialSubmitting(false)
     }
@@ -421,7 +430,11 @@ export default function ModelosTarefas() {
         formData.append('setor_ref', '')
       } else {
         formData.append('etapa', '2')
-        const setorChave = activeSetorModel?.chave || activeSetorModel?.nome || selectedTab
+        const setorChave = (
+          activeSetorModel?.chave ||
+          activeSetorModel?.nome ||
+          selectedTab
+        ).toLowerCase()
         formData.append('setor', setorChave)
         if (activeSetorModel?.id) {
           formData.append('setor_ref', activeSetorModel.id)
@@ -452,7 +465,9 @@ export default function ModelosTarefas() {
       fetchModelos()
     } catch (err) {
       console.error(err)
-      toast.error('Erro ao salvar template.')
+      const msg = getErrorMessage(err)
+      setFormError(msg || 'Erro ao salvar template.')
+      toast.error(msg ? `Erro ao salvar template: ${msg}` : 'Erro ao salvar template.')
     } finally {
       setSubmitting(false)
     }
@@ -562,8 +577,9 @@ export default function ModelosTarefas() {
       await fetchSetores()
     } catch (err: unknown) {
       console.error(err)
-      setSetorError('Erro ao salvar área. Verifique se o nome já existe.')
-      toast.error('Erro ao salvar área.')
+      const msg = getErrorMessage(err)
+      setSetorError(msg || 'Erro ao salvar área. Verifique se o nome já existe.')
+      toast.error(msg ? `Erro ao salvar área: ${msg}` : 'Erro ao salvar área.')
     } finally {
       setSetorSubmitting(false)
     }
