@@ -1,0 +1,540 @@
+import React, { useEffect, useState, useMemo } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '@/contexts/AuthContext'
+import { onboardingService } from '@/services/onboarding'
+import { useRealtime } from '@/hooks/use-realtime'
+import type { Onboarding, Setor } from '@/types/onboarding'
+import { SETORES_INFO } from '@/types/onboarding'
+import {
+  Clock,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  ArrowRight,
+  Plus,
+  Calendar,
+  AlertCircle,
+  Flame,
+  Activity,
+  Layers,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
+
+export default function Index() {
+  const { user } = useAuth()
+  const navigate = useNavigate()
+  const [onboardings, setOnboardings] = useState<Onboarding[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchOnboardings = async () => {
+    try {
+      const data = await onboardingService.list()
+      setOnboardings(data)
+    } catch (err) {
+      console.error('Erro ao carregar onboardings:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchOnboardings()
+  }, [])
+
+  // Inscrição Realtime para atualizar instantaneamente ao mudar de etapa/status
+  useRealtime<Onboarding>('onboardings', () => {
+    fetchOnboardings()
+  })
+
+  // Saudação por horário
+  const greeting = useMemo(() => {
+    const hora = new Date().getHours()
+    if (hora < 12) return 'Bom dia'
+    if (hora < 18) return 'Boa tarde'
+    return 'Boa noite'
+  }, [])
+
+  const firstName = (user?.name || user?.email || 'Usuário').split(' ')[0]
+
+  // Métricas
+  const emAndamento = onboardings.filter((o) => o.status === 'em_andamento').length
+  const concluidos = onboardings.filter((o) => o.status === 'concluido').length
+  const aguardandoAvaliacao = onboardings.filter((o) => o.status === 'avaliacao_pendente').length
+  const naoAptos = onboardings.filter((o) => o.status === 'nao_apto').length
+
+  // Distribuição por setor
+  const setorCounts = useMemo(() => {
+    const counts: Record<Setor, number> = {
+      windows: 0,
+      linux_rede: 0,
+      datacenter: 0,
+      campo: 0,
+      infraestrutura: 0,
+    }
+    for (const o of onboardings) {
+      if (counts[o.setor] !== undefined) {
+        counts[o.setor]++
+      }
+    }
+    return counts
+  }, [onboardings])
+
+  const maxSetorCount = Math.max(...Object.values(setorCounts), 1)
+
+  // Próximos vencimentos (< 3 dias do prazo de 15 dias e não finalizados)
+  const proximosVencimentos = useMemo(() => {
+    const hoje = new Date()
+    hoje.setHours(0, 0, 0, 0)
+
+    return onboardings
+      .filter((o) => o.status !== 'concluido' && o.status !== 'nao_apto')
+      .map((o) => {
+        const [ano, mes, dia] = o.data_fim.split('-').map(Number)
+        const dataFim = new Date(ano, mes - 1, dia)
+        dataFim.setHours(0, 0, 0, 0)
+
+        const diffTime = dataFim.getTime() - hoje.getTime()
+        const diasRestantes = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+        // Progresso estimado por etapa concluída (1 = 33%, 2 = 66%, 3 = 100%)
+        let progresso = 0
+        if (o.etapa1_concluida) progresso += 33
+        if (o.etapa2_concluida) progresso += 33
+        if (o.etapa3_concluida) progresso += 34
+
+        return {
+          ...o,
+          diasRestantes,
+          progresso,
+          isAtrasado: diasRestantes < 0,
+          isCritico: diasRestantes <= 3,
+        }
+      })
+      .sort((a, b) => a.diasRestantes - b.diasRestantes)
+      .slice(0, 6)
+  }, [onboardings])
+
+  // Feed de atividade recente (últimas ações inferidas do created/updated e status)
+  const atividadesRecentes = useMemo(() => {
+    const list: Array<{
+      id: string
+      onboardingId: string
+      texto: string
+      data: string
+      cor: string
+      tipo: string
+    }> = []
+
+    for (const o of onboardings) {
+      if (o.status === 'concluido') {
+        list.push({
+          id: `${o.id}-concluido`,
+          onboardingId: o.id,
+          texto: `Avaliação final: Apto — ${o.colaborador_nome} liberado para atendimento`,
+          data: o.data_conclusao_etapa3 || o.updated,
+          cor: 'bg-emerald-500',
+          tipo: 'Conclusão',
+        })
+      }
+      if (o.status === 'nao_apto') {
+        list.push({
+          id: `${o.id}-nao_apto`,
+          onboardingId: o.id,
+          texto: `Avaliação final: Não Apto — ${o.colaborador_nome}`,
+          data: o.data_conclusao_etapa3 || o.updated,
+          cor: 'bg-red-500',
+          tipo: 'Avaliação',
+        })
+      }
+      if (o.etapa2_concluida) {
+        list.push({
+          id: `${o.id}-etapa2`,
+          onboardingId: o.id,
+          texto: `Etapa 2 (Vivência Técnica) concluída — ${o.colaborador_nome} (${SETORES_INFO[o.setor].nome})`,
+          data: o.data_conclusao_etapa2 || o.updated,
+          cor: 'bg-blue-500',
+          tipo: 'Etapa 2',
+        })
+      }
+      if (o.etapa1_concluida) {
+        list.push({
+          id: `${o.id}-etapa1`,
+          onboardingId: o.id,
+          texto: `Etapa 1 (Apresentação RH) concluída para ${o.colaborador_nome}`,
+          data: o.data_conclusao_etapa1 || o.updated,
+          cor: 'bg-indigo-500',
+          tipo: 'Etapa 1',
+        })
+      }
+      list.push({
+        id: `${o.id}-criado`,
+        onboardingId: o.id,
+        texto: `Novo onboarding iniciado: ${o.colaborador_nome} no setor ${SETORES_INFO[o.setor].nome}`,
+        data: o.created,
+        cor: 'bg-slate-400',
+        tipo: 'Início',
+      })
+    }
+
+    return list.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()).slice(0, 5)
+  }, [onboardings])
+
+  const formatDate = (iso: string) => {
+    if (!iso) return '-'
+    try {
+      const d = new Date(iso)
+      return d.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    } catch {
+      return iso
+    }
+  }
+
+  const formatShortDate = (ymd: string) => {
+    if (!ymd) return '-'
+    const [ano, mes, dia] = ymd.split('-')
+    return `${dia}/${mes}/${ano}`
+  }
+
+  return (
+    <div className="space-y-7">
+      {/* Top Banner / Welcome */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-[#1A2233]">
+            {greeting}, {firstName}!
+          </h2>
+          <p className="text-sm text-[#6B7280] mt-1 max-w-xl">
+            Acompanhe a formação dos novos técnicos nos 5 setores da empresa. O prazo máximo para
+            liberação ao suporte é de 15 dias.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3 shrink-0">
+          <Button
+            asChild
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm"
+          >
+            <Link to="/onboardings/nova" className="flex items-center gap-2">
+              <Plus className="w-4 h-4" />
+              <span>Novo Onboarding</span>
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      {/* 4 Cards de Resumo Clicáveis */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Em andamento */}
+        <div
+          onClick={() => navigate('/onboardings?status=em_andamento')}
+          className="bg-white p-5 rounded-xl border border-gray-200/90 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Em andamento
+            </span>
+            <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
+              <Clock className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold text-[#1A2233]">{emAndamento}</span>
+            <span className="text-xs text-gray-400 font-medium">técnicos</span>
+          </div>
+          <div className="mt-2 text-xs text-blue-600 font-medium flex items-center gap-1 group-hover:underline">
+            <span>Ver lista</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </div>
+        </div>
+
+        {/* Concluídos */}
+        <div
+          onClick={() => navigate('/onboardings?status=concluido')}
+          className="bg-white p-5 rounded-xl border border-gray-200/90 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Concluídos (Aptos)
+            </span>
+            <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold text-[#1A2233]">{concluidos}</span>
+            <span className="text-xs text-gray-400 font-medium">liberados</span>
+          </div>
+          <div className="mt-2 text-xs text-emerald-600 font-medium flex items-center gap-1 group-hover:underline">
+            <span>Ver aprovados</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </div>
+        </div>
+
+        {/* Aguardando avaliação */}
+        <div
+          onClick={() => navigate('/onboardings?status=avaliacao_pendente')}
+          className="bg-white p-5 rounded-xl border border-gray-200/90 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Aguardando Avaliação
+            </span>
+            <div className="w-9 h-9 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition-colors">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold text-[#1A2233]">{aguardandoAvaliacao}</span>
+            <span className="text-xs text-gray-400 font-medium">etapa 3</span>
+          </div>
+          <div className="mt-2 text-xs text-amber-600 font-medium flex items-center gap-1 group-hover:underline">
+            <span>Avaliar agora</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </div>
+        </div>
+
+        {/* Não aptos */}
+        <div
+          onClick={() => navigate('/onboardings?status=nao_apto')}
+          className="bg-white p-5 rounded-xl border border-gray-200/90 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Não Aptos
+            </span>
+            <div className="w-9 h-9 rounded-lg bg-red-50 text-red-600 flex items-center justify-center group-hover:bg-red-600 group-hover:text-white transition-colors">
+              <XCircle className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold text-[#1A2233]">{naoAptos}</span>
+            <span className="text-xs text-gray-400 font-medium">reprovados</span>
+          </div>
+          <div className="mt-2 text-xs text-red-600 font-medium flex items-center gap-1 group-hover:underline">
+            <span>Ver detalhes</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </div>
+        </div>
+      </div>
+
+      {/* Gráfico de Barras por Setor */}
+      <div className="bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2.5">
+            <Layers className="w-5 h-5 text-blue-600" />
+            <h3 className="text-base font-bold text-[#1A2233]">
+              Distribuição de Onboardings por Setor
+            </h3>
+          </div>
+          <span className="text-xs text-gray-500 font-medium">
+            Total registrado: {onboardings.length}
+          </span>
+        </div>
+
+        {/* Barras Desktop / Lista Mobile */}
+        <div className="hidden sm:grid grid-cols-5 gap-4 pt-4 pb-2 items-end min-h-[190px]">
+          {(Object.keys(SETORES_INFO) as Setor[]).map((setorKey) => {
+            const count = setorCounts[setorKey]
+            const info = SETORES_INFO[setorKey]
+            const barHeight = Math.max(Math.round((count / maxSetorCount) * 120), 12)
+
+            return (
+              <div key={setorKey} className="flex flex-col items-center gap-2">
+                <span className="text-xs font-bold text-gray-700">{count}</span>
+                <div className="w-full flex justify-center items-end h-[120px]">
+                  <div
+                    style={{
+                      height: `${barHeight}px`,
+                      backgroundColor: info.cor,
+                    }}
+                    className="w-12 rounded-t-md transition-all duration-500 hover:opacity-90 shadow-xs"
+                    title={`${info.nome}: ${count} onboardings`}
+                  />
+                </div>
+                <div className="text-center mt-1">
+                  <span className="text-xs font-semibold text-gray-800 block truncate max-w-[90px]">
+                    {info.nome}
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Versão Mobile (lista simples) */}
+        <div className="sm:hidden space-y-3">
+          {(Object.keys(SETORES_INFO) as Setor[]).map((setorKey) => {
+            const count = setorCounts[setorKey]
+            const info = SETORES_INFO[setorKey]
+            const pct = Math.round((count / (onboardings.length || 1)) * 100)
+
+            return (
+              <div key={setorKey} className="space-y-1">
+                <div className="flex justify-between text-xs font-medium">
+                  <span className="font-semibold text-gray-800">{info.nome}</span>
+                  <span className="text-gray-500">
+                    {count} ({pct}%)
+                  </span>
+                </div>
+                <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    style={{ width: `${pct}%`, backgroundColor: info.cor }}
+                    className="h-full rounded-full transition-all duration-500"
+                  />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Grid: Próximos Vencimentos + Atividade Recente */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Próximos vencimentos (2 colunas em desktop) */}
+        <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-blue-600" />
+              <h3 className="text-base font-bold text-[#1A2233]">Próximos Vencimentos do Prazo</h3>
+            </div>
+            <Link to="/onboardings" className="text-xs font-semibold text-blue-600 hover:underline">
+              Ver todos
+            </Link>
+          </div>
+
+          <p className="text-xs text-gray-500 mb-4">
+            Acompanhamento prioritário: colaboradores com prazo final de 15 dias próximo ou vencido.
+          </p>
+
+          {proximosVencimentos.length === 0 ? (
+            <div className="py-12 text-center text-gray-400 text-sm flex-1 flex flex-col items-center justify-center">
+              <CheckCircle2 className="w-10 h-10 text-gray-300 mb-2" />
+              <p>Nenhum onboarding pendente de prazo no momento.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100 flex-1">
+              {proximosVencimentos.map((item) => {
+                const setor = SETORES_INFO[item.setor]
+
+                return (
+                  <div
+                    key={item.id}
+                    className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50/50 px-2 rounded-lg transition-colors"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Link
+                          to={`/colaboradores/${item.id}`}
+                          className="font-bold text-sm text-[#1A2233] hover:text-blue-600 truncate"
+                        >
+                          {item.colaborador_nome}
+                        </Link>
+                        <span
+                          className={`text-[11px] px-2 py-0.5 rounded-full border font-semibold ${setor.corBg}`}
+                        >
+                          {setor.nome}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
+                        <span>Prazo: {formatShortDate(item.data_fim)}</span>
+                        <span>•</span>
+                        <span>Etapa {item.etapa_atual} de 3</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 sm:w-48 shrink-0 justify-between sm:justify-end">
+                      {/* Dias restantes */}
+                      <div>
+                        {item.isAtrasado ? (
+                          <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200 text-xs font-bold flex items-center gap-1">
+                            <Flame className="w-3 h-3 text-red-600" />
+                            Atrasado ({Math.abs(item.diasRestantes)}d)
+                          </Badge>
+                        ) : item.isCritico ? (
+                          <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 border-amber-200 text-xs font-bold flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 text-amber-600" />
+                            {item.diasRestantes}d restantes
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 border-blue-200 text-xs font-medium">
+                            {item.diasRestantes} dias
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Progresso visual */}
+                      <div className="w-20 hidden sm:block">
+                        <Progress value={item.progresso} className="h-2" />
+                      </div>
+
+                      <Button
+                        asChild
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-blue-600 hover:text-blue-700 px-2"
+                      >
+                        <Link to={`/colaboradores/${item.id}`}>Ver</Link>
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Atividade Recente (1 coluna em desktop) */}
+        <div className="bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm flex flex-col">
+          <div className="flex items-center gap-2 mb-4">
+            <Activity className="w-5 h-5 text-blue-600" />
+            <h3 className="text-base font-bold text-[#1A2233]">Atividade Recente</h3>
+          </div>
+
+          <p className="text-xs text-gray-500 mb-4">
+            Últimas movimentações registradas no sistema.
+          </p>
+
+          {atividadesRecentes.length === 0 ? (
+            <div className="py-8 text-center text-gray-400 text-sm flex-1 flex items-center justify-center">
+              Nenhuma atividade registrada ainda.
+            </div>
+          ) : (
+            <div className="relative pl-5 space-y-5 border-l-2 border-gray-200 my-2 flex-1">
+              {atividadesRecentes.map((act) => (
+                <div key={act.id} className="relative group">
+                  <div
+                    className={`absolute -left-[27px] top-1 w-3.5 h-3.5 rounded-full border-2 border-white ${act.cor}`}
+                  />
+                  <div>
+                    <Link
+                      to={`/colaboradores/${act.onboardingId}`}
+                      className="text-xs font-semibold text-gray-800 hover:text-blue-600 line-clamp-2 block"
+                    >
+                      {act.texto}
+                    </Link>
+                    <span className="text-[11px] text-gray-400 font-medium block mt-0.5">
+                      {formatDate(act.data)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-4 pt-3 border-t border-gray-100 text-center">
+            <Link to="/onboardings" className="text-xs font-semibold text-blue-600 hover:underline">
+              Acompanhar todos os onboardings &rarr;
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

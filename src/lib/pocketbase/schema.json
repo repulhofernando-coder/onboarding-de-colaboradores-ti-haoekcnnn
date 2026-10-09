@@ -1,0 +1,404 @@
+{
+  "generatedAt": "2026-10-09T16:13:10.487Z",
+  "collections": [
+    {
+      "name": "users",
+      "type": "auth",
+      "apiRules": {
+        "list": "id = @request.auth.id",
+        "view": "id = @request.auth.id",
+        "create": "",
+        "update": "id = @request.auth.id",
+        "delete": "id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "avatar",
+          "type": "file",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "setor",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["RH", "Gestão"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX `idx_tokenKey__pb_users_auth_` ON `users` (`tokenKey`)",
+        "CREATE UNIQUE INDEX `idx_email__pb_users_auth_` ON `users` (`email`) WHERE `email` != ''",
+        "CREATE INDEX `idx_users_setor` ON `users` (setor)"
+      ]
+    },
+    {
+      "name": "modelo_tarefas",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "setor",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["windows", "linux_rede", "datacenter", "campo", "infraestrutura"]
+        },
+        {
+          "name": "titulo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["video", "manual"]
+        },
+        {
+          "name": "conteudo_url",
+          "type": "file",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "conteudo_link",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "obrigatorio",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ordem",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_modelo_tarefas_setor ON modelo_tarefas (setor)"]
+    },
+    {
+      "name": "onboardings",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "colaborador_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "colaborador_email",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "cargo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "setor",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["windows", "linux_rede", "datacenter", "campo", "infraestrutura"]
+        },
+        {
+          "name": "gestor_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "data_inicio",
+          "type": "date",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_fim",
+          "type": "date",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["novo", "em_andamento", "avaliacao_pendente", "concluido", "nao_apto"]
+        },
+        {
+          "name": "etapa_atual",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "etapa1_concluida",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_conclusao_etapa1",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "etapa1_concluida_por",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "etapa2_concluida",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_conclusao_etapa2",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "etapa2_concluida_por",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "etapa3_concluida",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_conclusao_etapa3",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_onboardings_setor ON onboardings (setor)",
+        "CREATE INDEX idx_onboardings_status ON onboardings (status)",
+        "CREATE INDEX idx_onboardings_gestor ON onboardings (gestor_id)",
+        "CREATE INDEX idx_onboardings_data_fim ON onboardings (data_fim)"
+      ]
+    },
+    {
+      "name": "tarefas_onboarding",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "onboarding_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "onboardings"
+        },
+        {
+          "name": "titulo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["video", "manual"]
+        },
+        {
+          "name": "conteudo_url",
+          "type": "file",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "conteudo_link",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "concluida",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "concluida_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "criado_automaticamente",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_tarefas_onboarding_id ON tarefas_onboarding (onboarding_id)"]
+    },
+    {
+      "name": "avaliacoes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "onboarding_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "onboardings"
+        },
+        {
+          "name": "avaliador_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "decisao",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["apto", "nao_apto"]
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_avaliacoes_onboarding_id ON avaliacoes (onboarding_id)",
+        "CREATE INDEX idx_avaliacoes_avaliador_id ON avaliacoes (avaliador_id)"
+      ]
+    }
+  ]
+}
