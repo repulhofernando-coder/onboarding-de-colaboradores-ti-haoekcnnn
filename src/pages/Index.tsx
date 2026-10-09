@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
-import { onboardingService } from '@/services/onboarding'
+import { onboardingService, setorService } from '@/services/onboarding'
 import { useRealtime } from '@/hooks/use-realtime'
-import type { Onboarding, Setor } from '@/types/onboarding'
-import { SETORES_INFO } from '@/types/onboarding'
+import type { Onboarding, SetorModel } from '@/types/onboarding'
+import { SETORES_INFO, getSetorVisual } from '@/types/onboarding'
 import {
   Clock,
   CheckCircle2,
@@ -26,14 +26,16 @@ export default function Index() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [onboardings, setOnboardings] = useState<Onboarding[]>([])
+  const [setoresList, setSetoresList] = useState<SetorModel[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchOnboardings = async () => {
     try {
-      const data = await onboardingService.list()
+      const [data, setores] = await Promise.all([onboardingService.list(), setorService.listAll()])
       setOnboardings(data)
+      setSetoresList(setores)
     } catch (err) {
-      console.error('Erro ao carregar onboardings:', err)
+      console.error('Erro ao carregar dados do dashboard:', err)
     } finally {
       setLoading(false)
     }
@@ -64,24 +66,52 @@ export default function Index() {
   const aguardandoAvaliacao = onboardings.filter((o) => o.status === 'avaliacao_pendente').length
   const naoAptos = onboardings.filter((o) => o.status === 'nao_apto').length
 
-  // Distribuição por setor
-  const setorCounts = useMemo(() => {
-    const counts: Record<Setor, number> = {
-      windows: 0,
-      linux_rede: 0,
-      datacenter: 0,
-      campo: 0,
-      infraestrutura: 0,
+  // Lista unificada de setores para o gráfico (da coleção com fallback)
+  const setoresAtivosGrafico = useMemo(() => {
+    if (setoresList.length > 0) {
+      return setoresList.filter((s) => s.ativo !== false)
     }
+    return Object.keys(SETORES_INFO).map((k) => ({
+      id: k,
+      chave: k,
+      nome: SETORES_INFO[k].nome,
+      cor: SETORES_INFO[k].cor,
+      descricao: SETORES_INFO[k].descricao,
+      ativo: true,
+    }))
+  }, [setoresList])
+
+  // Contagem dinâmica por setor
+  const setorCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const s of setoresAtivosGrafico) {
+      const key = s.chave || s.nome
+      counts[key] = 0
+      counts[s.id] = 0
+    }
+
     for (const o of onboardings) {
-      if (counts[o.setor] !== undefined) {
-        counts[o.setor]++
+      const matching = setoresAtivosGrafico.find(
+        (s) =>
+          s.id === o.setor_ref ||
+          s.id === o.setor ||
+          s.chave === o.setor ||
+          s.nome.toLowerCase() === (o.setor || '').toLowerCase(),
+      )
+      if (matching) {
+        const key = matching.chave || matching.nome
+        counts[key] = (counts[key] || 0) + 1
+      } else if (o.setor) {
+        counts[o.setor] = (counts[o.setor] || 0) + 1
       }
     }
     return counts
-  }, [onboardings])
+  }, [onboardings, setoresAtivosGrafico])
 
-  const maxSetorCount = Math.max(...Object.values(setorCounts), 1)
+  const maxSetorCount = Math.max(
+    ...setoresAtivosGrafico.map((s) => setorCounts[s.chave || s.nome] || 0),
+    1,
+  )
 
   // Próximos vencimentos (< 3 dias do prazo de 15 dias e não finalizados)
   const proximosVencimentos = useMemo(() => {
@@ -149,10 +179,11 @@ export default function Index() {
         })
       }
       if (o.etapa2_concluida) {
+        const setorNome = getSetorVisual(o.setor, o.expand?.setor_ref).nome
         list.push({
           id: `${o.id}-etapa2`,
           onboardingId: o.id,
-          texto: `Etapa 2 (Vivência Técnica) concluída — ${o.colaborador_nome} (${SETORES_INFO[o.setor].nome})`,
+          texto: `Etapa 2 (Vivência Técnica) concluída — ${o.colaborador_nome} (${setorNome})`,
           data: o.data_conclusao_etapa2 || o.updated,
           cor: 'bg-blue-500',
           tipo: 'Etapa 2',
@@ -168,10 +199,11 @@ export default function Index() {
           tipo: 'Etapa 1',
         })
       }
+      const setorNomeCriado = getSetorVisual(o.setor, o.expand?.setor_ref).nome
       list.push({
         id: `${o.id}-criado`,
         onboardingId: o.id,
-        texto: `Novo onboarding iniciado: ${o.colaborador_nome} no setor ${SETORES_INFO[o.setor].nome}`,
+        texto: `Novo onboarding iniciado: ${o.colaborador_nome} no setor ${setorNomeCriado}`,
         data: o.created,
         cor: 'bg-slate-400',
         tipo: 'Início',
@@ -211,8 +243,8 @@ export default function Index() {
             {greeting}, {firstName}!
           </h2>
           <p className="text-sm text-[#6B7280] mt-1 max-w-xl">
-            Acompanhe a formação dos novos técnicos nos 5 setores da empresa. O prazo máximo para
-            liberação ao suporte é de 15 dias.
+            Acompanhe a formação e integração dos novos colaboradores em todas as áreas da empresa.
+            O prazo máximo para conclusão é de 15 dias.
           </p>
         </div>
 
@@ -337,62 +369,68 @@ export default function Index() {
             Total registrado: {onboardings.length}
           </span>
         </div>
-
         {/* Barras Desktop / Lista Mobile */}
-        <div className="hidden sm:grid grid-cols-5 gap-4 pt-4 pb-2 items-end min-h-[190px]">
-          {(Object.keys(SETORES_INFO) as Setor[]).map((setorKey) => {
-            const count = setorCounts[setorKey]
-            const info = SETORES_INFO[setorKey]
+        <div className="hidden sm:flex flex-wrap gap-4 pt-4 pb-2 items-end justify-between min-h-[190px]">
+          {setoresAtivosGrafico.map((setor) => {
+            const key = setor.chave || setor.nome
+            const count = setorCounts[key] || 0
+            const cor = setor.cor || '#2563EB'
             const barHeight = Math.max(Math.round((count / maxSetorCount) * 120), 12)
 
             return (
-              <div key={setorKey} className="flex flex-col items-center gap-2">
+              <div
+                key={setor.id}
+                className="flex-1 min-w-[70px] max-w-[120px] flex flex-col items-center gap-2"
+              >
                 <span className="text-xs font-bold text-gray-700">{count}</span>
                 <div className="w-full flex justify-center items-end h-[120px]">
                   <div
                     style={{
                       height: `${barHeight}px`,
-                      backgroundColor: info.cor,
+                      backgroundColor: cor,
                     }}
-                    className="w-12 rounded-t-md transition-all duration-500 hover:opacity-90 shadow-xs"
-                    title={`${info.nome}: ${count} onboardings`}
+                    className="w-10 rounded-t-md transition-all duration-500 hover:opacity-90 shadow-xs"
+                    title={`${setor.nome}: ${count} onboardings`}
                   />
                 </div>
                 <div className="text-center mt-1">
-                  <span className="text-xs font-semibold text-gray-800 block truncate max-w-[90px]">
-                    {info.nome}
+                  <span
+                    className="text-xs font-semibold text-gray-800 block truncate max-w-[90px]"
+                    title={setor.nome}
+                  >
+                    {setor.nome}
                   </span>
                 </div>
               </div>
             )
           })}
         </div>
-
         {/* Versão Mobile (lista simples) */}
         <div className="sm:hidden space-y-3">
-          {(Object.keys(SETORES_INFO) as Setor[]).map((setorKey) => {
-            const count = setorCounts[setorKey]
-            const info = SETORES_INFO[setorKey]
+          {setoresAtivosGrafico.map((setor) => {
+            const key = setor.chave || setor.nome
+            const count = setorCounts[key] || 0
+            const cor = setor.cor || '#2563EB'
             const pct = Math.round((count / (onboardings.length || 1)) * 100)
 
             return (
-              <div key={setorKey} className="space-y-1">
+              <div key={setor.id} className="space-y-1">
                 <div className="flex justify-between text-xs font-medium">
-                  <span className="font-semibold text-gray-800">{info.nome}</span>
+                  <span className="font-semibold text-gray-800">{setor.nome}</span>
                   <span className="text-gray-500">
                     {count} ({pct}%)
                   </span>
                 </div>
                 <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
                   <div
-                    style={{ width: `${pct}%`, backgroundColor: info.cor }}
+                    style={{ width: `${pct}%`, backgroundColor: cor }}
                     className="h-full rounded-full transition-all duration-500"
                   />
                 </div>
               </div>
             )
           })}
-        </div>
+        </div>{' '}
       </div>
 
       {/* Grid: Próximos Vencimentos + Atividade Recente */}
@@ -421,7 +459,7 @@ export default function Index() {
           ) : (
             <div className="divide-y divide-gray-100 flex-1">
               {proximosVencimentos.map((item) => {
-                const setor = SETORES_INFO[item.setor]
+                const setor = getSetorVisual(item.setor, item.expand?.setor_ref)
 
                 return (
                   <div

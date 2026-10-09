@@ -10,7 +10,122 @@ import type {
   UserSetor,
   Setor,
   AvaliacaoDecisao,
+  SetorModel,
 } from '@/types/onboarding'
+
+export const setorService = {
+  async listAll(): Promise<SetorModel[]> {
+    try {
+      return await pb.collection('setores').getFullList<SetorModel>({
+        sort: 'ordem,nome',
+      })
+    } catch (err) {
+      console.warn('Erro ao carregar setores da API:', err)
+      return []
+    }
+  },
+
+  async listAtivos(): Promise<SetorModel[]> {
+    try {
+      return await pb.collection('setores').getFullList<SetorModel>({
+        filter: 'ativo = true',
+        sort: 'ordem,nome',
+      })
+    } catch (err) {
+      console.warn('Erro ao carregar setores ativos da API:', err)
+      return []
+    }
+  },
+
+  async getById(id: string): Promise<SetorModel> {
+    return pb.collection('setores').getOne<SetorModel>(id)
+  },
+
+  async create(data: {
+    nome: string
+    descricao?: string
+    cor?: string
+    ativo?: boolean
+    ordem?: number
+  }): Promise<SetorModel> {
+    const nomeTrimmed = data.nome.trim()
+    const chave = nomeTrimmed
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+
+    return pb.collection('setores').create<SetorModel>({
+      nome: nomeTrimmed,
+      chave,
+      descricao: data.descricao?.trim() || '',
+      cor: data.cor || '#4F46E5',
+      ativo: data.ativo ?? true,
+      ordem: data.ordem ?? 10,
+    })
+  },
+
+  async update(
+    id: string,
+    data: {
+      nome?: string
+      descricao?: string
+      cor?: string
+      ativo?: boolean
+      ordem?: number
+    },
+  ): Promise<SetorModel> {
+    const payload: Record<string, unknown> = {}
+    if (data.nome !== undefined) {
+      payload.nome = data.nome.trim()
+    }
+    if (data.descricao !== undefined) payload.descricao = data.descricao.trim()
+    if (data.cor !== undefined) payload.cor = data.cor
+    if (data.ativo !== undefined) payload.ativo = data.ativo
+    if (data.ordem !== undefined) payload.ordem = data.ordem
+
+    return pb.collection('setores').update<SetorModel>(id, payload)
+  },
+
+  async delete(id: string): Promise<boolean> {
+    return pb.collection('setores').delete(id)
+  },
+
+  async countUsage(
+    setorId: string,
+    setorChaveOuNome?: string,
+  ): Promise<{
+    modelosCount: number
+    onboardingsCount: number
+  }> {
+    let modelosCount = 0
+    let onboardingsCount = 0
+
+    // Filtro abrangente: por relation setor_ref ou pelos campos legado setor
+    const filterParts = [`setor_ref = '${setorId}'`]
+    if (setorChaveOuNome) {
+      filterParts.push(`setor = '${setorChaveOuNome}'`)
+    }
+    const filter = filterParts.join(' || ')
+
+    try {
+      const resModelos = await pb.collection('modelo_tarefas').getList(1, 1, { filter })
+      modelosCount = resModelos.totalItems
+    } catch {
+      /* intentionally ignored */
+    }
+
+    try {
+      const resOnboardings = await pb.collection('onboardings').getList(1, 1, { filter })
+      onboardingsCount = resOnboardings.totalItems
+    } catch {
+      /* intentionally ignored */
+    }
+
+    return { modelosCount, onboardingsCount }
+  },
+}
 
 export const userService = {
   async getGestores(): Promise<User[]> {
@@ -95,19 +210,19 @@ export const materialService = {
     return pb.collection('materiais').getFullList<MaterialBiblioteca>({
       filter,
       sort: '-created',
-      expand: 'criado_por',
+      expand: 'criado_por,setor_ref',
     })
   },
 
   async getById(id: string): Promise<MaterialBiblioteca> {
     return pb.collection('materiais').getOne<MaterialBiblioteca>(id, {
-      expand: 'criado_por',
+      expand: 'criado_por,setor_ref',
     })
   },
 
   async create(data: FormData | Partial<MaterialBiblioteca>): Promise<MaterialBiblioteca> {
     return pb.collection('materiais').create<MaterialBiblioteca>(data, {
-      expand: 'criado_por',
+      expand: 'criado_por,setor_ref',
     })
   },
 
@@ -116,7 +231,7 @@ export const materialService = {
     data: FormData | Partial<MaterialBiblioteca>,
   ): Promise<MaterialBiblioteca> {
     return pb.collection('materiais').update<MaterialBiblioteca>(id, data, {
-      expand: 'criado_por',
+      expand: 'criado_por,setor_ref',
     })
   },
 
@@ -139,11 +254,18 @@ export const materialService = {
 }
 
 export const modeloService = {
-  async listBySetor(setor: Setor): Promise<ModeloTarefa[]> {
+  async listBySetor(setor: Setor, setorId?: string): Promise<ModeloTarefa[]> {
+    // Busca por relation setor_ref ou por setor chave/string para total retrocompatibilidade
+    let filter = `(setor = '${setor}'`
+    if (setorId) {
+      filter += ` || setor_ref = '${setorId}'`
+    }
+    filter += `) && (etapa = 2 || etapa = null || etapa = 0)`
+
     return pb.collection('modelo_tarefas').getFullList<ModeloTarefa>({
-      filter: `setor = '${setor}' && (etapa = 2 || etapa = null || etapa = 0)`,
+      filter,
       sort: 'ordem,titulo',
-      expand: 'material',
+      expand: 'material,setor_ref',
     })
   },
 
@@ -151,26 +273,26 @@ export const modeloService = {
     return pb.collection('modelo_tarefas').getFullList<ModeloTarefa>({
       filter: 'etapa = 1',
       sort: 'ordem,titulo',
-      expand: 'material',
+      expand: 'material,setor_ref',
     })
   },
 
   async listAll(): Promise<ModeloTarefa[]> {
     return pb.collection('modelo_tarefas').getFullList<ModeloTarefa>({
-      sort: 'etapa,setor,ordem,titulo',
-      expand: 'material',
+      sort: 'etapa,ordem,titulo',
+      expand: 'material,setor_ref',
     })
   },
 
   async create(data: FormData | Partial<ModeloTarefa>): Promise<ModeloTarefa> {
     return pb.collection('modelo_tarefas').create<ModeloTarefa>(data, {
-      expand: 'material',
+      expand: 'material,setor_ref',
     })
   },
 
   async update(id: string, data: FormData | Partial<ModeloTarefa>): Promise<ModeloTarefa> {
     return pb.collection('modelo_tarefas').update<ModeloTarefa>(id, data, {
-      expand: 'material',
+      expand: 'material,setor_ref',
     })
   },
 
@@ -196,13 +318,13 @@ export const onboardingService = {
     return pb.collection('onboardings').getFullList<Onboarding>({
       filter,
       sort,
-      expand: 'gestor_id,etapa1_concluida_por,etapa2_concluida_por',
+      expand: 'gestor_id,etapa1_concluida_por,etapa2_concluida_por,setor_ref',
     })
   },
 
   async getById(id: string): Promise<Onboarding> {
     return pb.collection('onboardings').getOne<Onboarding>(id, {
-      expand: 'gestor_id,etapa1_concluida_por,etapa2_concluida_por',
+      expand: 'gestor_id,etapa1_concluida_por,etapa2_concluida_por,setor_ref',
     })
   },
 
@@ -211,6 +333,7 @@ export const onboardingService = {
     colaborador_email: string
     cargo?: string
     setor: Setor
+    setor_ref?: string
     gestor_id: string
     data_inicio: string
   }): Promise<Onboarding> {
@@ -220,8 +343,23 @@ export const onboardingService = {
     dateObj.setUTCDate(dateObj.getUTCDate() + 15)
     const data_fim = dateObj.toISOString().split('T')[0]
 
+    // Resolve setor_ref se não tiver sido passado diretamente
+    let setorRefId = data.setor_ref
+    if (!setorRefId) {
+      try {
+        const found = await pb
+          .collection('setores')
+          .getFirstListItem<SetorModel>(
+            `chave = '${data.setor}' || nome = '${data.setor}' || id = '${data.setor}'`,
+          )
+        setorRefId = found.id
+      } catch {
+        /* intentionally ignored */
+      }
+    }
+
     // Cria o registro do onboarding
-    const record = await pb.collection('onboardings').create<Onboarding>({
+    const recordPayload: Record<string, unknown> = {
       colaborador_nome: data.colaborador_nome.trim(),
       colaborador_email: data.colaborador_email.trim(),
       cargo: data.cargo ? data.cargo.trim() : '',
@@ -234,10 +372,16 @@ export const onboardingService = {
       etapa1_concluida: false,
       etapa2_concluida: false,
       etapa3_concluida: false,
+    }
+    if (setorRefId) {
+      recordPayload.setor_ref = setorRefId
+    }
+
+    const record = await pb.collection('onboardings').create<Onboarding>(recordPayload, {
+      expand: 'gestor_id,setor_ref',
     })
 
     // 1. Copia os templates da Etapa 1 (Apresentação RH) para tarefas_onboarding
-    // Se o template referenciar um material da biblioteca, associa a relation sem duplicar arquivo
     const templatesEtapa1 = await modeloService.listEtapa1()
     for (const tpl of templatesEtapa1) {
       await pb.collection('tarefas_onboarding').create({
@@ -256,7 +400,8 @@ export const onboardingService = {
     }
 
     // 2. Copia os templates do setor para tarefas_onboarding (Etapa 2 - Vivência Técnica)
-    const templates = await modeloService.listBySetor(data.setor)
+    // Se o setor não tiver templates pré-configurados, a Etapa 2 nasce vazia e permite adicionar itens
+    const templates = await modeloService.listBySetor(data.setor, setorRefId)
     for (const tpl of templates) {
       await pb.collection('tarefas_onboarding').create({
         onboarding_id: record.id,

@@ -15,7 +15,7 @@ import type {
   Avaliacao,
   TarefaTipo,
 } from '@/types/onboarding'
-import { SETORES_INFO, STATUS_INFO } from '@/types/onboarding'
+import { SETORES_INFO, STATUS_INFO, getSetorVisual } from '@/types/onboarding'
 import {
   ArrowLeft,
   Calendar,
@@ -481,7 +481,7 @@ export default function DetalheOnboarding() {
     )
   }
 
-  const setorInfo = SETORES_INFO[onboarding.setor]
+  const setorInfo = getSetorVisual(onboarding.setor, onboarding.expand?.setor_ref)
   const statusInfo = STATUS_INFO[onboarding.status]
 
   return (
@@ -516,10 +516,12 @@ export default function DetalheOnboarding() {
               <h2 className="text-2xl font-bold tracking-tight text-[#1A2233]">
                 {onboarding.colaborador_nome}
               </h2>
-              <span
-                className={`text-xs px-2.5 py-0.5 rounded-full border font-semibold ${setorInfo.corBg}`}
-              >
-                Setor: {setorInfo.nome}
+              <span className="text-xs px-2.5 py-0.5 rounded-full border font-semibold bg-blue-50 text-blue-700 border-blue-200 inline-flex items-center gap-1.5">
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: setorInfo.cor }}
+                />
+                Área: {setorInfo.nome}
               </span>
               <span
                 className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${statusInfo.corBg}`}

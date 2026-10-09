@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { modeloService, materialService } from '@/services/onboarding'
-import type { ModeloTarefa, MaterialBiblioteca, Setor, TarefaTipo } from '@/types/onboarding'
-import { SETORES_INFO } from '@/types/onboarding'
+import { modeloService, materialService, setorService } from '@/services/onboarding'
+import type {
+  ModeloTarefa,
+  MaterialBiblioteca,
+  Setor,
+  TarefaTipo,
+  SetorModel,
+  SetorVisualInfo,
+} from '@/types/onboarding'
+import { SETORES_INFO, getSetorVisual } from '@/types/onboarding'
 import {
   Video,
   FileText,
@@ -16,8 +23,11 @@ import {
   Library,
   Search,
   Upload,
-  Link2,
-  HelpCircle,
+  Settings2,
+  CheckCircle2,
+  Layers,
+  Sparkles,
+  ArrowRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,16 +42,39 @@ import {
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 
-type TabType = 'biblioteca' | 'etapa1' | Setor
+type TabType = 'biblioteca' | 'etapa1' | string
 
 export default function ModelosTarefas() {
   const { user, isAdmin, isRH } = useAuth()
 
-  // Aba selecionada: 'biblioteca' (nova primeira aba) | 'etapa1' | 5 setores
+  // Lista dinâmica de setores da coleção
+  const [setoresList, setSetoresList] = useState<SetorModel[]>([])
+  const [loadingSetores, setLoadingSetores] = useState(true)
+
+  // Aba selecionada: 'biblioteca' | 'etapa1' | setor.id ou setor.chave
   const [selectedTab, setSelectedTab] = useState<TabType>('biblioteca')
   const [modelos, setModelos] = useState<ModeloTarefa[]>([])
   const [materiais, setMateriais] = useState<MaterialBiblioteca[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Modal Gerenciamento Geral de Áreas
+  const [gerenciarSetoresOpen, setGerenciarSetoresOpen] = useState(false)
+  const [setorModalOpen, setSetorModalOpen] = useState(false)
+  const [setorEditing, setSetorEditing] = useState<SetorModel | null>(null)
+  const [setorNome, setSetorNome] = useState('')
+  const [setorDescricao, setSetorDescricao] = useState('')
+  const [setorCor, setSetorCor] = useState('#2563EB')
+  const [setorAtivo, setSetorAtivo] = useState(true)
+  const [setorSubmitting, setSetorSubmitting] = useState(false)
+  const [setorError, setSetorError] = useState('')
+
+  // Modal Confirmação de Exclusão/Desativação de Área com contagem de uso
+  const [deleteSetorItem, setDeleteSetorItem] = useState<{
+    setor: SetorModel
+    modelosCount: number
+    onboardingsCount: number
+  } | null>(null)
+  const [deletingSetor, setDeletingSetor] = useState(false)
 
   // Filtro de busca na biblioteca
   const [buscaMaterial, setBuscaMaterial] = useState('')
@@ -94,6 +127,20 @@ export default function ModelosTarefas() {
     origem?: string
   } | null>(null)
 
+  // Carregar setores da coleção
+  const fetchSetores = async () => {
+    try {
+      setLoadingSetores(true)
+      const data = await setorService.listAll()
+      setSetoresList(data)
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao carregar setores.')
+    } finally {
+      setLoadingSetores(false)
+    }
+  }
+
   // Carregar dados de materiais
   const fetchMateriais = async () => {
     try {
@@ -104,6 +151,16 @@ export default function ModelosTarefas() {
       toast.error('Erro ao carregar biblioteca de materiais.')
     }
   }
+
+  // Setor ativo atual (objeto SetorModel correspondente à aba)
+  const activeSetorModel = useMemo(() => {
+    if (selectedTab === 'biblioteca' || selectedTab === 'etapa1') return null
+    return (
+      setoresList.find(
+        (s) => s.id === selectedTab || s.chave === selectedTab || s.nome === selectedTab,
+      ) || null
+    )
+  }, [selectedTab, setoresList])
 
   // Carregar modelos da aba ativa
   const fetchModelos = async () => {
@@ -116,7 +173,9 @@ export default function ModelosTarefas() {
         const list = await modeloService.listEtapa1()
         setModelos(list)
       } else {
-        const list = await modeloService.listBySetor(selectedTab)
+        const setorId = activeSetorModel?.id
+        const setorChave = activeSetorModel?.chave || selectedTab
+        const list = await modeloService.listBySetor(setorChave, setorId)
         setModelos(list)
       }
     } catch (err) {
@@ -128,6 +187,7 @@ export default function ModelosTarefas() {
   }
 
   useEffect(() => {
+    fetchSetores()
     fetchMateriais()
   }, [])
 
@@ -137,7 +197,7 @@ export default function ModelosTarefas() {
     } else {
       fetchModelos()
     }
-  }, [selectedTab])
+  }, [selectedTab, setoresList])
 
   // Materiais filtrados para a tela da Biblioteca
   const materiaisFiltrados = useMemo(() => {
@@ -358,9 +418,14 @@ export default function ModelosTarefas() {
       if (selectedTab === 'etapa1') {
         formData.append('etapa', '1')
         formData.append('setor', '')
+        formData.append('setor_ref', '')
       } else {
         formData.append('etapa', '2')
-        formData.append('setor', selectedTab)
+        const setorChave = activeSetorModel?.chave || activeSetorModel?.nome || selectedTab
+        formData.append('setor', setorChave)
+        if (activeSetorModel?.id) {
+          formData.append('setor_ref', activeSetorModel.id)
+        }
       }
 
       if (formOrigemArquivo === 'biblioteca') {
@@ -428,9 +493,142 @@ export default function ModelosTarefas() {
     setPreviewOpen(true)
   }
 
+  // ==================== GESTÃO DE ÁREAS / SETORES ====================
+  const openNewSetorModal = () => {
+    setSetorEditing(null)
+    setSetorNome('')
+    setSetorDescricao('')
+    setSetorCor('#2563EB')
+    setSetorAtivo(true)
+    setSetorError('')
+    setSetorModalOpen(true)
+  }
+
+  const openEditSetorModal = (item: SetorModel) => {
+    setSetorEditing(item)
+    setSetorNome(item.nome)
+    setSetorDescricao(item.descricao || '')
+    setSetorCor(item.cor || '#2563EB')
+    setSetorAtivo(item.ativo)
+    setSetorError('')
+    setSetorModalOpen(true)
+  }
+
+  const handleSaveSetor = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSetorError('')
+
+    if (!setorNome.trim()) {
+      setSetorError('O nome da área/setor é obrigatório.')
+      return
+    }
+
+    try {
+      setSetorSubmitting(true)
+      if (setorEditing) {
+        await setorService.update(setorEditing.id, {
+          nome: setorNome.trim(),
+          descricao: setorDescricao.trim(),
+          cor: setorCor,
+          ativo: setorAtivo,
+        })
+        toast.success(`Área "${setorNome.trim()}" atualizada com sucesso!`)
+      } else {
+        const novo = await setorService.create({
+          nome: setorNome.trim(),
+          descricao: setorDescricao.trim(),
+          cor: setorCor,
+          ativo: true,
+          ordem: setoresList.length + 1,
+        })
+        toast.success(`Área "${novo.nome}" criada com sucesso!`, {
+          description: 'Você pode adicionar modelos de tarefas para ela a qualquer momento.',
+          action: {
+            label: 'Criar modelo para esta área',
+            onClick: () => {
+              setSelectedTab(novo.id)
+              setGerenciarSetoresOpen(false)
+              setTimeout(() => {
+                openNewModal('manual')
+              }, 200)
+            },
+          },
+        })
+        // Abre automaticamente a aba da nova área
+        setSelectedTab(novo.id)
+      }
+
+      setSetorModalOpen(false)
+      await fetchSetores()
+    } catch (err: unknown) {
+      console.error(err)
+      setSetorError('Erro ao salvar área. Verifique se o nome já existe.')
+      toast.error('Erro ao salvar área.')
+    } finally {
+      setSetorSubmitting(false)
+    }
+  }
+
+  const promptDeleteSetor = async (item: SetorModel) => {
+    try {
+      const counts = await setorService.countUsage(item.id, item.chave || item.nome)
+      setDeleteSetorItem({
+        setor: item,
+        modelosCount: counts.modelosCount,
+        onboardingsCount: counts.onboardingsCount,
+      })
+    } catch (err) {
+      console.error(err)
+      setDeleteSetorItem({
+        setor: item,
+        modelosCount: 0,
+        onboardingsCount: 0,
+      })
+    }
+  }
+
+  const confirmDeleteSetor = async () => {
+    if (!deleteSetorItem) return
+    try {
+      setDeletingSetor(true)
+      await setorService.delete(deleteSetorItem.setor.id)
+      toast.success(`Área "${deleteSetorItem.setor.nome}" excluída com sucesso.`)
+
+      // Se a aba excluída era a ativa, volta para biblioteca
+      if (selectedTab === deleteSetorItem.setor.id || selectedTab === deleteSetorItem.setor.chave) {
+        setSelectedTab('biblioteca')
+      }
+
+      setDeleteSetorItem(null)
+      await fetchSetores()
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao excluir área.')
+    } finally {
+      setDeletingSetor(false)
+    }
+  }
+
+  const handleToggleAtivoSetor = async (item: SetorModel) => {
+    try {
+      const novoStatus = !item.ativo
+      await setorService.update(item.id, { ativo: novoStatus })
+      toast.success(`Área "${item.nome}" ${novoStatus ? 'ativada' : 'desativada'} com sucesso!`)
+      await fetchSetores()
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao alterar status da área.')
+    }
+  }
+
   const isBiblioteca = selectedTab === 'biblioteca'
   const isEtapa1 = selectedTab === 'etapa1'
-  const currentSetorInfo = !isBiblioteca && !isEtapa1 ? SETORES_INFO[selectedTab as Setor] : null
+
+  // Informações visuais do setor ativo atual
+  const currentSetorInfo: SetorVisualInfo | null = useMemo(() => {
+    if (isBiblioteca || isEtapa1) return null
+    return getSetorVisual(selectedTab, activeSetorModel)
+  }, [isBiblioteca, isEtapa1, selectedTab, activeSetorModel])
 
   // Materiais disponíveis no modal de seleção filtrados pelo tipo corrente
   const materiaisCompativeis = useMemo(() => {
@@ -443,7 +641,7 @@ export default function ModelosTarefas() {
       <div className="bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
               <h2 className="text-xl font-bold text-[#1A2233]">Modelos de Tarefas & Treinamento</h2>
               {isAdmin ? (
                 <span className="text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
@@ -456,14 +654,25 @@ export default function ModelosTarefas() {
               ) : null}
             </div>
             <p className="text-xs text-gray-500 mt-1 max-w-3xl leading-relaxed">
-              Centralize vídeos e manuais na <strong>Biblioteca Central de Materiais</strong> (ex.:
-              Movidesk, Passportal) e associe aos templates da <strong>Etapa 1 (Geral RH)</strong> e
-              dos <strong>5 Setores de TI (Etapa 2)</strong>, evitando subir o mesmo arquivo
-              repetidas vezes.
+              Centralize vídeos e manuais na <strong>Biblioteca Central de Materiais</strong> e
+              associe aos templates da <strong>Etapa 1 (Geral RH)</strong> e das{' '}
+              <strong>Áreas/Setores da Empresa</strong>. Você pode adicionar novas áreas
+              dinamicamente conforme a empresa expande.
             </p>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {(isAdmin || isRH) && (
+              <Button
+                variant="outline"
+                onClick={() => setGerenciarSetoresOpen(true)}
+                className="text-xs font-semibold h-9 border-gray-300 hover:bg-gray-50 rounded-lg shadow-xs"
+              >
+                <Settings2 className="w-3.5 h-3.5 mr-1.5 text-gray-600" />
+                Gerenciar Áreas
+              </Button>
+            )}
+
             {isBiblioteca ? (
               <Button
                 onClick={() => openNewMaterialModal('manual')}
@@ -494,15 +703,15 @@ export default function ModelosTarefas() {
         </div>
       </div>
 
-      {/* Grid de Seleção de Abas: [Biblioteca de Materiais] + [Etapa 1 — Geral RH] + [5 Setores TI] */}
-      <div className="grid grid-cols-2 sm:grid-cols-7 gap-2.5">
+      {/* Grid de Seleção de Abas: [Biblioteca de Materiais] + [Etapa 1 — Geral RH] + [Setores Dinâmicos da Coleção] */}
+      <div className="flex flex-wrap gap-2.5">
         {/* 1. Aba Biblioteca Central */}
         <button
           type="button"
           onClick={() => setSelectedTab('biblioteca')}
-          className={`p-3.5 rounded-xl border-2 text-left transition-all col-span-2 sm:col-span-1 ${
+          className={`p-3 rounded-xl border-2 text-left transition-all flex-1 min-w-[140px] max-w-[200px] ${
             selectedTab === 'biblioteca'
-              ? 'border-indigo-600 bg-white shadow-sm scale-[1.01]'
+              ? 'border-indigo-600 bg-white shadow-sm ring-1 ring-indigo-200'
               : 'border-transparent bg-white/70 hover:bg-white text-gray-600 hover:border-gray-200'
           }`}
         >
@@ -517,9 +726,9 @@ export default function ModelosTarefas() {
         <button
           type="button"
           onClick={() => setSelectedTab('etapa1')}
-          className={`p-3.5 rounded-xl border-2 text-left transition-all col-span-2 sm:col-span-1 ${
+          className={`p-3 rounded-xl border-2 text-left transition-all flex-1 min-w-[140px] max-w-[200px] ${
             selectedTab === 'etapa1'
-              ? 'border-blue-600 bg-white shadow-sm scale-[1.01]'
+              ? 'border-blue-600 bg-white shadow-sm ring-1 ring-blue-200'
               : 'border-transparent bg-white/70 hover:bg-white text-gray-600 hover:border-gray-200'
           }`}
         >
@@ -532,33 +741,54 @@ export default function ModelosTarefas() {
           </span>
         </button>
 
-        {/* 3. Abas dos 5 Setores */}
-        {(Object.keys(SETORES_INFO) as Setor[]).map((setorKey) => {
-          const info = SETORES_INFO[setorKey]
-          const isSelected = selectedTab === setorKey
+        {/* 3. Abas das Áreas Dinâmicas da Coleção (ou fallback se carregando/vazio) */}
+        {(setoresList.length > 0
+          ? setoresList.filter((s) => s.ativo !== false)
+          : Object.keys(SETORES_INFO).map((k) => ({
+              id: k,
+              nome: SETORES_INFO[k].nome,
+              descricao: SETORES_INFO[k].descricao,
+              cor: SETORES_INFO[k].cor,
+              ativo: true,
+            }))
+        ).map((s) => {
+          const isSelected = selectedTab === s.id || (s.chave && selectedTab === s.chave)
+          const cor = s.cor || '#4F46E5'
 
           return (
             <button
-              key={setorKey}
+              key={s.id}
               type="button"
-              onClick={() => setSelectedTab(setorKey)}
-              className={`p-3.5 rounded-xl border-2 text-left transition-all ${
+              onClick={() => setSelectedTab(s.id)}
+              className={`p-3 rounded-xl border-2 text-left transition-all flex-1 min-w-[130px] max-w-[190px] ${
                 isSelected
-                  ? 'border-blue-600 bg-white shadow-sm scale-[1.01]'
+                  ? 'border-blue-600 bg-white shadow-sm ring-1 ring-blue-200'
                   : 'border-transparent bg-white/70 hover:bg-white text-gray-600 hover:border-gray-200'
               }`}
             >
               <div className="flex items-center gap-2 mb-1">
-                <span
-                  className="w-3 h-3 rounded-full shrink-0"
-                  style={{ backgroundColor: info.cor }}
-                />
-                <span className="font-bold text-xs text-gray-900 truncate">{info.nome}</span>
+                <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: cor }} />
+                <span className="font-bold text-xs text-gray-900 truncate">{s.nome}</span>
               </div>
-              <span className="text-[11px] text-gray-400 block truncate">{info.descricao}</span>
+              <span className="text-[11px] text-gray-400 block truncate">
+                {s.descricao || 'Área da empresa'}
+              </span>
             </button>
           )
         })}
+
+        {/* Botão Atalho "Nova Área" para Admin/RH direto nas abas */}
+        {(isAdmin || isRH) && (
+          <button
+            type="button"
+            onClick={openNewSetorModal}
+            className="p-3 rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-500 hover:bg-blue-50/50 text-gray-500 hover:text-blue-600 transition-all flex items-center justify-center gap-1.5 min-w-[110px]"
+            title="Criar nova área/setor para a empresa"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span className="text-xs font-semibold">Nova área</span>
+          </button>
+        )}
       </div>
 
       {/* ========================================================================= */}
@@ -674,7 +904,9 @@ export default function ModelosTarefas() {
             ) : (
               materiaisFiltrados.map((item) => {
                 const setorOrigemNome = item.setor_origem
-                  ? SETORES_INFO[item.setor_origem as Setor]?.nome
+                  ? setoresList.find(
+                      (s) => s.chave === item.setor_origem || s.nome === item.setor_origem,
+                    )?.nome || getSetorVisual(item.setor_origem).nome
                   : null
 
                 return (
@@ -1103,9 +1335,9 @@ export default function ModelosTarefas() {
                 disabled={materialSubmitting}
               >
                 <option value="">Geral / Comum a Todos os Setores</option>
-                {(Object.keys(SETORES_INFO) as Setor[]).map((s) => (
-                  <option key={s} value={s}>
-                    {SETORES_INFO[s].nome}
+                {setoresList.map((s) => (
+                  <option key={s.id} value={s.chave || s.nome}>
+                    {s.nome}
                   </option>
                 ))}
               </select>
@@ -1462,6 +1694,307 @@ export default function ModelosTarefas() {
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setPreviewOpen(false)}>
               Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL: GERENCIAMENTO DE ÁREAS / SETORES                                    */}
+      {/* ========================================================================= */}
+      <Dialog open={gerenciarSetoresOpen} onOpenChange={setGerenciarSetoresOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center justify-between pr-4">
+              <DialogTitle className="text-base font-bold text-gray-900 flex items-center gap-2">
+                <Layers className="w-5 h-5 text-blue-600" />
+                <span>Gestão de Áreas da Empresa</span>
+              </DialogTitle>
+              <Button
+                size="sm"
+                onClick={openNewSetorModal}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold h-8 rounded-lg"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                Nova Área
+              </Button>
+            </div>
+          </DialogHeader>
+
+          <div className="py-2 space-y-3">
+            <p className="text-xs text-gray-500">
+              Crie novas áreas ou ajuste as existentes (técnicas ou administrativas). As áreas
+              ativas aparecem no formulário de novos onboardings e como abas nos modelos de tarefas.
+            </p>
+
+            <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden bg-white">
+              {setoresList.length === 0 ? (
+                <div className="p-8 text-center text-xs text-gray-400">Carregando áreas...</div>
+              ) : (
+                setoresList.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`p-3.5 flex items-center justify-between gap-3 hover:bg-gray-50/70 transition-colors ${
+                      !item.ativo ? 'opacity-60 bg-gray-50/40' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <span
+                        className="w-3.5 h-3.5 rounded-full shrink-0"
+                        style={{ backgroundColor: item.cor || '#2563EB' }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-xs text-gray-900 truncate">
+                            {item.nome}
+                          </span>
+                          {!item.ativo && (
+                            <span className="text-[10px] bg-gray-100 text-gray-500 border px-1.5 py-0.2 rounded font-medium">
+                              Desativada
+                            </span>
+                          )}
+                        </div>
+                        {item.descricao && (
+                          <p className="text-[11px] text-gray-500 truncate mt-0.5">
+                            {item.descricao}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleToggleAtivoSetor(item)}
+                        className={`h-8 text-xs ${
+                          item.ativo
+                            ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50'
+                            : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'
+                        }`}
+                      >
+                        {item.ativo ? 'Desativar' : 'Ativar'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEditSetorModal(item)}
+                        className="h-8 w-8 text-gray-500 hover:text-gray-800"
+                        aria-label="Editar área"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => promptDeleteSetor(item)}
+                        className="h-8 w-8 text-gray-400 hover:text-red-600"
+                        aria-label="Excluir área"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setGerenciarSetoresOpen(false)}
+            >
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL: CRIAR / EDITAR ÁREA / SETOR                                        */}
+      {/* ========================================================================= */}
+      <Dialog open={setorModalOpen} onOpenChange={setSetorModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-gray-900 flex items-center gap-2">
+              <Layers className="w-5 h-5 text-blue-600" />
+              <span>{setorEditing ? 'Editar Área / Setor' : 'Nova Área / Setor'}</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveSetor} className="space-y-4 py-2">
+            {setorError && (
+              <div className="p-2.5 rounded bg-red-50 text-red-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{setorError}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Nome da Área / Setor *
+              </label>
+              <Input
+                placeholder="Ex.: RH, Comercial, Laboratório, Financeiro..."
+                value={setorNome}
+                onChange={(e) => setSetorNome(e.target.value)}
+                className="h-10 text-xs"
+                disabled={setorSubmitting}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Descrição ou Atribuições da Área
+              </label>
+              <Textarea
+                placeholder="Ex.: Atividades de recrutamento, departamento pessoal e rotinas da empresa..."
+                value={setorDescricao}
+                onChange={(e) => setSetorDescricao(e.target.value)}
+                className="text-xs min-h-[70px]"
+                disabled={setorSubmitting}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 items-center">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Cor da Identidade
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={setorCor}
+                    onChange={(e) => setSetorCor(e.target.value)}
+                    className="w-9 h-9 p-0.5 rounded cursor-pointer border border-gray-300"
+                    disabled={setorSubmitting}
+                  />
+                  <span className="text-xs text-gray-600 font-mono">{setorCor}</span>
+                </div>
+              </div>
+
+              {setorEditing && (
+                <div className="pt-4">
+                  <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={setorAtivo}
+                      onChange={(e) => setSetorAtivo(e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600"
+                      disabled={setorSubmitting}
+                    />
+                    <span>Área Ativa</span>
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSetorModalOpen(false)}
+                disabled={setorSubmitting}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={setorSubmitting}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+              >
+                {setorSubmitting ? 'Salvando...' : 'Salvar Área'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL: CONFIRMAÇÃO DE EXCLUSÃO DE ÁREA / SETOR COM AVISO DE CONTAGEM       */}
+      {/* ========================================================================= */}
+      <Dialog
+        open={Boolean(deleteSetorItem)}
+        onOpenChange={(open) => !open && setDeleteSetorItem(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-gray-900 flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-600" />
+              <span>Confirmar Exclusão da Área</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-2 space-y-3">
+            <p className="text-xs text-gray-600">
+              Tem certeza que deseja excluir a área <strong>"{deleteSetorItem?.setor.nome}"</strong>
+              ?
+            </p>
+
+            {deleteSetorItem &&
+            (deleteSetorItem.modelosCount > 0 || deleteSetorItem.onboardingsCount > 0) ? (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1.5">
+                <p className="font-semibold flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  Atenção: Área em uso no sistema!
+                </p>
+                <p>
+                  Esta área possui: <strong>{deleteSetorItem.modelosCount}</strong> modelo(s) de
+                  tarefa e <strong>{deleteSetorItem.onboardingsCount}</strong> colaborador(es) em
+                  onboarding associados.
+                </p>
+                <p className="text-[11px] text-amber-800">
+                  Recomendação: prefira <strong>desativar</strong> a área para preservar o histórico
+                  e os modelos já configurados.
+                </p>
+              </div>
+            ) : (
+              <p className="text-[11px] text-gray-400">
+                Nenhum modelo ou onboarding está vinculado a esta área no momento.
+              </p>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteSetorItem(null)}
+              disabled={deletingSetor}
+            >
+              Cancelar
+            </Button>
+            {deleteSetorItem && deleteSetorItem.setor.ativo && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  if (deleteSetorItem) {
+                    await handleToggleAtivoSetor(deleteSetorItem.setor)
+                    setDeleteSetorItem(null)
+                  }
+                }}
+                disabled={deletingSetor}
+                className="text-amber-700 border-amber-300 hover:bg-amber-50"
+              >
+                Apenas Desativar
+              </Button>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              onClick={confirmDeleteSetor}
+              disabled={deletingSetor}
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold"
+            >
+              {deletingSetor ? 'Excluindo...' : 'Excluir Área'}
             </Button>
           </DialogFooter>
         </DialogContent>

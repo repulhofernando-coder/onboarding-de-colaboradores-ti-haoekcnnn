@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { onboardingService } from '@/services/onboarding'
 import { useRealtime } from '@/hooks/use-realtime'
 import type { Onboarding } from '@/types/onboarding'
-import { SETORES_INFO, STATUS_INFO } from '@/types/onboarding'
+import { SETORES_INFO, STATUS_INFO, getSetorVisual } from '@/types/onboarding'
 import {
   Users,
   Search,
@@ -147,7 +147,7 @@ export default function Colaboradores() {
           </div>
         ) : (
           filtrados.map((item) => {
-            const setor = SETORES_INFO[item.setor]
+            const setor = getSetorVisual(item.setor, item.onboardingMaisRecente.expand?.setor_ref)
             const status = STATUS_INFO[item.onboardingMaisRecente.status]
             const onb = item.onboardingMaisRecente
 
@@ -172,9 +172,11 @@ export default function Colaboradores() {
                       </span>
                     </div>
 
-                    <span
-                      className={`text-[11px] px-2.5 py-0.5 rounded-full border font-semibold shrink-0 ${setor.corBg}`}
-                    >
+                    <span className="text-[11px] px-2.5 py-0.5 rounded-full border font-semibold shrink-0 bg-blue-50 text-blue-700 border-blue-200 inline-flex items-center gap-1.5">
+                      <span
+                        className="w-1.5 h-1.5 rounded-full shrink-0"
+                        style={{ backgroundColor: setor.cor }}
+                      />
                       {setor.nome}
                     </span>
                   </div>

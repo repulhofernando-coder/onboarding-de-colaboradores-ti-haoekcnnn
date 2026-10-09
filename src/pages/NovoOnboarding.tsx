@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { onboardingService, userService } from '@/services/onboarding'
-import type { Setor, User } from '@/types/onboarding'
-import { SETORES_INFO } from '@/types/onboarding'
+import { onboardingService, userService, setorService } from '@/services/onboarding'
+import type { Setor, User, SetorModel } from '@/types/onboarding'
+import { SETORES_INFO, getSetorVisual } from '@/types/onboarding'
 import {
   ArrowLeft,
   Calendar,
@@ -36,12 +36,15 @@ export default function NovoOnboarding() {
     return new Date().toISOString().split('T')[0]
   })
 
+  const [setoresList, setSetoresList] = useState<SetorModel[]>([])
+  const [loadingSetores, setLoadingSetores] = useState(true)
   const [gestores, setGestores] = useState<User[]>([])
   const [loadingGestores, setLoadingGestores] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
+    // Carregar gestores
     userService
       .getGestores()
       .then((res) => {
@@ -56,6 +59,23 @@ export default function NovoOnboarding() {
       })
       .finally(() => {
         setLoadingGestores(false)
+      })
+
+    // Carregar setores ativos da coleção
+    setorService
+      .listAtivos()
+      .then((res) => {
+        if (res.length > 0) {
+          setSetoresList(res)
+          const firstKey = res[0].chave || res[0].nome
+          setSetor(firstKey)
+        }
+      })
+      .catch((err) => {
+        console.error(err)
+      })
+      .finally(() => {
+        setLoadingSetores(false)
       })
   }, [])
 
@@ -114,11 +134,17 @@ export default function NovoOnboarding() {
 
     try {
       setSubmitting(true)
+      // Descobre o setor_ref se existir na lista carregada
+      const foundModel = setoresList.find(
+        (s) => s.chave === setor || s.nome === setor || s.id === setor,
+      )
+
       const novo = await onboardingService.create({
         colaborador_nome: nome,
         colaborador_email: email,
         cargo,
         setor,
+        setor_ref: foundModel?.id,
         gestor_id: gestorId,
         data_inicio: dataInicio,
       })
@@ -262,29 +288,44 @@ export default function NovoOnboarding() {
               <Select
                 value={setor}
                 onValueChange={(val: Setor) => setSetor(val)}
-                disabled={submitting}
+                disabled={submitting || loadingSetores}
               >
                 <SelectTrigger className="h-11 border-gray-300 text-sm">
                   <SelectValue placeholder="Selecione o setor" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(Object.keys(SETORES_INFO) as Setor[]).map((key) => {
-                    const info = SETORES_INFO[key]
-                    return (
-                      <SelectItem key={key} value={key}>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="w-2.5 h-2.5 rounded-full"
-                            style={{ backgroundColor: info.cor }}
-                          />
-                          <span>{info.nome}</span>
-                        </div>
-                      </SelectItem>
-                    )
-                  })}
+                  {setoresList.length > 0
+                    ? setoresList.map((item) => (
+                        <SelectItem key={item.id} value={item.chave || item.nome}>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full"
+                              style={{ backgroundColor: item.cor || '#2563EB' }}
+                            />
+                            <span>{item.nome}</span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    : (Object.keys(SETORES_INFO) as Setor[]).map((key) => {
+                        const info = SETORES_INFO[key]
+                        return (
+                          <SelectItem key={key} value={key}>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="w-2.5 h-2.5 rounded-full"
+                                style={{ backgroundColor: info.cor }}
+                              />
+                              <span>{info.nome}</span>
+                            </div>
+                          </SelectItem>
+                        )
+                      })}
                 </SelectContent>
               </Select>
-              <p className="text-[11px] text-gray-500 mt-1">{SETORES_INFO[setor].descricao}</p>
+              <p className="text-[11px] text-gray-500 mt-1">
+                {setoresList.find((s) => s.chave === setor || s.nome === setor)?.descricao ||
+                  getSetorVisual(setor).descricao}
+              </p>
             </div>
 
             <div>

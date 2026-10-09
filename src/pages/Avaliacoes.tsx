@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
-import { onboardingService, avaliacaoService } from '@/services/onboarding'
+import { onboardingService, avaliacaoService, setorService } from '@/services/onboarding'
 import { useRealtime } from '@/hooks/use-realtime'
-import type { Onboarding, Avaliacao } from '@/types/onboarding'
-import { SETORES_INFO } from '@/types/onboarding'
+import type { Onboarding, AvaliacaoDecisao, SetorModel } from '@/types/onboarding'
+import { SETORES_INFO, getSetorVisual } from '@/types/onboarding'
 import {
   ClipboardCheck,
   Flame,
@@ -32,42 +32,56 @@ import { toast } from 'sonner'
 export default function Avaliacoes() {
   const { user, role, isAdmin } = useAuth()
   const [onboardings, setOnboardings] = useState<Onboarding[]>([])
+  const [setoresList, setSetoresList] = useState<SetorModel[]>([])
+  const [filtroSetor, setFiltroSetor] = useState<string>('todos')
   const [loading, setLoading] = useState(true)
 
-  // Modal de Avaliação
+  // Modal de avaliação
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedOnboarding, setSelectedOnboarding] = useState<Onboarding | null>(null)
-  const [decisao, setDecisao] = useState<'apto' | 'nao_apto' | null>(null)
+  const [decisao, setDecisao] = useState<AvaliacaoDecisao | null>(null)
   const [observacoes, setObservacoes] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  const fetchOnboardings = async () => {
+  const fetchData = async () => {
     try {
-      const data = await onboardingService.list()
+      const [data, setores] = await Promise.all([onboardingService.list(), setorService.listAll()])
       setOnboardings(data)
+      setSetoresList(setores)
     } catch (err) {
       console.error(err)
-      toast.error('Erro ao carregar avaliações.')
+      toast.error('Erro ao carregar onboardings.')
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    fetchOnboardings()
+    fetchData()
   }, [])
 
   useRealtime<Onboarding>('onboardings', () => {
-    fetchOnboardings()
+    fetchData()
   })
 
-  // Colaboradores aguardando avaliação final
+  // Colaboradores aguardando avaliação final filtrados por setor
   const pendentes = useMemo(() => {
     const hoje = new Date()
     hoje.setHours(0, 0, 0, 0)
 
     return onboardings
-      .filter((o) => o.status === 'avaliacao_pendente')
+      .filter((o) => {
+        const matchStatus = o.status === 'avaliacao_pendente'
+        const matchSetor =
+          filtroSetor === 'todos' ||
+          o.setor === filtroSetor ||
+          o.setor_ref === filtroSetor ||
+          (o.expand?.setor_ref &&
+            (o.expand.setor_ref.id === filtroSetor ||
+              o.expand.setor_ref.chave === filtroSetor ||
+              o.expand.setor_ref.nome === filtroSetor))
+        return matchStatus && matchSetor
+      })
       .map((o) => {
         const [ano, mes, dia] = o.data_fim.split('-').map(Number)
         const dataFim = new Date(ano, mes - 1, dia)
@@ -84,7 +98,7 @@ export default function Avaliacoes() {
         }
       })
       .sort((a, b) => a.diasRestantes - b.diasRestantes)
-  }, [onboardings])
+  }, [onboardings, filtroSetor])
 
   // Colaboradores que excederam o prazo de 15 dias
   const atrasados = useMemo(() => {
@@ -127,7 +141,7 @@ export default function Avaliacoes() {
           : `Decisão registrada! ${selectedOnboarding.colaborador_nome} marcado como Não Apto.`,
       )
       setModalOpen(false)
-      fetchOnboardings()
+      fetchData()
     } catch (err) {
       console.error(err)
       toast.error('Erro ao salvar avaliação.')
@@ -234,7 +248,7 @@ export default function Avaliacoes() {
 
       {/* Lista de Avaliações Pendentes */}
       <div className="bg-white rounded-xl border border-gray-200/90 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+        <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h3 className="text-base font-bold text-gray-900">
               Colaboradores Prontos para Avaliação Final
@@ -245,6 +259,52 @@ export default function Avaliacoes() {
             </p>
           </div>
           <span className="text-xs font-semibold text-gray-500">{pendentes.length} pendentes</span>
+        </div>
+
+        {/* Filtro por Setor Dinâmico */}
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-1.5 flex-wrap bg-gray-50/50">
+          <span className="text-xs font-semibold text-gray-500 mr-1">Filtrar por Área:</span>
+          <button
+            type="button"
+            onClick={() => setFiltroSetor('todos')}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              filtroSetor === 'todos'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+            }`}
+          >
+            Todas as áreas
+          </button>
+          {(setoresList.length > 0
+            ? setoresList.filter((s) => s.ativo !== false)
+            : Object.keys(SETORES_INFO).map((k) => ({
+                id: k,
+                chave: k,
+                nome: SETORES_INFO[k].nome,
+                cor: SETORES_INFO[k].cor,
+              }))
+          ).map((s) => {
+            const val = s.chave || s.nome
+            const active = filtroSetor === val || filtroSetor === s.id
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setFiltroSetor(val)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                  active
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                }`}
+              >
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: s.cor || '#2563EB' }}
+                />
+                <span>{s.nome}</span>
+              </button>
+            )
+          })}
         </div>
 
         <div className="overflow-x-auto">
@@ -270,7 +330,7 @@ export default function Avaliacoes() {
                 </tr>
               ) : (
                 pendentes.map((item) => {
-                  const setor = SETORES_INFO[item.setor]
+                  const setor = getSetorVisual(item.setor, item.expand?.setor_ref)
 
                   return (
                     <tr key={item.id} className="hover:bg-amber-50/20 transition-colors">
@@ -287,9 +347,11 @@ export default function Avaliacoes() {
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${setor.corBg}`}
-                        >
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-200">
+                          <span
+                            className="w-1.5 h-1.5 rounded-full shrink-0"
+                            style={{ backgroundColor: setor.cor }}
+                          />
                           {setor.nome}
                         </span>
                       </td>
@@ -394,7 +456,7 @@ export default function Avaliacoes() {
                   )}
                 </div>
                 <div className="text-[11px] text-gray-500">
-                  Setor: {SETORES_INFO[item.setor].nome}
+                  Setor: {getSetorVisual(item.setor, item.expand?.setor_ref).nome}
                 </div>
                 <div className="text-[11px] text-gray-400">
                   Data: {formatShortDate(item.data_conclusao_etapa3)}
@@ -427,8 +489,12 @@ export default function Avaliacoes() {
                   {selectedOnboarding.colaborador_nome}
                 </div>
                 <div className="text-gray-500 mt-0.5">
-                  Setor {SETORES_INFO[selectedOnboarding.setor].nome} • Início:{' '}
-                  {formatShortDate(selectedOnboarding.data_inicio)} • Prazo:{' '}
+                  Setor{' '}
+                  {
+                    getSetorVisual(selectedOnboarding.setor, selectedOnboarding.expand?.setor_ref)
+                      .nome
+                  }{' '}
+                  • Início: {formatShortDate(selectedOnboarding.data_inicio)} • Prazo:{' '}
                   {formatShortDate(selectedOnboarding.data_fim)}
                 </div>
               </div>

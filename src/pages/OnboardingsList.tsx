@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { onboardingService } from '@/services/onboarding'
+import { onboardingService, setorService } from '@/services/onboarding'
 import { useRealtime } from '@/hooks/use-realtime'
-import type { Onboarding, OnboardingStatus, Setor } from '@/types/onboarding'
-import { SETORES_INFO, STATUS_INFO } from '@/types/onboarding'
+import type { Onboarding, SetorModel, OnboardingStatus } from '@/types/onboarding'
+import { SETORES_INFO, STATUS_INFO, getSetorVisual } from '@/types/onboarding'
 import {
   Search,
   Plus,
@@ -24,9 +24,11 @@ export default function OnboardingsList() {
   const statusParam = searchParams.get('status') as OnboardingStatus | null
 
   const [onboardings, setOnboardings] = useState<Onboarding[]>([])
+  const [setoresList, setSetoresList] = useState<SetorModel[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [selectedStatus, setSelectedStatus] = useState<string>(statusParam || 'todos')
+  const [selectedSetor, setSelectedSetor] = useState<string>('todos')
   const [sortField, setSortField] = useState<'colaborador_nome' | 'data_fim' | 'progresso'>(
     'data_fim',
   )
@@ -34,10 +36,11 @@ export default function OnboardingsList() {
   const [page, setPage] = useState(1)
   const itemsPerPage = 10
 
-  const fetchOnboardings = async () => {
+  const fetchData = async () => {
     try {
-      const data = await onboardingService.list()
+      const [data, setores] = await Promise.all([onboardingService.list(), setorService.listAll()])
       setOnboardings(data)
+      setSetoresList(setores)
     } catch (err) {
       console.error(err)
     } finally {
@@ -46,11 +49,11 @@ export default function OnboardingsList() {
   }
 
   useEffect(() => {
-    fetchOnboardings()
+    fetchData()
   }, [])
 
   useRealtime<Onboarding>('onboardings', () => {
-    fetchOnboardings()
+    fetchData()
   })
 
   useEffect(() => {
@@ -108,9 +111,18 @@ export default function OnboardingsList() {
 
       const matchesStatus = selectedStatus === 'todos' || item.status === selectedStatus
 
-      return matchesSearch && matchesStatus
+      const matchesSetor =
+        selectedSetor === 'todos' ||
+        item.setor === selectedSetor ||
+        item.setor_ref === selectedSetor ||
+        (item.expand?.setor_ref &&
+          (item.expand.setor_ref.id === selectedSetor ||
+            item.expand.setor_ref.chave === selectedSetor ||
+            item.expand.setor_ref.nome === selectedSetor))
+
+      return matchesSearch && matchesStatus && matchesSetor
     })
-  }, [processedData, search, selectedStatus])
+  }, [processedData, search, selectedStatus, selectedSetor])
 
   const sortedData = useMemo(() => {
     return [...filteredData].sort((a, b) => {
@@ -221,6 +233,58 @@ export default function OnboardingsList() {
             )
           })}
         </div>
+
+        {/* Chips de filtro por setor dinâmico */}
+        <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-gray-100">
+          <span className="text-xs font-semibold text-gray-500 mr-1">Área / Setor:</span>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedSetor('todos')
+              setPage(1)
+            }}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              selectedSetor === 'todos'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            Todas as áreas
+          </button>
+          {(setoresList.length > 0
+            ? setoresList.filter((s) => s.ativo !== false)
+            : Object.keys(SETORES_INFO).map((k) => ({
+                id: k,
+                chave: k,
+                nome: SETORES_INFO[k].nome,
+                cor: SETORES_INFO[k].cor,
+              }))
+          ).map((s) => {
+            const val = s.chave || s.nome
+            const active = selectedSetor === val || selectedSetor === s.id
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => {
+                  setSelectedSetor(val)
+                  setPage(1)
+                }}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                  active
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: s.cor || '#2563EB' }}
+                />
+                <span>{s.nome}</span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* Tabela de Onboardings (Desktop) e Lista de Cards (Mobile) */}
@@ -274,7 +338,7 @@ export default function OnboardingsList() {
                 </tr>
               ) : (
                 paginatedData.map((item) => {
-                  const setor = SETORES_INFO[item.setor]
+                  const setor = getSetorVisual(item.setor, item.expand?.setor_ref)
                   const status = STATUS_INFO[item.status]
 
                   return (
@@ -294,9 +358,11 @@ export default function OnboardingsList() {
 
                       {/* Setor */}
                       <td className="py-3.5 px-4">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${setor.corBg}`}
-                        >
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-200">
+                          <span
+                            className="w-1.5 h-1.5 rounded-full shrink-0"
+                            style={{ backgroundColor: setor.cor }}
+                          />
                           {setor.nome}
                         </span>
                       </td>
@@ -378,7 +444,7 @@ export default function OnboardingsList() {
             </div>
           ) : (
             paginatedData.map((item) => {
-              const setor = SETORES_INFO[item.setor]
+              const setor = getSetorVisual(item.setor, item.expand?.setor_ref)
               const status = STATUS_INFO[item.status]
 
               return (
@@ -395,9 +461,11 @@ export default function OnboardingsList() {
                         {item.cargo || item.colaborador_email}
                       </span>
                     </div>
-                    <span
-                      className={`text-[11px] px-2 py-0.5 rounded-full border font-semibold ${setor.corBg}`}
-                    >
+                    <span className="text-[11px] px-2 py-0.5 rounded-full border font-semibold bg-blue-50 text-blue-700 border-blue-200 inline-flex items-center gap-1">
+                      <span
+                        className="w-1.5 h-1.5 rounded-full shrink-0"
+                        style={{ backgroundColor: setor.cor }}
+                      />
                       {setor.nome}
                     </span>
                   </div>

@@ -1,4 +1,4 @@
-export type Setor = 'windows' | 'linux_rede' | 'datacenter' | 'campo' | 'infraestrutura'
+export type Setor = 'windows' | 'linux_rede' | 'datacenter' | 'campo' | 'infraestrutura' | string
 
 export type UserRole = 'admin' | 'rh' | 'gestao'
 
@@ -52,20 +52,43 @@ export const ROLES_INFO: Record<
   },
 }
 
+export interface SetorModel extends RecordModel {
+  nome: string
+  chave?: string
+  descricao?: string
+  cor?: string
+  ativo: boolean
+  ordem?: number
+}
+
+export interface SetorVisualInfo {
+  id?: string
+  chave?: string
+  nome: string
+  cor: string
+  corBg: string
+  corBorder: string
+  descricao: string
+  ativo?: boolean
+}
+
 export interface MaterialBiblioteca extends RecordModel {
   titulo: string
   tipo: TarefaTipo
   descricao?: string
   arquivo?: string
   setor_origem?: Setor | ''
+  setor_ref?: string
   criado_por?: string
   expand?: {
     criado_por?: User
+    setor_ref?: SetorModel
   }
 }
 
 export interface ModeloTarefa extends RecordModel {
   setor?: Setor
+  setor_ref?: string
   titulo: string
   tipo: TarefaTipo
   descricao?: string
@@ -77,6 +100,7 @@ export interface ModeloTarefa extends RecordModel {
   material?: string
   expand?: {
     material?: MaterialBiblioteca
+    setor_ref?: SetorModel
   }
 }
 
@@ -85,6 +109,7 @@ export interface Onboarding extends RecordModel {
   colaborador_email: string
   cargo?: string
   setor: Setor
+  setor_ref?: string
   gestor_id: string
   data_inicio: string
   data_fim: string
@@ -98,6 +123,12 @@ export interface Onboarding extends RecordModel {
   etapa2_concluida_por?: string
   etapa3_concluida?: boolean
   data_conclusao_etapa3?: string
+  expand?: {
+    gestor_id?: User
+    etapa1_concluida_por?: User
+    etapa2_concluida_por?: User
+    setor_ref?: SetorModel
+  }
 }
 
 export interface TarefaOnboarding extends RecordModel {
@@ -125,7 +156,7 @@ export interface Avaliacao extends RecordModel {
   observacoes?: string
 }
 export const SETORES_INFO: Record<
-  Setor,
+  string,
   {
     nome: string
     cor: string
@@ -169,6 +200,82 @@ export const SETORES_INFO: Record<
     corBorder: 'border-cyan-500',
     descricao: 'Cabeamento estruturado e infra em clientes',
   },
+  rh: {
+    nome: 'RH',
+    cor: '#059669',
+    corBg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    corBorder: 'border-emerald-500',
+    descricao: 'Recursos Humanos, departamento pessoal e gestão de pessoas',
+  },
+  comercial: {
+    nome: 'Comercial',
+    cor: '#EA580C',
+    corBg: 'bg-orange-50 text-orange-700 border-orange-200',
+    corBorder: 'border-orange-500',
+    descricao: 'Vendas, relacionamento com clientes e prospecção',
+  },
+  laboratorio: {
+    nome: 'Laboratório',
+    cor: '#4F46E5',
+    corBg: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    corBorder: 'border-indigo-500',
+    descricao: 'Bancada técnica, testes de hardware e reparos',
+  },
+}
+
+/**
+ * Retorna dados visuais para qualquer setor (cadastrado ou fallback).
+ * Garante nunca quebrar a interface mesmo se uma nova área for cadastrada.
+ */
+export function getSetorVisual(
+  identificador?: string | null,
+  setorModel?: SetorModel | null,
+): SetorVisualInfo {
+  if (setorModel) {
+    const cor = setorModel.cor || '#4F46E5'
+    return {
+      id: setorModel.id,
+      chave: setorModel.chave || setorModel.id,
+      nome: setorModel.nome,
+      cor,
+      corBg: 'bg-blue-50 text-blue-700 border-blue-200',
+      corBorder: 'border-blue-500',
+      descricao: setorModel.descricao || 'Área da empresa',
+      ativo: setorModel.ativo,
+    }
+  }
+
+  if (!identificador) {
+    return {
+      nome: 'Geral',
+      cor: '#6B7280',
+      corBg: 'bg-gray-50 text-gray-700 border-gray-200',
+      corBorder: 'border-gray-500',
+      descricao: 'Área geral',
+    }
+  }
+
+  const staticInfo = SETORES_INFO[identificador] || SETORES_INFO[identificador.toLowerCase()]
+  if (staticInfo) {
+    return {
+      chave: identificador,
+      nome: staticInfo.nome,
+      cor: staticInfo.cor,
+      corBg: staticInfo.corBg,
+      corBorder: staticInfo.corBorder,
+      descricao: staticInfo.descricao,
+    }
+  }
+
+  // Fallback dinâmico para nome ou ID não mapeado
+  return {
+    chave: identificador,
+    nome: identificador,
+    cor: '#4F46E5',
+    corBg: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    corBorder: 'border-indigo-500',
+    descricao: 'Área da empresa',
+  }
 }
 
 export const STATUS_INFO: Record<
