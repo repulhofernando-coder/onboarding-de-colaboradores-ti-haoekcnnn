@@ -6,6 +6,10 @@ interface AuthContextType {
   user: User | null
   isLoading: boolean
   isAuthenticated: boolean
+  role: 'admin' | 'rh' | 'gestao'
+  isAdmin: boolean
+  isRH: boolean
+  isGestao: boolean
   login: (email: string, pass: string) => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
@@ -82,12 +86,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
+  // Normalização do papel (role) do usuário
+  const effectiveRole = ((): 'admin' | 'rh' | 'gestao' => {
+    if (!user) return 'gestao'
+    if (user.role === 'admin') return 'admin'
+    if (user.role === 'rh') return 'rh'
+    if (user.role === 'gestao') return 'gestao'
+    // Fallback retrocompatível com setor
+    if (user.setor === 'RH') return 'rh'
+    return 'gestao'
+  })()
+
+  const isAdmin = effectiveRole === 'admin'
+  const isRH = effectiveRole === 'rh'
+  const isGestao = effectiveRole === 'gestao'
+
   return (
     <AuthContext.Provider
       value={{
         user,
         isLoading,
         isAuthenticated: !!user && pb.authStore.isValid,
+        role: effectiveRole,
+        isAdmin,
+        isRH,
+        isGestao,
         login,
         logout,
         refreshUser,

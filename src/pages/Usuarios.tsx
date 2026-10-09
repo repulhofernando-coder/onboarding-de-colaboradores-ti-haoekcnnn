@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { userService } from '@/services/onboarding'
 import { useAuth } from '@/contexts/AuthContext'
-import type { User, UserSetor } from '@/types/onboarding'
+import type { User, UserRole } from '@/types/onboarding'
+import { ROLES_INFO } from '@/types/onboarding'
 import {
   Users,
   Search,
   Plus,
   Mail,
   Calendar,
+  Shield,
   ShieldCheck,
   UserCheck,
   Pencil,
@@ -51,11 +53,11 @@ import {
 import { toast } from 'sonner'
 
 export default function Usuarios() {
-  const { user: currentUser } = useAuth()
+  const { user: currentUser, role: currentRole, isAdmin: isCurrentAdmin } = useAuth()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [filterSetor, setFilterSetor] = useState<'todos' | UserSetor>('todos')
+  const [filterRole, setFilterRole] = useState<'todos' | UserRole>('todos')
 
   // Modais de Criação e Edição
   const [modalOpen, setModalOpen] = useState(false)
@@ -65,7 +67,7 @@ export default function Usuarios() {
   // Campos do formulário
   const [formNome, setFormNome] = useState('')
   const [formEmail, setFormEmail] = useState('')
-  const [formSetor, setFormSetor] = useState<UserSetor>('Gestão')
+  const [formRole, setFormRole] = useState<UserRole>('gestao')
   const [formSenha, setFormSenha] = useState('')
   const [formAtivo, setFormAtivo] = useState(true)
 
@@ -89,21 +91,35 @@ export default function Usuarios() {
     fetchUsers()
   }, [])
 
+  // Determina o papel do usuário (com fallback para setor se role não preenchido)
+  const getUserRole = (u: User): UserRole => {
+    if (u.role === 'admin' || u.role === 'rh' || u.role === 'gestao') return u.role
+    if (u.setor === 'RH') return 'rh'
+    return 'gestao'
+  }
+
   const handleOpenCreate = () => {
     setEditingUser(null)
     setFormNome('')
     setFormEmail('')
-    setFormSetor('Gestão')
+    setFormRole('gestao')
     setFormSenha('')
     setFormAtivo(true)
     setModalOpen(true)
   }
 
   const handleOpenEdit = (u: User) => {
+    const targetRole = getUserRole(u)
+    // Se o usuário atual for RH e o alvo for Admin, RH não pode editar o Admin
+    if (!isCurrentAdmin && targetRole === 'admin') {
+      toast.error('Você não tem permissão para editar um usuário Administrador.')
+      return
+    }
+
     setEditingUser(u)
     setFormNome(u.name || '')
     setFormEmail(u.email || '')
-    setFormSetor(u.setor || 'Gestão')
+    setFormRole(targetRole)
     setFormSenha('')
     setFormAtivo(u.ativo !== false)
     setModalOpen(true)
@@ -141,7 +157,7 @@ export default function Usuarios() {
           name: formNome,
           email: formEmail,
           password: formSenha,
-          setor: formSetor,
+          role: formRole,
           ativo: formAtivo,
         })
         toast.success(`Usuário ${formNome} criado com sucesso!`)
@@ -150,7 +166,7 @@ export default function Usuarios() {
         await userService.update(editingUser.id, {
           name: formNome,
           email: formEmail,
-          setor: formSetor,
+          role: formRole,
           ativo: formAtivo,
           password: formSenha || undefined,
         })
@@ -188,6 +204,13 @@ export default function Usuarios() {
       return
     }
 
+    const targetRole = getUserRole(u)
+    // RH NÃO pode desativar Admin
+    if (!isCurrentAdmin && targetRole === 'admin') {
+      toast.error('Você não tem permissão para desativar um usuário Administrador.')
+      return
+    }
+
     try {
       await userService.toggleAtivo(u.id, novoStatus)
       setUsers((prev) =>
@@ -205,6 +228,14 @@ export default function Usuarios() {
 
     if (currentUser && currentUser.id === deleteUser.id) {
       toast.error('Você não pode excluir o seu próprio usuário logado.')
+      setDeleteUser(null)
+      return
+    }
+
+    const targetRole = getUserRole(deleteUser)
+    // RH NÃO pode excluir Admin
+    if (!isCurrentAdmin && targetRole === 'admin') {
+      toast.error('Você não tem permissão para excluir um usuário Administrador.')
       setDeleteUser(null)
       return
     }
@@ -229,11 +260,12 @@ export default function Usuarios() {
       const matchText =
         (u.name && u.name.toLowerCase().includes(q)) ||
         (u.email && u.email.toLowerCase().includes(q))
-      const matchSetor = filterSetor === 'todos' || u.setor === filterSetor
+      const uRole = getUserRole(u)
+      const matchRole = filterRole === 'todos' || uRole === filterRole
 
-      return matchText && matchSetor
+      return matchText && matchRole
     })
-  }, [users, search, filterSetor])
+  }, [users, search, filterRole])
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '-'
@@ -280,16 +312,17 @@ export default function Usuarios() {
 
           <div className="w-full sm:w-48">
             <Select
-              value={filterSetor}
-              onValueChange={(val) => setFilterSetor(val as 'todos' | UserSetor)}
+              value={filterRole}
+              onValueChange={(val) => setFilterRole(val as 'todos' | UserRole)}
             >
               <SelectTrigger className="h-10 border-gray-300 text-sm">
-                <SelectValue placeholder="Filtrar por setor" />
+                <SelectValue placeholder="Filtrar por papel" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="todos">Todos os setores</SelectItem>
-                <SelectItem value="Gestão">Gestão</SelectItem>
-                <SelectItem value="RH">RH</SelectItem>
+                <SelectItem value="todos">Todos os papéis</SelectItem>
+                <SelectItem value="admin">Administrador</SelectItem>
+                <SelectItem value="rh">RH</SelectItem>
+                <SelectItem value="gestao">Gestão</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -311,6 +344,11 @@ export default function Usuarios() {
           usuariosFiltrados.map((u) => {
             const isSelf = currentUser?.id === u.id
             const isAtivo = u.ativo !== false
+            const role = getUserRole(u)
+            const roleInfo = ROLES_INFO[role]
+            const isTargetAdmin = role === 'admin'
+            // RH não pode excluir nem desativar Admin
+            const canModifyAdmin = isCurrentAdmin || !isTargetAdmin
 
             return (
               <div
@@ -320,7 +358,7 @@ export default function Usuarios() {
                 }`}
               >
                 <div className="space-y-3">
-                  {/* Top do card: nome, avatar e setor */}
+                  {/* Top do card: nome, avatar e papel */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
@@ -353,18 +391,16 @@ export default function Usuarios() {
                     </div>
 
                     <span
-                      className={`text-[11px] px-2.5 py-0.5 rounded-full border font-semibold shrink-0 inline-flex items-center gap-1 ${
-                        u.setor === 'RH'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : 'bg-blue-50 text-blue-700 border-blue-200'
-                      }`}
+                      className={`text-[11px] px-2.5 py-0.5 rounded-full border font-semibold shrink-0 inline-flex items-center gap-1 ${roleInfo.badgeClass}`}
                     >
-                      {u.setor === 'RH' ? (
+                      {role === 'admin' ? (
+                        <Shield className="w-3 h-3" />
+                      ) : role === 'rh' ? (
                         <UserCheck className="w-3 h-3" />
                       ) : (
                         <ShieldCheck className="w-3 h-3" />
                       )}
-                      <span>{u.setor || 'Gestão'}</span>
+                      <span>{roleInfo.nome}</span>
                     </span>
                   </div>
 
@@ -413,13 +449,17 @@ export default function Usuarios() {
                     <Switch
                       id={`ativo-${u.id}`}
                       checked={isAtivo}
-                      disabled={isSelf}
+                      disabled={isSelf || !canModifyAdmin}
                       onCheckedChange={(checked) => handleToggleAtivo(u, checked)}
                       aria-label="Ativar ou desativar usuário"
                     />
                     <Label
                       htmlFor={`ativo-${u.id}`}
-                      className="text-xs text-gray-600 cursor-pointer font-medium"
+                      className={`text-xs text-gray-600 font-medium ${
+                        isSelf || !canModifyAdmin
+                          ? 'cursor-not-allowed opacity-60'
+                          : 'cursor-pointer'
+                      }`}
                     >
                       {isAtivo ? 'Ativo' : 'Inativo'}
                     </Label>
@@ -429,9 +469,12 @@ export default function Usuarios() {
                     <Button
                       variant="outline"
                       size="sm"
+                      disabled={!canModifyAdmin}
                       onClick={() => handleOpenEdit(u)}
-                      className="h-8 px-2.5 text-xs text-gray-700 border-gray-300 hover:bg-gray-50"
-                      title="Editar usuário"
+                      className="h-8 px-2.5 text-xs text-gray-700 border-gray-300 hover:bg-gray-50 disabled:opacity-40"
+                      title={
+                        !canModifyAdmin ? 'RH não pode editar o Administrador' : 'Editar usuário'
+                      }
                     >
                       <Pencil className="w-3.5 h-3.5 mr-1 text-gray-500" />
                       <span>Editar</span>
@@ -440,11 +483,15 @@ export default function Usuarios() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      disabled={isSelf}
+                      disabled={isSelf || !canModifyAdmin}
                       onClick={() => setDeleteUser(u)}
                       className="h-8 px-2 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-40"
                       title={
-                        isSelf ? 'Você não pode excluir seu próprio usuário' : 'Excluir usuário'
+                        isSelf
+                          ? 'Você não pode excluir seu próprio usuário'
+                          : !canModifyAdmin
+                            ? 'RH não pode excluir o Administrador'
+                            : 'Excluir usuário'
                       }
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -501,18 +548,24 @@ export default function Usuarios() {
 
               <div>
                 <Label className="text-xs font-semibold text-gray-700">
-                  Setor / Perfil de Acesso *
+                  Papel de Acesso (Perfil) *
                 </Label>
-                <Select value={formSetor} onValueChange={(val) => setFormSetor(val as UserSetor)}>
+                <Select value={formRole} onValueChange={(val) => setFormRole(val as UserRole)}>
                   <SelectTrigger className="mt-1.5 h-10 text-sm border-gray-300">
-                    <SelectValue placeholder="Selecione o setor" />
+                    <SelectValue placeholder="Selecione o papel de acesso" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Gestão">
-                      Gestão (Gestor de TI responsável por onboardings)
+                    {/* Admin só pode ser criado/atribuído se o usuário atual for Admin */}
+                    {isCurrentAdmin && (
+                      <SelectItem value="admin">
+                        Admin — Acesso total a todas as configurações e etapas
+                      </SelectItem>
+                    )}
+                    <SelectItem value="rh">
+                      RH — Conduz Etapa 1, gerencia usuários e cria onboardings
                     </SelectItem>
-                    <SelectItem value="RH">
-                      RH (Recursos Humanos e Apresentação Institucional)
+                    <SelectItem value="gestao">
+                      Gestão — Acompanha desde a Etapa 1, conduz Etapa 2 e avalia
                     </SelectItem>
                   </SelectContent>
                 </Select>

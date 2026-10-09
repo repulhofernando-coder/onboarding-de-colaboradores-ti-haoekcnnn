@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
+import { ROLES_INFO, type UserRole } from '@/types/onboarding'
 import {
   LayoutDashboard,
   ListTodo,
@@ -14,6 +15,7 @@ import {
   ChevronDown,
   ShieldCheck,
   UserCheck,
+  ShieldAlert,
   Shield,
 } from 'lucide-react'
 import {
@@ -30,19 +32,20 @@ interface NavItem {
   label: string
   path: string
   icon: React.ComponentType<{ className?: string }>
+  allowedRoles?: UserRole[]
 }
 
 const navItems: NavItem[] = [
   { label: 'Visão Geral', path: '/', icon: LayoutDashboard },
   { label: 'Onboardings', path: '/onboardings', icon: ListTodo },
   { label: 'Colaboradores', path: '/colaboradores', icon: Users },
-  { label: 'Modelos de Tarefas', path: '/modelos', icon: Layers },
+  { label: 'Modelos de Tarefas', path: '/modelos', icon: Layers, allowedRoles: ['admin', 'rh'] },
   { label: 'Avaliações', path: '/avaliacoes', icon: ClipboardCheck },
-  { label: 'Usuários', path: '/usuarios', icon: Shield },
+  { label: 'Usuários', path: '/usuarios', icon: Shield, allowedRoles: ['admin', 'rh'] },
 ]
 
 export default function Layout() {
-  const { user, logout } = useAuth()
+  const { user, role, logout } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -116,33 +119,35 @@ export default function Layout() {
 
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
-            const Icon = item.icon
-            const isActive =
-              item.path === '/'
-                ? location.pathname === '/'
-                : location.pathname.startsWith(item.path)
+          {navItems
+            .filter((item) => !item.allowedRoles || item.allowedRoles.includes(role))
+            .map((item) => {
+              const Icon = item.icon
+              const isActive =
+                item.path === '/'
+                  ? location.pathname === '/'
+                  : location.pathname.startsWith(item.path)
 
-            return (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${
-                  isActive
-                    ? 'bg-blue-50 text-blue-700 font-semibold shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
-              >
-                <Icon
-                  className={`w-4 h-4 shrink-0 transition-colors ${
-                    isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'
+              return (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  onClick={() => setMobileOpen(false)}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${
+                    isActive
+                      ? 'bg-blue-50 text-blue-700 font-semibold shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
-                />
-                <span className="truncate">{item.label}</span>
-              </NavLink>
-            )
-          })}
+                >
+                  <Icon
+                    className={`w-4 h-4 shrink-0 transition-colors ${
+                      isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'
+                    }`}
+                  />
+                  <span className="truncate">{item.label}</span>
+                </NavLink>
+              )
+            })}
         </nav>
 
         {/* User Card & Sair in Sidebar Bottom */}
@@ -156,12 +161,14 @@ export default function Layout() {
                 {user?.name || user?.email}
               </div>
               <div className="flex items-center gap-1 text-[11px] text-gray-500">
-                {user?.setor === 'RH' ? (
+                {role === 'admin' ? (
+                  <Shield className="w-3 h-3 text-purple-600" />
+                ) : role === 'rh' ? (
                   <UserCheck className="w-3 h-3 text-emerald-600" />
                 ) : (
                   <ShieldCheck className="w-3 h-3 text-blue-600" />
                 )}
-                <span>Setor {user?.setor || 'Geral'}</span>
+                <span>{ROLES_INFO[role]?.nome || 'Usuário'}</span>
               </div>
             </div>
           </div>
@@ -200,7 +207,6 @@ export default function Layout() {
               </h1>
             </div>
           </div>
-
           {/* User Menu on Header */}
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex flex-col text-right">
@@ -208,7 +214,7 @@ export default function Layout() {
                 {user?.name || user?.email}
               </span>
               <span className="text-[11px] text-gray-500 font-medium">
-                {user?.setor ? `Perfil ${user.setor}` : 'Colaborador'}
+                {ROLES_INFO[role]?.nome || 'Usuário'}
               </span>
             </div>
 
@@ -225,12 +231,16 @@ export default function Layout() {
                   <ChevronDown className="w-3.5 h-3.5 text-gray-400 hidden sm:block" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuContent align="end" className="w-60">
                 <DropdownMenuLabel>
                   <div className="font-semibold text-gray-900">{user?.name}</div>
                   <div className="text-xs text-gray-500 truncate">{user?.email}</div>
-                  <div className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700">
-                    Setor: {user?.setor || 'Não definido'}
+                  <div
+                    className={`mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                      ROLES_INFO[role]?.badgeClass || 'bg-gray-50 text-gray-700 border-gray-200'
+                    }`}
+                  >
+                    Papel: {ROLES_INFO[role]?.nome || 'Usuário'}
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -243,7 +253,7 @@ export default function Layout() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
+          </div>{' '}
         </header>
 
         {/* Page Content Body */}

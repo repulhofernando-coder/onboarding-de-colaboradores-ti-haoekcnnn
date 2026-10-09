@@ -30,7 +30,7 @@ import {
 import { toast } from 'sonner'
 
 export default function Avaliacoes() {
-  const { user } = useAuth()
+  const { user, role, isAdmin } = useAuth()
   const [onboardings, setOnboardings] = useState<Onboarding[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -156,7 +156,14 @@ export default function Avaliacoes() {
     }
   }
 
-  const isGestao = user?.setor === 'Gestão'
+  // Somente Admin ou o Gestor Responsável atribuído ao onboarding podem avaliar
+  const podeAvaliarItem = (item: Onboarding) => {
+    if (isAdmin) return true
+    if (role === 'gestao' && item.gestor_id === user?.id) return true
+    // Se gestao mas gestor_id não definido no item, permite para não travar legado
+    if (role === 'gestao' && !item.gestor_id) return true
+    return false
+  }
 
   return (
     <div className="space-y-6">
@@ -319,7 +326,7 @@ export default function Avaliacoes() {
                             <Link to={`/colaboradores/${item.id}`}>Detalhes</Link>
                           </Button>
 
-                          {isGestao ? (
+                          {podeAvaliarItem(item) ? (
                             <Button
                               size="sm"
                               onClick={() => openAvaliarModal(item)}
@@ -327,15 +334,25 @@ export default function Avaliacoes() {
                             >
                               Avaliar
                             </Button>
+                          ) : role === 'rh' ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled
+                              className="h-8 text-xs text-gray-400 border-gray-200"
+                              title="O RH não avalia. Avaliação exclusiva do Gestor Responsável ou Administrador."
+                            >
+                              Apenas Leitura (RH)
+                            </Button>
                           ) : (
                             <Button
                               size="sm"
                               variant="outline"
                               disabled
                               className="h-8 text-xs text-gray-400 border-gray-200"
-                              title="Apenas usuários do setor Gestão avaliam"
+                              title="Apenas o gestor responsável ou o Administrador podem avaliar."
                             >
-                              Somente Gestor
+                              Outro Gestor
                             </Button>
                           )}
                         </div>

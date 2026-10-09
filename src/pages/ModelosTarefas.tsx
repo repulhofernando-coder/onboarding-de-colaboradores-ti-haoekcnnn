@@ -30,9 +30,7 @@ import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 
 export default function ModelosTarefas() {
-  const { user } = useAuth()
-  const isRH = user?.setor === 'RH'
-  const isGestao = user?.setor === 'Gestão'
+  const { user, role, isAdmin, isRH } = useAuth()
 
   // Aba selecionada: 'etapa1' ou um dos 5 setores (etapa 2)
   const [selectedTab, setSelectedTab] = useState<'etapa1' | Setor>('etapa1')
@@ -203,7 +201,11 @@ export default function ModelosTarefas() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <h2 className="text-xl font-bold text-[#1A2233]">Modelos de Tarefas & Treinamento</h2>
-              {isRH ? (
+              {isAdmin ? (
+                <span className="text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3" /> Acesso Administrador
+                </span>
+              ) : isRH ? (
                 <span className="text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3" /> Gestão pelo RH
                 </span>

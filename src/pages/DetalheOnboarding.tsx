@@ -44,7 +44,7 @@ import { toast } from 'sonner'
 
 export default function DetalheOnboarding() {
   const { id } = useParams<{ id: string }>()
-  const { user } = useAuth()
+  const { user, role, isAdmin, isRH } = useAuth()
   const navigate = useNavigate()
 
   const [onboarding, setOnboarding] = useState<Onboarding | null>(null)
@@ -153,10 +153,49 @@ export default function DetalheOnboarding() {
     return tarefas.filter((t) => t.etapa === 2 || !t.etapa)
   }, [tarefas])
 
+  // Verificar se todas as tarefas da Etapa 1 estão marcadas
+  const allEtapa1Checked = useMemo(() => {
+    if (onboarding?.etapa1_concluida) return true
+    if (tarefasEtapa1.length === 0) return false
+    return tarefasEtapa1.every((t) => t.concluida)
+  }, [onboarding?.etapa1_concluida, tarefasEtapa1])
+
+  // Regras de permissão específicas do Onboarding
+  // Etapa 1: Ações de escrita (marcar vistos, upload de item, concluir etapa) exclusivas de Admin e RH
+  const podeGerenciarEtapa1 = isAdmin || isRH
+
+  // Etapa 2 e Etapa 3: Somente Admin ou o Gestor Responsável atribuído
+  const isGestorResponsavel = onboarding?.gestor_id === user?.id
+  const podeGerenciarEtapa2e3 =
+    isAdmin ||
+    (role === 'gestao' && isGestorResponsavel) ||
+    (role === 'gestao' && !onboarding?.gestor_id)
+
   // Toggle de tarefa genérico (serve para Etapa 1 e Etapa 2)
   const handleToggleTarefa = async (tarefa: TarefaOnboarding) => {
-    if (tarefa.etapa === 1 && onboarding?.etapa1_concluida) return
-    if ((tarefa.etapa === 2 || !tarefa.etapa) && onboarding?.etapa2_concluida) return
+    if (tarefa.etapa === 1) {
+      if (onboarding?.etapa1_concluida) return
+      if (!podeGerenciarEtapa1) {
+        toast.error(
+          'Você não tem permissão para esta ação. A Etapa 1 é conduzida pelo RH ou Administrador.',
+        )
+        return
+      }
+    }
+
+    if (tarefa.etapa === 2 || !tarefa.etapa) {
+      if (!onboarding?.etapa1_concluida) {
+        toast.error('A Etapa 2 só pode ser iniciada após a conclusão da Etapa 1 pelo RH.')
+        return
+      }
+      if (onboarding?.etapa2_concluida) return
+      if (!podeGerenciarEtapa2e3) {
+        toast.error(
+          'Você não tem permissão para esta ação. A Etapa 2 é conduzida pelo Gestor Responsável ou Administrador.',
+        )
+        return
+      }
+    }
 
     try {
       const updated = await tarefaService.toggleConcluida(tarefa.id, !tarefa.concluida)
@@ -167,20 +206,20 @@ export default function DetalheOnboarding() {
     }
   }
 
-  // Verificar se todas as tarefas da Etapa 1 estão marcadas
-  const allEtapa1Checked = useMemo(() => {
-    if (onboarding?.etapa1_concluida) return true
-    if (tarefasEtapa1.length === 0) return false
-    return tarefasEtapa1.every((t) => t.concluida)
-  }, [onboarding?.etapa1_concluida, tarefasEtapa1])
-
   // Concluir Etapa 1
   const handleConcluirEtapa1 = async () => {
     if (!onboarding || !user) return
+    if (!podeGerenciarEtapa1) {
+      toast.error(
+        'Você não tem permissão para esta ação. Apenas RH ou Administrador concluem a Etapa 1.',
+      )
+      return
+    }
+
     try {
       setConcluindoEtapa1(true)
       await onboardingService.concluirEtapa1(onboarding.id, user.id)
-      toast.success('Etapa 1 concluída com sucesso pelo RH! Etapa 2 liberada.')
+      toast.success('Etapa 1 concluída com sucesso! Processo repassado ao Gestor para a Etapa 2.')
       fetchData()
     } catch (err) {
       console.error(err)
@@ -191,7 +230,16 @@ export default function DetalheOnboarding() {
   }
 
   // Excluir Tarefa customizada
-  const handleDeleteTarefa = async (tarefaId: string) => {
+  const handleDeleteTarefa = async (tarefaId: string, etapa: number = 1) => {
+    if (etapa === 1 && !podeGerenciarEtapa1) {
+      toast.error('Você não tem permissão para remover itens da Etapa 1.')
+      return
+    }
+    if (etapa === 2 && !podeGerenciarEtapa2e3) {
+      toast.error('Você não tem permissão para remover itens da Etapa 2.')
+      return
+    }
+
     if (!confirm('Deseja realmente remover este item do onboarding?')) return
     try {
       await tarefaService.delete(tarefaId)
@@ -211,6 +259,13 @@ export default function DetalheOnboarding() {
   // Concluir Etapa 2
   const handleConcluirEtapa2 = async () => {
     if (!onboarding || !user) return
+    if (!podeGerenciarEtapa2e3) {
+      toast.error(
+        'Você não tem permissão para esta ação. Apenas o Gestor Responsável ou Administrador concluem a Etapa 2.',
+      )
+      return
+    }
+
     try {
       setConcluindoEtapa2(true)
       await onboardingService.concluirEtapa2(onboarding.id, user.id)
@@ -228,6 +283,15 @@ export default function DetalheOnboarding() {
 
   // Abrir modal de novo item especificando a etapa (1 ou 2)
   const openAddItemModal = (etapa: 1 | 2) => {
+    if (etapa === 1 && !podeGerenciarEtapa1) {
+      toast.error('Você não tem permissão para esta ação.')
+      return
+    }
+    if (etapa === 2 && !podeGerenciarEtapa2e3) {
+      toast.error('Você não tem permissão para esta ação.')
+      return
+    }
+
     setModalItemEtapa(etapa)
     setNovoItemTitulo('')
     setNovoItemDescricao('')
@@ -244,6 +308,15 @@ export default function DetalheOnboarding() {
     setItemError('')
 
     if (!onboarding) return
+    if (modalItemEtapa === 1 && !podeGerenciarEtapa1) {
+      toast.error('Você não tem permissão para adicionar itens na Etapa 1.')
+      return
+    }
+    if (modalItemEtapa === 2 && !podeGerenciarEtapa2e3) {
+      toast.error('Você não tem permissão para adicionar itens na Etapa 2.')
+      return
+    }
+
     if (!novoItemTitulo.trim()) {
       setItemError('O título do item é obrigatório.')
       return
@@ -292,6 +365,12 @@ export default function DetalheOnboarding() {
   // Registrar Decisão da Avaliação Final (Etapa 3)
   const handleRegistrarAvaliacao = async () => {
     if (!onboarding || !user) return
+    if (!podeGerenciarEtapa2e3) {
+      toast.error(
+        'Você não tem permissão para esta ação. Avaliação exclusiva do Gestor Responsável ou Administrador.',
+      )
+      return
+    }
     if (!decisaoAvaliacao) {
       toast.error('A decisão (Apto ou Não Apto) é obrigatória.')
       return
@@ -360,10 +439,6 @@ export default function DetalheOnboarding() {
 
   const setorInfo = SETORES_INFO[onboarding.setor]
   const statusInfo = STATUS_INFO[onboarding.status]
-
-  // Regras de permissão
-  const isRH = user?.setor === 'RH'
-  const isGestao = user?.setor === 'Gestão'
 
   return (
     <div className="space-y-7">
@@ -491,20 +566,26 @@ export default function DetalheOnboarding() {
             </div>
 
             {/* Ações de topo da Etapa 1: Adicionar item de upload */}
-            {!onboarding.etapa1_concluida && (isRH || isGestao) && (
+            {!onboarding.etapa1_concluida && (
               <div className="flex justify-between items-center mb-3 pt-1">
                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   Materiais & Validações do RH
                 </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => openAddItemModal(1)}
-                  className="h-8 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
-                >
-                  <Upload className="w-3.5 h-3.5 mr-1" />
-                  Adicionar item (upload)
-                </Button>
+                {podeGerenciarEtapa1 ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openAddItemModal(1)}
+                    className="h-8 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
+                  >
+                    <Upload className="w-3.5 h-3.5 mr-1" />
+                    Adicionar item (upload)
+                  </Button>
+                ) : (
+                  <span className="text-[11px] text-gray-400 italic">
+                    (Modo visualização — condução do RH)
+                  </span>
+                )}
               </div>
             )}
 
@@ -527,10 +608,19 @@ export default function DetalheOnboarding() {
                       <div className="flex items-start gap-3 flex-1">
                         <button
                           type="button"
-                          disabled={onboarding.etapa1_concluida}
+                          disabled={onboarding.etapa1_concluida || !podeGerenciarEtapa1}
                           onClick={() => handleToggleTarefa(item)}
-                          className="mt-0.5 text-gray-400 hover:text-blue-600 transition-transform active:scale-95 disabled:cursor-default"
+                          className={`mt-0.5 text-gray-400 transition-transform ${
+                            podeGerenciarEtapa1 && !onboarding.etapa1_concluida
+                              ? 'hover:text-blue-600 active:scale-95'
+                              : 'cursor-default opacity-80'
+                          }`}
                           aria-label="Marcar item"
+                          title={
+                            !podeGerenciarEtapa1
+                              ? 'Apenas RH ou Administrador podem marcar itens da Etapa 1'
+                              : undefined
+                          }
                         >
                           {checked ? (
                             <CheckCircle2 className="w-5 h-5 text-emerald-600 animate-fade-in" />
@@ -593,17 +683,19 @@ export default function DetalheOnboarding() {
                           Visualizar
                         </Button>
 
-                        {!item.criado_automaticamente && !onboarding.etapa1_concluida && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDeleteTarefa(item.id)}
-                            className="h-8 w-8 text-gray-400 hover:text-red-600"
-                            aria-label="Excluir item"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        )}
+                        {!item.criado_automaticamente &&
+                          !onboarding.etapa1_concluida &&
+                          podeGerenciarEtapa1 && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteTarefa(item.id, 1)}
+                              className="h-8 w-8 text-gray-400 hover:text-red-600"
+                              aria-label="Excluir item"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
                       </div>
                     </div>
                   )
@@ -615,22 +707,35 @@ export default function DetalheOnboarding() {
             {!onboarding.etapa1_concluida && (
               <div className="pt-3 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <span className="text-xs text-gray-500">
-                  {allEtapa1Checked
-                    ? 'Todos os itens conferidos! O RH pode concluir a etapa.'
-                    : 'Marque todos os itens acima para liberar a conclusão.'}
+                  {!podeGerenciarEtapa1
+                    ? 'O Gestor acompanha esta etapa em modo leitura. A conclusão cabe ao RH ou Administrador.'
+                    : allEtapa1Checked
+                      ? 'Todos os itens conferidos! O RH pode concluir a etapa e repassar ao Gestor.'
+                      : 'Marque todos os itens acima para liberar a conclusão.'}
                 </span>
 
-                <Button
-                  onClick={handleConcluirEtapa1}
-                  disabled={!allEtapa1Checked || concluindoEtapa1 || (!isRH && !isGestao)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm"
-                >
-                  {concluindoEtapa1 ? (
-                    <span>Concluindo...</span>
-                  ) : (
-                    <span>Concluir Etapa 1 (RH)</span>
-                  )}
-                </Button>
+                {podeGerenciarEtapa1 ? (
+                  <Button
+                    onClick={handleConcluirEtapa1}
+                    disabled={!allEtapa1Checked || concluindoEtapa1}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm"
+                  >
+                    {concluindoEtapa1 ? (
+                      <span>Concluindo...</span>
+                    ) : (
+                      <span>Concluir Etapa 1 (RH)</span>
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    disabled
+                    className="text-xs text-gray-400 border-gray-200"
+                    title="Apenas RH ou Administrador podem concluir a Etapa 1."
+                  >
+                    Somente RH / Admin
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -713,15 +818,23 @@ export default function DetalheOnboarding() {
                     <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
                       Itens do Setor & Materiais de Apoio
                     </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => openAddItemModal(2)}
-                      className="h-8 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
-                    >
-                      <Upload className="w-3.5 h-3.5 mr-1" />
-                      Adicionar item (upload)
-                    </Button>
+                    {podeGerenciarEtapa2e3 ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openAddItemModal(2)}
+                        className="h-8 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
+                      >
+                        <Upload className="w-3.5 h-3.5 mr-1" />
+                        Adicionar item (upload)
+                      </Button>
+                    ) : (
+                      <span className="text-[11px] text-gray-400 italic">
+                        {role === 'rh'
+                          ? '(Etapa técnica sob condução do Gestor Responsável)'
+                          : '(Apenas o Gestor Responsável ou Administrador conduzem)'}
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -743,10 +856,19 @@ export default function DetalheOnboarding() {
                           <div className="flex items-start gap-3 flex-1">
                             <button
                               type="button"
-                              disabled={onboarding.etapa2_concluida}
+                              disabled={onboarding.etapa2_concluida || !podeGerenciarEtapa2e3}
                               onClick={() => handleToggleTarefa(tarefa)}
-                              className="mt-0.5 text-gray-400 hover:text-blue-600 transition-transform active:scale-95 disabled:cursor-default"
+                              className={`mt-0.5 text-gray-400 transition-transform ${
+                                podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida
+                                  ? 'hover:text-blue-600 active:scale-95'
+                                  : 'cursor-default opacity-80'
+                              }`}
                               aria-label="Marcar tarefa"
+                              title={
+                                !podeGerenciarEtapa2e3
+                                  ? 'Apenas o Gestor Responsável ou Administrador podem marcar itens da Etapa 2'
+                                  : undefined
+                              }
                             >
                               {tarefa.concluida ? (
                                 <CheckCircle2 className="w-5 h-5 text-emerald-600 animate-fade-in" />
@@ -802,17 +924,19 @@ export default function DetalheOnboarding() {
                               Visualizar
                             </Button>
 
-                            {!tarefa.criado_automaticamente && !onboarding.etapa2_concluida && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDeleteTarefa(tarefa.id)}
-                                className="h-8 w-8 text-gray-400 hover:text-red-600"
-                                aria-label="Excluir tarefa"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            )}
+                            {!tarefa.criado_automaticamente &&
+                              !onboarding.etapa2_concluida &&
+                              podeGerenciarEtapa2e3 && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteTarefa(tarefa.id, 2)}
+                                  className="h-8 w-8 text-gray-400 hover:text-red-600"
+                                  aria-label="Excluir tarefa"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              )}
                           </div>
                         </div>
                       )
@@ -824,22 +948,37 @@ export default function DetalheOnboarding() {
                 {!onboarding.etapa2_concluida && (
                   <div className="pt-3 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <span className="text-xs text-gray-500">
-                      {allEtapa2TarefasChecked
-                        ? 'Todas as tarefas técnicas concluídas! Liberado para finalizar etapa 2.'
-                        : 'Marque todas as tarefas técnicas para liberar a avaliação do gestor.'}
+                      {!podeGerenciarEtapa2e3
+                        ? role === 'rh'
+                          ? 'A Etapa 2 é conduzida pelo Gestor Responsável.'
+                          : 'Apenas o Gestor Responsável atribuído ou o Administrador concluem a Etapa 2.'
+                        : allEtapa2TarefasChecked
+                          ? 'Todas as tarefas técnicas concluídas! Liberado para finalizar etapa 2.'
+                          : 'Marque todas as tarefas técnicas para liberar a avaliação do gestor.'}
                     </span>
 
-                    <Button
-                      onClick={handleConcluirEtapa2}
-                      disabled={!allEtapa2TarefasChecked || concluindoEtapa2}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm"
-                    >
-                      {concluindoEtapa2 ? (
-                        <span>Concluindo...</span>
-                      ) : (
-                        <span>Concluir Etapa 2 (Vivência Técnica)</span>
-                      )}
-                    </Button>
+                    {podeGerenciarEtapa2e3 ? (
+                      <Button
+                        onClick={handleConcluirEtapa2}
+                        disabled={!allEtapa2TarefasChecked || concluindoEtapa2}
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm"
+                      >
+                        {concluindoEtapa2 ? (
+                          <span>Concluindo...</span>
+                        ) : (
+                          <span>Concluir Etapa 2 (Vivência Técnica)</span>
+                        )}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        disabled
+                        className="text-xs text-gray-400 border-gray-200"
+                        title="Apenas o Gestor Responsável ou Administrador podem concluir a Etapa 2."
+                      >
+                        Somente Gestor / Admin
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -971,10 +1110,14 @@ export default function DetalheOnboarding() {
                   está 100% apto a assumir chamados sozinho.
                 </div>
 
-                {!isGestao ? (
-                  <div className="p-4 rounded-lg bg-gray-100 text-xs text-gray-600 text-center">
-                    Visualização em modo de leitura (Setor RH). A decisão final cabe ao Gestor de TI
-                    responsável.
+                {!podeGerenciarEtapa2e3 ? (
+                  <div className="p-4 rounded-lg bg-gray-100 text-xs text-gray-600 text-center space-y-1">
+                    <p className="font-semibold text-gray-700">Visualização em modo de leitura</p>
+                    <p className="text-[11px] text-gray-500">
+                      {role === 'rh'
+                        ? 'O perfil de RH não realiza a avaliação. A decisão final cabe exclusivamente ao Gestor de TI Responsável ou Administrador.'
+                        : 'Apenas o Gestor Responsável atribuído a este onboarding ou o Administrador podem registrar a decisão final.'}
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-4">

@@ -1,5 +1,7 @@
 export type Setor = 'windows' | 'linux_rede' | 'datacenter' | 'campo' | 'infraestrutura'
 
+export type UserRole = 'admin' | 'rh' | 'gestao'
+
 export type UserSetor = 'RH' | 'Gestão'
 
 export type OnboardingStatus =
@@ -18,10 +20,36 @@ import type { RecordModel } from 'pocketbase'
 export interface User extends RecordModel {
   email: string
   name: string
+  role?: UserRole
   setor?: UserSetor
   avatar?: string
   ativo?: boolean
   verified?: boolean
+}
+
+export const ROLES_INFO: Record<
+  UserRole,
+  {
+    nome: string
+    descricao: string
+    badgeClass: string
+  }
+> = {
+  admin: {
+    nome: 'Administrador',
+    descricao: 'Acesso total a todas as configurações, usuários e etapas',
+    badgeClass: 'bg-purple-50 text-purple-700 border-purple-200',
+  },
+  rh: {
+    nome: 'RH',
+    descricao: 'Cria usuários e onboardings, conduz e conclui a Etapa 1',
+    badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  },
+  gestao: {
+    nome: 'Gestão',
+    descricao: 'Acompanha desde a Etapa 1, conduz Etapa 2 e realiza Avaliação Final',
+    badgeClass: 'bg-blue-50 text-blue-700 border-blue-200',
+  },
 }
 
 export interface ModeloTarefa extends RecordModel {

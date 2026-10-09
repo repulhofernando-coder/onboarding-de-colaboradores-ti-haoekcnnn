@@ -5,6 +5,7 @@ import type {
   ModeloTarefa,
   Avaliacao,
   User,
+  UserRole,
   UserSetor,
   Setor,
   AvaliacaoDecisao,
@@ -12,8 +13,10 @@ import type {
 
 export const userService = {
   async getGestores(): Promise<User[]> {
+    // Gestores elegíveis para liderar onboardings (role = 'gestao' ou role = 'admin', ou fallback antigo setor = 'Gestão')
     const records = await pb.collection('users').getFullList<User>({
-      filter: "setor = 'Gestão' && ativo != false",
+      filter:
+        "(role = 'gestao' || role = 'admin' || (role = null && setor = 'Gestão')) && ativo != false",
       sort: 'name',
     })
     return records
@@ -29,15 +32,20 @@ export const userService = {
     name: string
     email: string
     password: string
-    setor: UserSetor
+    role?: UserRole
+    setor?: UserSetor
     ativo?: boolean
   }): Promise<User> {
+    const role = data.role || (data.setor === 'RH' ? 'rh' : 'gestao')
+    const setor: UserSetor = role === 'rh' ? 'RH' : 'Gestão'
+
     return pb.collection('users').create<User>({
       name: data.name.trim(),
       email: data.email.trim(),
       password: data.password,
       passwordConfirm: data.password,
-      setor: data.setor,
+      role,
+      setor,
       ativo: data.ativo ?? true,
       emailVisibility: true,
       verified: true,
@@ -49,6 +57,7 @@ export const userService = {
     data: {
       name?: string
       email?: string
+      role?: UserRole
       setor?: UserSetor
       password?: string
       ativo?: boolean
@@ -57,7 +66,12 @@ export const userService = {
     const payload: Record<string, unknown> = {}
     if (data.name !== undefined) payload.name = data.name.trim()
     if (data.email !== undefined) payload.email = data.email.trim()
-    if (data.setor !== undefined) payload.setor = data.setor
+    if (data.role !== undefined) {
+      payload.role = data.role
+      payload.setor = data.role === 'rh' ? 'RH' : 'Gestão'
+    } else if (data.setor !== undefined) {
+      payload.setor = data.setor
+    }
     if (data.ativo !== undefined) payload.ativo = data.ativo
     if (data.password && data.password.trim() !== '') {
       payload.password = data.password

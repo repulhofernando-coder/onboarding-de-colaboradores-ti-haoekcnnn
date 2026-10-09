@@ -47,9 +47,23 @@ const App = () => (
             <Route path="/onboardings/nova" element={<NovoOnboarding />} />
             <Route path="/colaboradores" element={<Colaboradores />} />
             <Route path="/colaboradores/:id" element={<DetalheOnboarding />} />
-            <Route path="/modelos" element={<ModelosTarefas />} />
+            <Route
+              path="/modelos"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'rh']}>
+                  <ModelosTarefas />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/avaliacoes" element={<Avaliacoes />} />
-            <Route path="/usuarios" element={<Usuarios />} />
+            <Route
+              path="/usuarios"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'rh']}>
+                  <Usuarios />
+                </ProtectedRoute>
+              }
+            />
           </Route>
 
           {/* 404 */}
