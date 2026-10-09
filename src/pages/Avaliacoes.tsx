@@ -270,12 +270,12 @@ export default function Avaliacoes() {
             onClick={() => setFiltroSetor('todos')}
             className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
               filtroSetor === 'todos'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                ? 'bg-brand-600 text-white shadow-xs'
+                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
             }`}
           >
-            Todas as áreas
-          </button>
+            Todas as Áreas ({onboardings.length})
+          </button>{' '}
           {(setoresList.length > 0
             ? setoresList.filter((s) => s.ativo !== false)
             : Object.keys(SETORES_INFO).map((k) => ({
@@ -294,13 +294,13 @@ export default function Avaliacoes() {
                 onClick={() => setFiltroSetor(val)}
                 className={`px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5 ${
                   active
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                    ? 'bg-brand-600 text-white shadow-xs'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
                 }`}
               >
                 <span
                   className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: s.cor || '#2563EB' }}
+                  style={{ backgroundColor: s.cor || '#008D96' }}
                 />
                 <span>{s.nome}</span>
               </button>
@@ -338,7 +338,7 @@ export default function Avaliacoes() {
                       <td className="py-3.5 px-4">
                         <Link
                           to={`/colaboradores/${item.id}`}
-                          className="font-bold text-gray-900 hover:text-blue-600 block"
+                          className="font-bold text-gray-900 hover:text-brand-600 block"
                         >
                           {item.colaborador_nome}
                         </Link>
@@ -348,7 +348,7 @@ export default function Avaliacoes() {
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-200">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-brand-50 text-brand-700 border-brand-200">
                           <span
                             className="w-1.5 h-1.5 rounded-full shrink-0"
                             style={{ backgroundColor: setor.cor }}
@@ -393,7 +393,7 @@ export default function Avaliacoes() {
                             <Button
                               size="sm"
                               onClick={() => openAvaliarModal(item)}
-                              className="h-8 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm"
+                              className="h-8 text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white rounded-lg shadow-sm"
                             >
                               Avaliar
                             </Button>
@@ -464,7 +464,7 @@ export default function Avaliacoes() {
                 </div>
                 <Link
                   to={`/colaboradores/${item.id}`}
-                  className="text-[11px] text-blue-600 font-semibold hover:underline block pt-1"
+                  className="text-[11px] text-brand-600 font-semibold hover:underline block pt-1"
                 >
                   Ver parecer &rarr;
                 </Link>
@@ -579,11 +579,11 @@ export default function Avaliacoes() {
                       ? 'bg-emerald-600 hover:bg-emerald-700'
                       : decisao === 'nao_apto'
                         ? 'bg-red-600 hover:bg-red-700'
-                        : 'bg-blue-600'
+                        : 'bg-brand-600'
                   }`}
                 >
-                  {submitting ? 'Gravando Decisão...' : 'Confirmar e Gravar Decisão'}
-                </Button>
+                  {saving ? 'Registrando...' : 'Confirmar Avaliação'}
+                </Button>{' '}
               </DialogFooter>
             </div>
           )}

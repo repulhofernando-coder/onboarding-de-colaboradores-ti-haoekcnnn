@@ -692,7 +692,7 @@ export default function ModelosTarefas() {
             {isBiblioteca ? (
               <Button
                 onClick={() => openNewMaterialModal('manual')}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold h-9 rounded-lg shadow-sm"
+                className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold h-9 rounded-lg shadow-sm"
               >
                 <Plus className="w-3.5 h-3.5 mr-1.5" />
                 Novo Material na Biblioteca
@@ -708,7 +708,7 @@ export default function ModelosTarefas() {
                 </Button>
                 <Button
                   onClick={() => openNewModal('manual')}
-                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold h-9 rounded-lg"
+                  className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold h-9 rounded-lg"
                 >
                   <FileText className="w-3.5 h-3.5 mr-1.5" />
                   Adicionar Manual
@@ -744,12 +744,12 @@ export default function ModelosTarefas() {
           onClick={() => setSelectedTab('etapa1')}
           className={`p-3 rounded-xl border-2 text-left transition-all flex-1 min-w-[140px] max-w-[200px] ${
             selectedTab === 'etapa1'
-              ? 'border-blue-600 bg-white shadow-sm ring-1 ring-blue-200'
+              ? 'border-brand-600 bg-white shadow-sm ring-1 ring-brand-200'
               : 'border-transparent bg-white/70 hover:bg-white text-gray-600 hover:border-gray-200'
           }`}
         >
           <div className="flex items-center gap-2 mb-1">
-            <span className="w-3 h-3 rounded-full bg-blue-600 shrink-0" />
+            <span className="w-3 h-3 rounded-full bg-brand-600 shrink-0" />
             <span className="font-bold text-xs text-gray-900 truncate">Etapa 1 — RH</span>
           </div>
           <span className="text-[11px] text-gray-400 block truncate">
@@ -778,7 +778,7 @@ export default function ModelosTarefas() {
               onClick={() => setSelectedTab(s.id)}
               className={`p-3 rounded-xl border-2 text-left transition-all flex-1 min-w-[130px] max-w-[190px] ${
                 isSelected
-                  ? 'border-blue-600 bg-white shadow-sm ring-1 ring-blue-200'
+                  ? 'border-brand-600 bg-white shadow-sm ring-1 ring-brand-200'
                   : 'border-transparent bg-white/70 hover:bg-white text-gray-600 hover:border-gray-200'
               }`}
             >
@@ -798,7 +798,7 @@ export default function ModelosTarefas() {
           <button
             type="button"
             onClick={openNewSetorModal}
-            className="p-3 rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-500 hover:bg-blue-50/50 text-gray-500 hover:text-blue-600 transition-all flex items-center justify-center gap-1.5 min-w-[110px]"
+            className="p-3 rounded-xl border-2 border-dashed border-gray-300 hover:border-brand-500 hover:bg-brand-50/50 text-gray-500 hover:text-brand-600 transition-all flex items-center justify-center gap-1.5 min-w-[110px]"
             title="Criar nova área/setor para a empresa"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -882,7 +882,9 @@ export default function ModelosTarefas() {
                 size="sm"
                 onClick={() => setFiltroTipoMaterial('manual')}
                 className={`h-8 text-xs ${
-                  filtroTipoMaterial === 'manual' ? 'bg-blue-600 text-white hover:bg-blue-700' : ''
+                  filtroTipoMaterial === 'manual'
+                    ? 'bg-brand-600 text-white hover:bg-brand-700'
+                    : ''
                 }`}
               >
                 <FileText className="w-3 h-3 mr-1" />
@@ -935,7 +937,7 @@ export default function ModelosTarefas() {
                         className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
                           item.tipo === 'video'
                             ? 'bg-purple-100 text-purple-700'
-                            : 'bg-blue-100 text-blue-700'
+                            : 'bg-brand-100 text-brand-700'
                         }`}
                       >
                         {item.tipo === 'video' ? (
@@ -954,7 +956,7 @@ export default function ModelosTarefas() {
                             className={`text-[10px] font-medium px-2 py-0.5 rounded border ${
                               item.tipo === 'video'
                                 ? 'bg-purple-50 text-purple-700 border-purple-200'
-                                : 'bg-blue-50 text-blue-700 border-blue-200'
+                                : 'bg-brand-50 text-brand-700 border-brand-200'
                             }`}
                           >
                             {item.tipo === 'video' ? 'Vídeo (MP4)' : 'Manual / PDF'}
@@ -988,7 +990,7 @@ export default function ModelosTarefas() {
                         variant="ghost"
                         size="sm"
                         onClick={() => openPreviewMaterial(item)}
-                        className="h-8 text-xs text-blue-600 hover:text-blue-700"
+                        className="h-8 text-xs text-brand-600 hover:text-brand-700"
                       >
                         Visualizar
                       </Button>
@@ -1026,7 +1028,7 @@ export default function ModelosTarefas() {
             <div className="flex items-center gap-2.5">
               {isEtapa1 ? (
                 <>
-                  <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs">
+                  <div className="w-8 h-8 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-xs">
                     E1
                   </div>
                   <div>
@@ -1064,18 +1066,18 @@ export default function ModelosTarefas() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Video className="w-4 h-4 text-purple-600" />
-                <h4 className="text-sm font-bold text-gray-800">Vídeos Obrigatórios</h4>
+                <FileText className="w-4 h-4 text-brand-600" />
+                <h4 className="text-sm font-bold text-gray-800">Manuais & Documentos</h4>
               </div>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => openNewModal('video')}
-                className="h-8 text-xs text-purple-700 border-purple-200 hover:bg-purple-50"
+                onClick={() => openNewModal('manual')}
+                className="h-8 text-xs text-brand-700 border-brand-200 hover:bg-brand-50"
               >
                 <Plus className="w-3.5 h-3.5 mr-1" />
-                Adicionar Vídeo
-              </Button>
+                Adicionar Manual
+              </Button>{' '}
             </div>
 
             <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden bg-gray-50/30">
@@ -1128,7 +1130,7 @@ export default function ModelosTarefas() {
                         variant="ghost"
                         size="sm"
                         onClick={() => openPreviewModelo(item)}
-                        className="h-8 text-xs text-blue-600 hover:text-blue-700"
+                        className="h-8 text-xs text-brand-600 hover:text-brand-700"
                       >
                         Visualizar
                       </Button>
@@ -1205,7 +1207,7 @@ export default function ModelosTarefas() {
                               <Library className="w-3 h-3" /> Material da Biblioteca
                             </span>
                           ) : item.conteudo_url ? (
-                            <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.2 rounded font-medium shrink-0">
+                            <span className="text-[10px] bg-brand-50 text-brand-700 border border-brand-200 px-1.5 py-0.2 rounded font-medium shrink-0">
                               Upload direto
                             </span>
                           ) : (
@@ -1227,7 +1229,7 @@ export default function ModelosTarefas() {
                         variant="ghost"
                         size="sm"
                         onClick={() => openPreviewModelo(item)}
-                        className="h-8 text-xs text-blue-600 hover:text-blue-700"
+                        className="h-8 text-xs text-brand-600 hover:text-brand-700"
                       >
                         Visualizar
                       </Button>
@@ -1293,7 +1295,7 @@ export default function ModelosTarefas() {
                   size="sm"
                   onClick={() => setMaterialTipo('manual')}
                   className={
-                    materialTipo === 'manual' ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''
+                    materialTipo === 'manual' ? 'bg-brand-600 hover:bg-brand-700 text-white' : ''
                   }
                 >
                   <FileText className="w-3.5 h-3.5 mr-1" />
@@ -1542,12 +1544,12 @@ export default function ModelosTarefas() {
                   onClick={() => setFormOrigemArquivo('upload_direto')}
                   className={`p-2.5 rounded-lg border text-left transition-all ${
                     formOrigemArquivo === 'upload_direto'
-                      ? 'border-blue-600 bg-blue-50/60 text-blue-900 font-semibold'
+                      ? 'border-brand-600 bg-brand-50/60 text-brand-900 font-semibold'
                       : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                   }`}
                 >
                   <div className="flex items-center gap-1.5 text-xs">
-                    <Upload className="w-3.5 h-3.5 text-blue-600" />
+                    <Upload className="w-3.5 h-3.5 text-brand-600" />
                     <span>Upload direto deste item</span>
                   </div>
                   <span className="text-[10px] text-gray-400 block mt-0.5">
@@ -1598,7 +1600,7 @@ export default function ModelosTarefas() {
                     type="file"
                     accept=".mp4,.pdf,.pptx,.docx,.doc,.ppt"
                     onChange={(e) => setFormFile(e.target.files?.[0] || null)}
-                    className="block w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    className="block w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100"
                     disabled={submitting}
                   />
                   <p className="text-[11px] text-gray-400">
@@ -1624,10 +1626,10 @@ export default function ModelosTarefas() {
                 type="submit"
                 size="sm"
                 disabled={submitting}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                className="bg-brand-600 hover:bg-brand-700 text-white font-semibold"
               >
-                {submitting ? 'Salvando...' : 'Salvar no Modelo'}
-              </Button>
+                {salvando ? 'Salvando...' : 'Salvar Modelo'}
+              </Button>{' '}
             </DialogFooter>
           </form>
         </DialogContent>
@@ -1672,7 +1674,7 @@ export default function ModelosTarefas() {
                 </div>
               ) : (
                 <div className="p-6 rounded-lg bg-gray-50 border border-gray-200 text-center space-y-4">
-                  <FileCheck2 className="w-12 h-12 text-blue-600 mx-auto" />
+                  <FileCheck2 className="w-12 h-12 text-brand-600 mx-auto" />
                   <div>
                     <h4 className="text-sm font-bold text-gray-800">
                       Documento disponível para leitura
@@ -1681,7 +1683,7 @@ export default function ModelosTarefas() {
                       Arquivo anexado ({previewItem.origem || 'Modelo de Tarefas'}).
                     </p>
                   </div>
-                  <Button asChild size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+                  <Button asChild size="sm" className="bg-brand-600 hover:bg-brand-700 text-white">
                     <a
                       href={previewItem.url}
                       target="_blank"
@@ -1723,13 +1725,13 @@ export default function ModelosTarefas() {
           <DialogHeader>
             <div className="flex items-center justify-between pr-4">
               <DialogTitle className="text-base font-bold text-gray-900 flex items-center gap-2">
-                <Layers className="w-5 h-5 text-blue-600" />
+                <Layers className="w-5 h-5 text-brand-600" />
                 <span>Gestão de Áreas da Empresa</span>
               </DialogTitle>
               <Button
                 size="sm"
                 onClick={openNewSetorModal}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold h-8 rounded-lg"
+                className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold h-8 rounded-lg"
               >
                 <Plus className="w-3.5 h-3.5 mr-1" />
                 Nova Área
@@ -1836,7 +1838,7 @@ export default function ModelosTarefas() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-gray-900 flex items-center gap-2">
-              <Layers className="w-5 h-5 text-blue-600" />
+              <Layers className="w-5 h-5 text-brand-600" />
               <span>{setorEditing ? 'Editar Área / Setor' : 'Nova Área / Setor'}</span>
             </DialogTitle>
           </DialogHeader>
@@ -1899,7 +1901,7 @@ export default function ModelosTarefas() {
                       type="checkbox"
                       checked={setorAtivo}
                       onChange={(e) => setSetorAtivo(e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600"
+                      className="rounded border-gray-300 text-brand-600"
                       disabled={setorSubmitting}
                     />
                     <span>Área Ativa</span>
@@ -1922,10 +1924,10 @@ export default function ModelosTarefas() {
                 type="submit"
                 size="sm"
                 disabled={setorSubmitting}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                className="bg-brand-600 hover:bg-brand-700 text-white font-semibold"
               >
-                {setorSubmitting ? 'Salvando...' : 'Salvar Área'}
-              </Button>
+                {salvandoSetor ? 'Salvando...' : setorEditando ? 'Salvar Alterações' : 'Criar Área'}
+              </Button>{' '}
             </DialogFooter>
           </form>
         </DialogContent>

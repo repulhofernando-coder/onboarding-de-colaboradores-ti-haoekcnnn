@@ -13,10 +13,10 @@ import {
   Info,
   ShieldCheck,
   FileCheck2,
-  Laptop,
   Flame,
   Lock,
 } from 'lucide-react'
+import MundoOpenLogo from '@/components/MundoOpenLogo'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
@@ -215,7 +215,7 @@ export default function ColaboradorPublico() {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="text-center space-y-3">
-          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+          <div className="w-10 h-10 border-4 border-brand-600 border-t-transparent rounded-full animate-spin mx-auto" />
           <p className="text-sm font-medium text-slate-600">
             Carregando sua jornada de onboarding...
           </p>
@@ -257,15 +257,15 @@ export default function ColaboradorPublico() {
       <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-30 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white shadow-sm">
-              <Laptop className="w-5 h-5" />
+            <div className="bg-white px-2.5 py-1 rounded-xl shadow-xs">
+              <MundoOpenLogo variant="full" size="sm" />
             </div>
             <div>
-              <span className="text-[11px] font-semibold text-blue-400 uppercase tracking-wider block">
-                Portal do Colaborador TI
+              <span className="text-[11px] font-semibold text-brand-300 uppercase tracking-wider block">
+                Portal do Colaborador
               </span>
               <h1 className="text-sm font-bold text-white leading-tight">
-                Onboarding & Integração Técnica
+                Integração & Treinamento Técnico
               </h1>
             </div>
           </div>
@@ -284,7 +284,7 @@ export default function ColaboradorPublico() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center gap-1.5">
+                <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-brand-50 text-brand-700 border border-brand-200 inline-flex items-center gap-1.5">
                   <span
                     className="w-2 h-2 rounded-full shrink-0"
                     style={{ backgroundColor: setorInfo.cor }}
@@ -319,7 +319,7 @@ export default function ColaboradorPublico() {
                 Prazo de Integração (15 dias):
               </span>
               <div className="flex items-center sm:justify-end gap-1.5 font-bold text-slate-800">
-                <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                <Calendar className="w-3.5 h-3.5 text-brand-600" />
                 <span>Até {formatShortDate(onboarding.data_fim)}</span>
               </div>
               {onboarding.expand?.gestor_id?.name && (
@@ -334,10 +334,10 @@ export default function ColaboradorPublico() {
           <div className="pt-2 border-t border-slate-100 space-y-2">
             <div className="flex items-center justify-between text-xs font-semibold">
               <span className="text-slate-700 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                <Sparkles className="w-3.5 h-3.5 text-brand-600" />
                 Seu Progresso de Confirmações
               </span>
-              <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+              <span className="text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full border border-brand-200">
                 {totalConfirmadas} de {totalVisivel} materiais confirmados ({progressoPercent}%)
               </span>
             </div>
@@ -367,7 +367,7 @@ export default function ColaboradorPublico() {
         <section className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-sm space-y-5">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-sm">
+              <div className="w-9 h-9 rounded-xl bg-brand-600 text-white flex items-center justify-center font-bold text-sm shadow-sm">
                 1
               </div>
               <div>
@@ -375,7 +375,7 @@ export default function ColaboradorPublico() {
                   Etapa 1 — Apresentação da Empresa
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Cultura institucional, estrutura dos setores e boas práticas gerais de
+                  Cultura institucional Mundo Open, estrutura dos setores e boas práticas de
                   atendimento.
                 </p>
               </div>
@@ -386,7 +386,7 @@ export default function ColaboradorPublico() {
                 Etapa Validada pelo RH
               </Badge>
             ) : (
-              <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-xs font-semibold">
+              <Badge className="bg-brand-50 text-brand-700 border-brand-200 text-xs font-semibold">
                 Em andamento
               </Badge>
             )}
@@ -420,7 +420,7 @@ export default function ColaboradorPublico() {
                           className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
                             item.tipo === 'video'
                               ? 'bg-purple-50 text-purple-600'
-                              : 'bg-blue-50 text-blue-600'
+                              : 'bg-brand-50 text-brand-600'
                           }`}
                         >
                           {item.tipo === 'video' ? (
@@ -476,7 +476,7 @@ export default function ColaboradorPublico() {
                               tarefaId: item.id,
                             })
                           }
-                          className="h-9 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
+                          className="h-9 text-xs text-brand-700 border-brand-200 hover:bg-brand-50"
                         >
                           {item.tipo === 'video' ? 'Assistir' : 'Abrir/Ler'}
                         </Button>
@@ -525,7 +525,7 @@ export default function ColaboradorPublico() {
             <div className="flex items-center gap-3">
               <div
                 className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shadow-sm ${
-                  !etapa2Liberada ? 'bg-slate-300 text-slate-600' : 'bg-blue-600 text-white'
+                  !etapa2Liberada ? 'bg-slate-300 text-slate-600' : 'bg-brand-600 text-white'
                 }`}
               >
                 {!etapa2Liberada ? <Lock className="w-4 h-4" /> : '2'}
@@ -550,7 +550,7 @@ export default function ColaboradorPublico() {
                 Etapa Concluída pelo Gestor
               </Badge>
             ) : (
-              <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-xs font-semibold">
+              <Badge className="bg-brand-50 text-brand-700 border-brand-200 text-xs font-semibold">
                 Liberada para Estudo
               </Badge>
             )}
@@ -593,7 +593,7 @@ export default function ColaboradorPublico() {
                             className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
                               item.tipo === 'video'
                                 ? 'bg-purple-50 text-purple-600'
-                                : 'bg-blue-50 text-blue-600'
+                                : 'bg-brand-50 text-brand-600'
                             }`}
                           >
                             {item.tipo === 'video' ? (
@@ -651,7 +651,7 @@ export default function ColaboradorPublico() {
                                 tarefaId: item.id,
                               })
                             }
-                            className="h-9 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
+                            className="h-9 text-xs text-brand-700 border-brand-200 hover:bg-brand-50"
                           >
                             {item.tipo === 'video' ? 'Assistir' : 'Abrir/Ler'}
                           </Button>
@@ -691,10 +691,15 @@ export default function ColaboradorPublico() {
 
         {/* Rodapé informativo */}
         <div className="text-center text-xs text-slate-400 py-4 space-y-1">
-          <p>Sistema de Gestão de Onboarding TI • Dúvidas? Procure o setor de Recursos Humanos.</p>
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <span className="text-slate-500 font-semibold">Mundo Open Tecnologia</span>
+            <span>•</span>
+            <span>Onboarding de Colaboradores</span>
+          </div>
+          <p>Dúvidas sobre o processo? Procure o setor de Recursos Humanos ou seu Gestor.</p>
           <p className="text-[11px] text-slate-400">
             Link exclusivo do colaborador. Suas confirmações ficam salvas de forma segura e
-            automática.
+            automática em tempo real.
           </p>
         </div>
       </main>
@@ -707,7 +712,7 @@ export default function ColaboradorPublico() {
               {previewItem?.tipo === 'video' ? (
                 <Video className="w-5 h-5 text-purple-600" />
               ) : (
-                <FileText className="w-5 h-5 text-blue-600" />
+                <FileText className="w-5 h-5 text-brand-600" />
               )}
               <span>{previewItem?.titulo}</span>
             </DialogTitle>
@@ -729,7 +734,7 @@ export default function ColaboradorPublico() {
                 </div>
               ) : (
                 <div className="p-8 rounded-xl bg-slate-50 border border-slate-200 text-center space-y-4">
-                  <FileCheck2 className="w-14 h-14 text-blue-600 mx-auto" />
+                  <FileCheck2 className="w-14 h-14 text-brand-600 mx-auto" />
                   <div>
                     <h4 className="text-sm font-bold text-slate-800">
                       Documento disponível para leitura
@@ -739,7 +744,7 @@ export default function ColaboradorPublico() {
                       seu navegador.
                     </p>
                   </div>
-                  <Button asChild size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+                  <Button asChild size="sm" className="bg-brand-600 hover:bg-brand-700 text-white">
                     <a
                       href={previewItem.url}
                       target="_blank"

@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { ROLES_INFO, type UserRole } from '@/types/onboarding'
+import MundoOpenLogo from '@/components/MundoOpenLogo'
 import {
   LayoutDashboard,
   ListTodo,
@@ -11,11 +12,9 @@ import {
   LogOut,
   Menu,
   X,
-  CheckCircle2,
   ChevronDown,
   ShieldCheck,
   UserCheck,
-  ShieldAlert,
   Shield,
 } from 'lucide-react'
 import {
@@ -66,7 +65,7 @@ export default function Layout() {
     if (p.startsWith('/modelos')) return 'Modelos de Tarefas por Setor'
     if (p.startsWith('/avaliacoes')) return 'Avaliações Finais dos Gestores'
     if (p.startsWith('/usuarios')) return 'Gestão de Usuários'
-    return 'Onboarding TI'
+    return 'Onboarding de Colaboradores'
   }
 
   const userInitials = (user?.name || user?.email || 'U')
@@ -88,24 +87,14 @@ export default function Layout() {
 
       {/* Sidebar Desktop & Mobile Drawer */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 w-60 bg-white border-r border-gray-200/90 flex flex-col transition-transform duration-250 ease-out lg:translate-x-0 ${
+        className={`fixed top-0 bottom-0 left-0 z-50 w-64 bg-white border-r border-gray-200/90 flex flex-col transition-transform duration-250 ease-out lg:translate-x-0 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Brand */}
-        <div className="h-16 flex items-center justify-between px-5 border-b border-gray-100">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm shadow-blue-500/20">
-              <CheckCircle2 className="w-5 h-5 stroke-[2.3]" />
-            </div>
-            <div>
-              <div className="font-bold text-base tracking-tight text-[#1A2233] leading-none">
-                Onboarding TI
-              </div>
-              <div className="text-[11px] font-medium text-[#6B7280] tracking-wide mt-0.5">
-                Suporte Terceirizado
-              </div>
-            </div>
+        {/* Brand Mundo Open */}
+        <div className="h-20 flex items-center justify-between px-5 border-b border-gray-100">
+          <div className="flex flex-col">
+            <MundoOpenLogo variant="full" size="md" subtitle="Onboarding de Colaboradores" />
           </div>
           <button
             type="button"
@@ -135,13 +124,13 @@ export default function Layout() {
                   onClick={() => setMobileOpen(false)}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${
                     isActive
-                      ? 'bg-blue-50 text-blue-700 font-semibold shadow-xs'
+                      ? 'bg-brand-50 text-brand-700 font-semibold shadow-xs'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
                 >
                   <Icon
                     className={`w-4 h-4 shrink-0 transition-colors ${
-                      isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'
+                      isActive ? 'text-brand-600' : 'text-gray-400 group-hover:text-gray-600'
                     }`}
                   />
                   <span className="truncate">{item.label}</span>
@@ -153,7 +142,7 @@ export default function Layout() {
         {/* User Card & Sair in Sidebar Bottom */}
         <div className="p-3 border-t border-gray-100">
           <div className="bg-gray-50/80 rounded-lg p-2.5 mb-2 flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+            <div className="w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
               {userInitials}
             </div>
             <div className="min-w-0 flex-1">
@@ -164,9 +153,9 @@ export default function Layout() {
                 {role === 'admin' ? (
                   <Shield className="w-3 h-3 text-purple-600" />
                 ) : role === 'rh' ? (
-                  <UserCheck className="w-3 h-3 text-emerald-600" />
+                  <UserCheck className="w-3 h-3 text-brand-600" />
                 ) : (
-                  <ShieldCheck className="w-3 h-3 text-blue-600" />
+                  <ShieldCheck className="w-3 h-3 text-teal-600" />
                 )}
                 <span>{ROLES_INFO[role]?.nome || 'Usuário'}</span>
               </div>
@@ -185,7 +174,7 @@ export default function Layout() {
       </aside>
 
       {/* Main Content Area */}
-      <div className="lg:pl-60 flex-1 flex flex-col min-w-0">
+      <div className="lg:pl-64 flex-1 flex flex-col min-w-0">
         {/* Top Header */}
         <header className="sticky top-0 z-30 h-16 bg-white/95 backdrop-blur-sm border-b border-gray-200/90 flex items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
@@ -199,8 +188,8 @@ export default function Layout() {
               <Menu className="w-5 h-5" />
             </Button>
             <div className="flex flex-col">
-              <span className="text-xs font-medium text-gray-400 hidden sm:block">
-                Onboarding TI &gt;
+              <span className="text-xs font-medium text-brand-700/70 hidden sm:block">
+                Mundo Open &gt; Onboarding
               </span>
               <h1 className="text-base sm:text-lg font-bold text-[#1A2233] leading-none">
                 {getPageTitle()}
@@ -222,10 +211,10 @@ export default function Layout() {
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="flex items-center gap-2 p-1 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex items-center gap-2 p-1 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
                   aria-label="Menu do usuário"
                 >
-                  <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
+                  <div className="w-9 h-9 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
                     {userInitials}
                   </div>
                   <ChevronDown className="w-3.5 h-3.5 text-gray-400 hidden sm:block" />

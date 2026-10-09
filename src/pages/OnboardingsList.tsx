@@ -176,7 +176,7 @@ export default function OnboardingsList() {
 
         <Button
           asChild
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm shrink-0"
+          className="bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm shrink-0"
         >
           <Link to="/onboardings/nova" className="flex items-center gap-2">
             <Plus className="w-4 h-4" />
@@ -197,7 +197,7 @@ export default function OnboardingsList() {
                 setSearch(e.target.value)
                 setPage(1)
               }}
-              className="pl-9 h-10 border-gray-300 text-sm focus-visible:ring-blue-500"
+              className="pl-9 h-10 border-gray-300 text-sm focus-visible:ring-brand-500"
             />
           </div>
 
@@ -225,7 +225,7 @@ export default function OnboardingsList() {
                 onClick={() => handleStatusFilter(chip.id)}
                 className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                   active
-                    ? 'bg-blue-600 text-white shadow-xs'
+                    ? 'bg-brand-600 text-white shadow-xs'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
@@ -246,7 +246,7 @@ export default function OnboardingsList() {
             }}
             className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
               selectedSetor === 'todos'
-                ? 'bg-blue-600 text-white shadow-xs'
+                ? 'bg-brand-600 text-white shadow-xs'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
@@ -273,7 +273,7 @@ export default function OnboardingsList() {
                 }}
                 className={`px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5 ${
                   active
-                    ? 'bg-blue-600 text-white shadow-xs'
+                    ? 'bg-brand-600 text-white shadow-xs'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
@@ -343,12 +343,12 @@ export default function OnboardingsList() {
                   const status = STATUS_INFO[item.status]
 
                   return (
-                    <tr key={item.id} className="hover:bg-blue-50/30 transition-colors group">
+                    <tr key={item.id} className="hover:bg-brand-50/30 transition-colors group">
                       {/* Colaborador */}
                       <td className="py-3.5 px-4">
                         <Link
                           to={`/colaboradores/${item.id}`}
-                          className="font-bold text-gray-900 group-hover:text-blue-600 block truncate max-w-[200px]"
+                          className="font-bold text-gray-900 group-hover:text-brand-600 block truncate max-w-[200px]"
                         >
                           {item.colaborador_nome}
                         </Link>
@@ -418,7 +418,7 @@ export default function OnboardingsList() {
                           asChild
                           variant="ghost"
                           size="sm"
-                          className="h-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 font-medium"
+                          className="h-8 text-brand-600 hover:text-brand-700 hover:bg-brand-50 font-medium"
                         >
                           <Link
                             to={`/colaboradores/${item.id}`}
@@ -454,7 +454,7 @@ export default function OnboardingsList() {
                     <div>
                       <Link
                         to={`/colaboradores/${item.id}`}
-                        className="font-bold text-sm text-gray-900 hover:text-blue-600 block"
+                        className="font-bold text-sm text-gray-900 hover:text-brand-600 block"
                       >
                         {item.colaborador_nome}
                       </Link>
@@ -499,7 +499,7 @@ export default function OnboardingsList() {
                       asChild
                       size="sm"
                       variant="outline"
-                      className="h-8 text-blue-600 border-blue-200"
+                      className="h-8 text-brand-600 border-brand-200"
                     >
                       <Link to={`/colaboradores/${item.id}`}>Ver detalhe</Link>
                     </Button>

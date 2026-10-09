@@ -1,10 +1,11 @@
 import React, { useState } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
-import { CheckCircle2, Lock, Mail, AlertCircle } from 'lucide-react'
+import { Lock, Mail, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
+import MundoOpenLogo from '@/components/MundoOpenLogo'
 
 export default function Login() {
   const { login } = useAuth()
@@ -50,25 +51,29 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F6F7F9] px-4 py-12">
-      <div className="w-full max-w-md">
-        {/* Brand Header */}
+    <div className="min-h-screen flex items-center justify-center bg-[#F6F7F9] px-4 py-12 relative overflow-hidden">
+      {/* Detalhe de fundo decorativo com o verde da marca */}
+      <div className="absolute -top-32 -right-32 w-96 h-96 bg-brand-200/40 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-brand-100/50 rounded-full blur-3xl pointer-events-none" />
+
+      <div className="w-full max-w-md relative z-10">
+        {/* Brand Header Mundo Open */}
         <div className="flex flex-col items-center text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 mb-3">
-            <CheckCircle2 className="w-8 h-8 stroke-[2.2]" />
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-4 inline-flex items-center justify-center">
+            <MundoOpenLogo variant="full" size="lg" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#1A2233]">Onboarding TI</h1>
-          <p className="text-sm text-[#6B7280] mt-1">
-            Plataforma de Treinamento e Integração Técnica
-          </p>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-50 border border-brand-200/80 text-brand-800 text-xs font-semibold">
+            <span className="w-2 h-2 rounded-full bg-brand-600 animate-pulse" />
+            Sistema de Onboarding de Colaboradores
+          </div>
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm p-8">
+        <div className="bg-white rounded-2xl border border-gray-200/80 shadow-md p-8">
           <div className="mb-6">
-            <h2 className="text-lg font-semibold text-[#1A2233]">Acessar o sistema</h2>
+            <h2 className="text-lg font-bold text-[#1A2233]">Acessar o sistema</h2>
             <p className="text-xs text-[#6B7280] mt-0.5">
-              Área restrita para Gestores e equipe de RH
+              Área restrita para Administradores, RH e Gestores
             </p>
           </div>
 
@@ -92,7 +97,7 @@ export default function Login() {
                   placeholder="seu.email@empresa.com.br"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-9 h-11 border-gray-300 focus-visible:ring-blue-500 text-sm"
+                  className="pl-9 h-11 border-gray-300 focus-visible:ring-brand-500 text-sm"
                   disabled={loading}
                 />
               </div>
@@ -105,7 +110,7 @@ export default function Login() {
                 </label>
                 <Link
                   to="/forgot-password"
-                  className="text-xs text-blue-600 hover:text-blue-700 font-medium hover:underline"
+                  className="text-xs text-brand-600 hover:text-brand-700 font-semibold hover:underline"
                 >
                   Esqueci minha senha
                 </Link>
@@ -118,7 +123,7 @@ export default function Login() {
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-9 h-11 border-gray-300 focus-visible:ring-blue-500 text-sm"
+                  className="pl-9 h-11 border-gray-300 focus-visible:ring-brand-500 text-sm"
                   disabled={loading}
                 />
               </div>
@@ -127,7 +132,7 @@ export default function Login() {
             <Button
               type="submit"
               disabled={loading}
-              className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm transition-all hover:-translate-y-0.5 active:translate-y-0"
+              className="w-full h-11 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm transition-all hover:-translate-y-0.5 active:translate-y-0"
             >
               {loading ? (
                 <div className="flex items-center gap-2">

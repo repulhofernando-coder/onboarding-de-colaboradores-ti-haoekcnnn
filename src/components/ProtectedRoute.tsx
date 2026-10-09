@@ -20,7 +20,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F6F7F9]">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
           <p className="text-sm text-gray-500 font-medium">Carregando sessão...</p>
         </div>
       </div>
@@ -42,7 +42,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
           Você não tem permissão para esta ação ou tela. Seu perfil atual é{' '}
           <strong className="text-gray-900 uppercase">{role}</strong>.
         </p>
-        <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white">
+        <Button asChild className="bg-brand-600 hover:bg-brand-700 text-white">
           <Link to="/">Voltar para a Visão Geral</Link>
         </Button>
       </div>

@@ -36,6 +36,22 @@ export default {
         ring: 'hsl(var(--ring))',
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
+        brand: {
+          50: '#ecfeff',
+          100: '#cffafe',
+          200: '#a5f3fc',
+          300: '#67e8f9',
+          400: '#22d3ee',
+          500: '#06b6d4',
+          600: '#008D96', // Verde Mundo Open principal
+          700: '#00747c',
+          800: '#045e65',
+          900: '#084c52',
+          950: '#022d31',
+          DEFAULT: '#008D96',
+          foreground: '#ffffff',
+          dark: '#1f2937',
+        },
         primary: {
           DEFAULT: 'hsl(var(--primary))',
           foreground: 'hsl(var(--primary-foreground))',

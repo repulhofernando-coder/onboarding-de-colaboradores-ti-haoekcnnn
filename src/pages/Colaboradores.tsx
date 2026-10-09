@@ -113,7 +113,7 @@ export default function Colaboradores() {
 
         <Button
           asChild
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm shrink-0"
+          className="bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm shrink-0"
         >
           <Link to="/onboardings/nova" className="flex items-center gap-2">
             <Plus className="w-4 h-4" />
@@ -130,7 +130,7 @@ export default function Colaboradores() {
             placeholder="Buscar por colaborador, e-mail ou cargo..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-10 border-gray-300 text-sm focus-visible:ring-blue-500"
+            className="pl-9 h-10 border-gray-300 text-sm focus-visible:ring-brand-500"
           />
         </div>
 
@@ -164,15 +164,16 @@ export default function Colaboradores() {
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <h3 className="font-bold text-base text-gray-900 group-hover:text-blue-600 transition-colors">
-                        {item.nome}
+                      <h3 className="font-bold text-base text-gray-900 group-hover:text-brand-600 transition-colors">
+                        {item.colaborador_nome}
                       </h3>
-                      <span className="text-xs text-gray-500 block mt-0.5">
-                        {item.cargo || 'Analista de Suporte'}
+                      <span className="text-xs text-gray-500 block">
+                        {item.cargo || item.colaborador_email}
                       </span>
                     </div>
 
-                    <span className="text-[11px] px-2.5 py-0.5 rounded-full border font-semibold shrink-0 bg-blue-50 text-blue-700 border-blue-200 inline-flex items-center gap-1.5">
+                    <span className="text-[11px] px-2.5 py-0.5 rounded-full border font-semibold shrink-0 bg-brand-50 text-brand-700 border-brand-200 inline-flex items-center gap-1.5">
+                      {' '}
                       <span
                         className="w-1.5 h-1.5 rounded-full shrink-0"
                         style={{ backgroundColor: setor.cor }}
@@ -217,7 +218,7 @@ export default function Colaboradores() {
                   <Button
                     asChild
                     size="sm"
-                    className="h-8 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                    className="h-8 text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white rounded-lg"
                   >
                     <Link
                       to={`/colaboradores/${onb.id}`}

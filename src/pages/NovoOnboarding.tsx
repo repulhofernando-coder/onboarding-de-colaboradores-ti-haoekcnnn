@@ -191,33 +191,32 @@ export default function NovoOnboarding() {
         </div>
 
         {/* Caixa Informativa sobre as 3 etapas sequenciais */}
-        <div className="mb-8 p-4 rounded-xl bg-blue-50/70 border border-blue-200/70 text-blue-900">
-          <div className="flex items-center gap-2 mb-2 font-bold text-xs uppercase tracking-wider text-blue-800">
-            <Info className="w-4 h-4" />
-            <span>Fluxo do Onboarding (Prazo Máximo: 15 dias)</span>
+        <div className="mb-8 p-4 rounded-xl bg-brand-50/80 border border-brand-200/70 text-brand-950">
+          <div className="flex items-center gap-2 mb-2 font-bold text-xs uppercase tracking-wider text-brand-800">
+            <Sparkles className="w-4 h-4 text-brand-600" />
+            <span>Estrutura de 15 dias da Mundo Open</span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs mt-3">
-            <div className="bg-white/80 p-2.5 rounded-lg border border-blue-200/60">
-              <span className="font-bold text-blue-700 block mb-1">1. Apresentação RH</span>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            <div className="bg-white/90 p-2.5 rounded-lg border border-brand-200/60">
+              <span className="font-bold text-brand-700 block mb-1">1. Apresentação RH</span>
               <p className="text-gray-600 text-[11px] leading-relaxed">
-                Visão da empresa, explicação dos setores, conduta e cultura interna.
+                Cultura da empresa, estrutura dos setores e boas práticas gerais de atendimento.
               </p>
             </div>
-            <div className="bg-white/80 p-2.5 rounded-lg border border-blue-200/60">
-              <span className="font-bold text-blue-700 block mb-1">2. Vivência Técnica</span>
+            <div className="bg-white/90 p-2.5 rounded-lg border border-brand-200/60">
+              <span className="font-bold text-brand-700 block mb-1">2. Vivência Técnica</span>
               <p className="text-gray-600 text-[11px] leading-relaxed">
-                Movidesk, Passportal, shadow técnico, chamados e materiais específicos do setor.
+                Movidesk (chamados), Passportal (documentação) e procedimentos específicos do setor.
               </p>
             </div>
-            <div className="bg-white/80 p-2.5 rounded-lg border border-blue-200/60">
-              <span className="font-bold text-blue-700 block mb-1">3. Avaliação Gestor</span>
+            <div className="bg-white/90 p-2.5 rounded-lg border border-brand-200/60">
+              <span className="font-bold text-brand-700 block mb-1">3. Avaliação Gestor</span>
               <p className="text-gray-600 text-[11px] leading-relaxed">
-                Reunião decisória com o gestor: aprovação como Apto para suporte independente.
+                Gestor avalia após 15 dias e decide se o colaborador está apto para o suporte.
               </p>
             </div>
           </div>
         </div>
-
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Nome */}
           <div>
@@ -392,7 +391,7 @@ export default function NovoOnboarding() {
                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   Prazo Final Automático (15 dias)
                 </span>
-                <span className="text-base font-bold text-blue-700 mt-0.5">
+                <span className="text-base font-bold text-brand-700 mt-0.5">
                   {dataFimCalculada ? `Prazo final: ${dataFimCalculada}` : '-'}
                 </span>
                 <span className="text-[11px] text-gray-400 mt-0.5">
@@ -416,7 +415,7 @@ export default function NovoOnboarding() {
             <Button
               type="submit"
               disabled={submitting}
-              className="h-11 px-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm"
+              className="h-11 px-6 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm"
             >
               {submitting ? (
                 <div className="flex items-center gap-2">

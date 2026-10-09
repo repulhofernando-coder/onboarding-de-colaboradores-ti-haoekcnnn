@@ -290,7 +290,7 @@ export default function Usuarios() {
 
         <Button
           onClick={handleOpenCreate}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm shrink-0"
+          className="bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm shrink-0"
         >
           <Plus className="w-4 h-4 mr-2" />
           <span>Novo Usuário</span>
@@ -306,7 +306,7 @@ export default function Usuarios() {
               placeholder="Buscar por nome ou e-mail..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 h-10 border-gray-300 text-sm focus-visible:ring-blue-500"
+              className="pl-9 h-10 border-gray-300 text-sm focus-visible:ring-brand-500"
             />
           </div>
 
@@ -361,7 +361,7 @@ export default function Usuarios() {
                   {/* Top do card: nome, avatar e papel */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
+                      <div className="w-10 h-10 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
                         {(u.name || u.email || 'U')
                           .split(' ')
                           .filter(Boolean)
@@ -377,7 +377,7 @@ export default function Usuarios() {
                           {isSelf && (
                             <Badge
                               variant="outline"
-                              className="text-[10px] py-0 px-1.5 text-blue-700 bg-blue-50 border-blue-200"
+                              className="text-[10px] py-0 px-1.5 text-brand-700 bg-brand-50 border-brand-200"
                             >
                               Você
                             </Badge>
@@ -625,7 +625,7 @@ export default function Usuarios() {
               <Button
                 type="submit"
                 disabled={saving}
-                className="h-10 text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                className="h-10 text-xs bg-brand-600 hover:bg-brand-700 text-white font-semibold"
               >
                 {saving ? 'Salvando...' : editingUser ? 'Salvar Alterações' : 'Criar Usuário'}
               </Button>

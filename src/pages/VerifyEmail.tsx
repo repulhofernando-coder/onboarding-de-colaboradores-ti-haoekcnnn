@@ -39,7 +39,7 @@ export default function VerifyEmail() {
         <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm p-8">
           {loading ? (
             <div className="py-8 flex flex-col items-center gap-3">
-              <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              <div className="w-10 h-10 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
               <p className="text-sm text-gray-600 font-medium">
                 Validando verificação de e-mail...
               </p>
@@ -51,11 +51,11 @@ export default function VerifyEmail() {
               </div>
               <h2 className="text-xl font-bold text-[#1A2233] mb-2">E-mail verificado!</h2>
               <p className="text-sm text-[#6B7280] mb-6">
-                Sua conta de acesso ao Onboarding TI foi confirmada com sucesso.
+                Sua conta de acesso ao Onboarding Mundo Open foi confirmada com sucesso.
               </p>
               <Button
                 asChild
-                className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg"
+                className="w-full h-11 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg"
               >
                 <Link to="/login" className="flex items-center justify-center gap-2">
                   <span>Ir para o Login</span>

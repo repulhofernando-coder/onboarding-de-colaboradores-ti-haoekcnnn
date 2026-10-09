@@ -190,7 +190,7 @@ export default function Index() {
           onboardingId: o.id,
           texto: `Etapa 2 (Vivência Técnica) concluída — ${o.colaborador_nome} (${setorNome})`,
           data: o.data_conclusao_etapa2 || o.updated,
-          cor: 'bg-blue-500',
+          cor: 'bg-brand-600',
           tipo: 'Etapa 2',
         })
       }
@@ -256,7 +256,7 @@ export default function Index() {
         <div className="flex items-center gap-3 shrink-0">
           <Button
             asChild
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm"
+            className="bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm"
           >
             <Link to="/onboardings/nova" className="flex items-center gap-2">
               <Plus className="w-4 h-4" />
@@ -277,7 +277,7 @@ export default function Index() {
             <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
               Em andamento
             </span>
-            <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
+            <div className="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center group-hover:bg-brand-600 group-hover:text-white transition-colors">
               <Clock className="w-5 h-5" />
             </div>
           </div>
@@ -365,7 +365,7 @@ export default function Index() {
       <div className="bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2.5">
-            <Layers className="w-5 h-5 text-blue-600" />
+            <Layers className="w-5 h-5 text-brand-600" />
             <h3 className="text-base font-bold text-[#1A2233]">
               Distribuição de Onboardings por Setor
             </h3>
@@ -447,7 +447,10 @@ export default function Index() {
               <Calendar className="w-5 h-5 text-blue-600" />
               <h3 className="text-base font-bold text-[#1A2233]">Próximos Vencimentos do Prazo</h3>
             </div>
-            <Link to="/onboardings" className="text-xs font-semibold text-blue-600 hover:underline">
+            <Link
+              to="/onboardings"
+              className="text-xs font-semibold text-brand-600 hover:underline"
+            >
               Ver todos
             </Link>
           </div>
@@ -475,7 +478,7 @@ export default function Index() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <Link
                           to={`/colaboradores/${item.id}`}
-                          className="font-bold text-sm text-[#1A2233] hover:text-blue-600 truncate"
+                          className="font-bold text-sm text-[#1A2233] hover:text-brand-600 truncate"
                         >
                           {item.colaborador_nome}
                         </Link>
@@ -506,7 +509,7 @@ export default function Index() {
                             {item.diasRestantes}d restantes
                           </Badge>
                         ) : (
-                          <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 border-blue-200 text-xs font-medium">
+                          <Badge className="bg-brand-50 text-brand-700 hover:bg-brand-50 border-brand-200 text-xs font-medium">
                             {item.diasRestantes} dias
                           </Badge>
                         )}
@@ -521,7 +524,7 @@ export default function Index() {
                         asChild
                         variant="ghost"
                         size="sm"
-                        className="h-8 text-blue-600 hover:text-blue-700 px-2"
+                        className="h-8 text-brand-600 hover:text-brand-700 px-2"
                       >
                         <Link to={`/colaboradores/${item.id}`}>Ver</Link>
                       </Button>
@@ -536,7 +539,7 @@ export default function Index() {
         {/* Atividade Recente (1 coluna em desktop) */}
         <div className="bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm flex flex-col">
           <div className="flex items-center gap-2 mb-4">
-            <Activity className="w-5 h-5 text-blue-600" />
+            <Activity className="w-5 h-5 text-brand-600" />
             <h3 className="text-base font-bold text-[#1A2233]">Atividade Recente</h3>
           </div>
 
@@ -558,7 +561,7 @@ export default function Index() {
                   <div>
                     <Link
                       to={`/colaboradores/${act.onboardingId}`}
-                      className="text-xs font-semibold text-gray-800 hover:text-blue-600 line-clamp-2 block"
+                      className="text-xs font-semibold text-gray-800 hover:text-brand-600 line-clamp-2 block"
                     >
                       {act.texto}
                     </Link>
@@ -572,7 +575,10 @@ export default function Index() {
           )}
 
           <div className="mt-4 pt-3 border-t border-gray-100 text-center">
-            <Link to="/onboardings" className="text-xs font-semibold text-blue-600 hover:underline">
+            <Link
+              to="/onboardings"
+              className="text-xs font-semibold text-brand-600 hover:underline"
+            >
               Acompanhar todos os onboardings &rarr;
             </Link>
           </div>

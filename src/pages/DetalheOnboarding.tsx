@@ -532,7 +532,7 @@ export default function DetalheOnboarding() {
   if (loading || !onboarding) {
     return (
       <div className="py-24 text-center">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+        <div className="w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
         <p className="text-sm text-gray-500 font-medium">Carregando detalhes do onboarding...</p>
       </div>
     )
@@ -566,11 +566,11 @@ export default function DetalheOnboarding() {
       </div>
 
       {/* Banner / Card do Link Público do Colaborador */}
-      <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white p-5 sm:p-6 rounded-2xl shadow-sm space-y-3 border border-blue-800">
+      <div className="bg-gradient-to-r from-brand-900 via-brand-950 to-slate-900 text-white p-5 sm:p-6 rounded-2xl shadow-sm space-y-3 border border-brand-800">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider bg-blue-500/25 text-blue-300 px-2.5 py-0.5 rounded-full border border-blue-400/30 inline-flex items-center gap-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider bg-brand-500/25 text-cyan-200 px-2.5 py-0.5 rounded-full border border-cyan-400/30 inline-flex items-center gap-1">
                 <Share2 className="w-3 h-3" />
                 Link Público do Colaborador (Sem Login)
               </span>
@@ -578,7 +578,7 @@ export default function DetalheOnboarding() {
             <h3 className="text-base sm:text-lg font-bold text-white">
               Acesso exclusivo para {onboarding.colaborador_nome}
             </h3>
-            <p className="text-xs text-blue-200/90 max-w-2xl leading-relaxed">
+            <p className="text-xs text-cyan-100/90 max-w-2xl leading-relaxed">
               O colaborador assiste aos vídeos e lê os manuais por este link e confirma que já
               assistiu/leu diretamente da tela dele. O RH e Gestão acompanham o progresso em tempo
               real.
@@ -589,11 +589,11 @@ export default function DetalheOnboarding() {
             <Button
               type="button"
               onClick={handleCopiarLinkColaborador}
-              className="bg-white text-blue-900 hover:bg-blue-50 font-bold text-xs h-10 px-4 shadow-sm"
+              className="bg-white text-brand-950 hover:bg-brand-50 font-bold text-xs h-10 px-4 shadow-sm"
             >
               {linkCopiado ? (
                 <>
-                  <Check className="w-4 h-4 mr-1.5 text-emerald-600" />
+                  <Check className="w-4 h-4 mr-1.5 text-brand-600" />
                   Link Copiado!
                 </>
               ) : (
@@ -608,7 +608,7 @@ export default function DetalheOnboarding() {
               <Button
                 asChild
                 variant="outline"
-                className="bg-blue-800/60 border-blue-700 text-white hover:bg-blue-800 text-xs h-10 px-3"
+                className="bg-brand-800/60 border-brand-700 text-white hover:bg-brand-800 text-xs h-10 px-3"
               >
                 <a
                   href={linkColaborador}
@@ -624,11 +624,11 @@ export default function DetalheOnboarding() {
         </div>
 
         {linkColaborador && (
-          <div className="pt-2 border-t border-blue-800/80 flex items-center gap-2 text-xs text-blue-300 font-mono overflow-hidden">
-            <span className="text-blue-400 select-none shrink-0 font-sans font-medium">
+          <div className="pt-2 border-t border-brand-800/80 flex items-center gap-2 text-xs text-cyan-200 font-mono overflow-hidden">
+            <span className="text-cyan-400 select-none shrink-0 font-sans font-medium">
               URL direta:
             </span>
-            <span className="truncate select-all bg-blue-950/60 px-2.5 py-1 rounded border border-blue-800/60 flex-1">
+            <span className="truncate select-all bg-brand-950/80 px-2.5 py-1 rounded border border-brand-800/60 flex-1">
               {linkColaborador}
             </span>
           </div>
@@ -643,7 +643,7 @@ export default function DetalheOnboarding() {
               <h2 className="text-2xl font-bold tracking-tight text-[#1A2233]">
                 {onboarding.colaborador_nome}
               </h2>
-              <span className="text-xs px-2.5 py-0.5 rounded-full border font-semibold bg-blue-50 text-blue-700 border-blue-200 inline-flex items-center gap-1.5">
+              <span className="text-xs px-2.5 py-0.5 rounded-full border font-semibold bg-brand-50 text-brand-700 border-brand-200 inline-flex items-center gap-1.5">
                 <span
                   className="w-2 h-2 rounded-full shrink-0"
                   style={{ backgroundColor: setorInfo.cor }}
@@ -702,7 +702,7 @@ export default function DetalheOnboarding() {
             className={`bg-white rounded-xl border p-6 shadow-sm transition-all relative ${
               onboarding.etapa1_concluida
                 ? 'border-emerald-200 bg-emerald-50/10'
-                : 'border-blue-200 ring-1 ring-blue-100'
+                : 'border-brand-200 ring-1 ring-brand-100'
             }`}
           >
             {/* Header da Etapa */}
@@ -712,7 +712,7 @@ export default function DetalheOnboarding() {
                   className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm ${
                     onboarding.etapa1_concluida
                       ? 'bg-emerald-600 text-white'
-                      : 'bg-blue-600 text-white'
+                      : 'bg-brand-600 text-white'
                   }`}
                 >
                   {onboarding.etapa1_concluida ? <CheckCircle2 className="w-5 h-5" /> : '1'}
@@ -740,7 +740,7 @@ export default function DetalheOnboarding() {
                   Concluída em {formatShortDate(onboarding.data_conclusao_etapa1)}
                 </Badge>
               ) : (
-                <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 text-xs font-semibold">
+                <Badge className="bg-brand-50 text-brand-700 hover:bg-brand-50 text-xs font-semibold">
                   Em andamento
                 </Badge>
               )}
@@ -757,7 +757,7 @@ export default function DetalheOnboarding() {
                     size="sm"
                     variant="outline"
                     onClick={() => openAddItemModal(1)}
-                    className="h-8 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
+                    className="h-8 text-xs text-brand-700 border-brand-200 hover:bg-brand-50"
                   >
                     <Upload className="w-3.5 h-3.5 mr-1" />
                     Adicionar item (upload)
@@ -793,7 +793,7 @@ export default function DetalheOnboarding() {
                           onClick={() => handleToggleTarefa(item)}
                           className={`mt-0.5 text-gray-400 transition-transform ${
                             podeGerenciarEtapa1 && !onboarding.etapa1_concluida
-                              ? 'hover:text-blue-600 active:scale-95'
+                              ? 'hover:text-brand-600 active:scale-95'
                               : 'cursor-default opacity-80'
                           }`}
                           aria-label="Marcar item"
@@ -815,7 +815,7 @@ export default function DetalheOnboarding() {
                             {item.tipo === 'video' ? (
                               <Video className="w-4 h-4 text-purple-600 shrink-0" />
                             ) : (
-                              <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                              <FileText className="w-4 h-4 text-brand-600 shrink-0" />
                             )}
                             <span
                               className={`text-sm font-semibold ${
@@ -825,7 +825,7 @@ export default function DetalheOnboarding() {
                               {item.titulo}
                             </span>
                             {item.conteudo_url ? (
-                              <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">
+                              <span className="text-[10px] bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded font-medium">
                                 Arquivo próprio
                               </span>
                             ) : item.material ? (
@@ -881,7 +881,7 @@ export default function DetalheOnboarding() {
                               url: fileUrl,
                             })
                           }
-                          className="h-8 text-xs text-blue-600 hover:text-blue-700 shrink-0"
+                          className="h-8 text-xs text-brand-600 hover:text-brand-700 shrink-0"
                         >
                           <Eye className="w-3.5 h-3.5 mr-1" />
                           Visualizar
@@ -922,7 +922,7 @@ export default function DetalheOnboarding() {
                   <Button
                     onClick={handleConcluirEtapa1}
                     disabled={!allEtapa1Checked || concluindoEtapa1}
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm"
+                    className="bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm"
                   >
                     {concluindoEtapa1 ? (
                       <span>Concluindo...</span>
@@ -1005,7 +1005,7 @@ export default function DetalheOnboarding() {
                   Concluída em {formatShortDate(onboarding.data_conclusao_etapa2)}
                 </Badge>
               ) : (
-                <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 text-xs font-semibold">
+                <Badge className="bg-brand-50 text-brand-700 hover:bg-brand-50 text-xs font-semibold">
                   Liberada para atuação
                 </Badge>
               )}
@@ -1035,7 +1035,7 @@ export default function DetalheOnboarding() {
                         size="sm"
                         variant="outline"
                         onClick={() => openAddItemModal(2)}
-                        className="h-8 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
+                        className="h-8 text-xs text-brand-700 border-brand-200 hover:bg-brand-50"
                       >
                         <Upload className="w-3.5 h-3.5 mr-1" />
                         Adicionar item (upload)
@@ -1072,7 +1072,7 @@ export default function DetalheOnboarding() {
                               onClick={() => handleToggleTarefa(tarefa)}
                               className={`mt-0.5 text-gray-400 transition-transform ${
                                 podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida
-                                  ? 'hover:text-blue-600 active:scale-95'
+                                  ? 'hover:text-brand-600 active:scale-95'
                                   : 'cursor-default opacity-80'
                               }`}
                               aria-label="Marcar tarefa"
@@ -1094,7 +1094,7 @@ export default function DetalheOnboarding() {
                                 {tarefa.tipo === 'video' ? (
                                   <Video className="w-4 h-4 text-purple-600 shrink-0" />
                                 ) : (
-                                  <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                                  <FileText className="w-4 h-4 text-brand-600 shrink-0" />
                                 )}
                                 <span
                                   className={`text-sm font-semibold ${
@@ -1106,7 +1106,7 @@ export default function DetalheOnboarding() {
                                   {tarefa.titulo}
                                 </span>
                                 {tarefa.conteudo_url ? (
-                                  <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">
+                                  <span className="text-[10px] bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded font-medium">
                                     Arquivo próprio
                                   </span>
                                 ) : tarefa.material ? (
@@ -1154,7 +1154,7 @@ export default function DetalheOnboarding() {
                                   url: fileUrl,
                                 })
                               }
-                              className="h-8 text-xs text-blue-600 hover:text-blue-700"
+                              className="h-8 text-xs text-brand-600 hover:text-brand-700"
                             >
                               <Eye className="w-3.5 h-3.5 mr-1" />
                               Visualizar
@@ -1197,7 +1197,7 @@ export default function DetalheOnboarding() {
                       <Button
                         onClick={handleConcluirEtapa2}
                         disabled={!allEtapa2TarefasChecked || concluindoEtapa2}
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm"
+                        className="bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm"
                       >
                         {concluindoEtapa2 ? (
                           <span>Concluindo...</span>
@@ -1420,7 +1420,7 @@ export default function DetalheOnboarding() {
                             ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                             : decisaoAvaliacao === 'nao_apto'
                               ? 'bg-red-600 hover:bg-red-700 text-white'
-                              : 'bg-blue-600 hover:bg-blue-700 text-white'
+                              : 'bg-brand-600 hover:bg-brand-700 text-white'
                         }`}
                       >
                         {salvandoAvaliacao ? 'Registrando Decisão...' : 'Registrar Decisão Final'}
@@ -1437,14 +1437,14 @@ export default function DetalheOnboarding() {
         <div className="space-y-6">
           <div className="bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm">
             <h3 className="text-sm font-bold text-[#1A2233] mb-4 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-blue-600" />
+              <Clock className="w-4 h-4 text-brand-600" />
               <span>Linha do Tempo do Onboarding</span>
             </h3>
 
             <div className="relative pl-6 space-y-6 border-l-2 border-gray-200 my-2">
               {/* Evento 1: Criação */}
               <div className="relative">
-                <div className="absolute -left-[31px] top-0 w-3.5 h-3.5 rounded-full bg-blue-600 border-2 border-white" />
+                <div className="absolute -left-[31px] top-0 w-3.5 h-3.5 rounded-full bg-brand-600 border-2 border-white" />
                 <span className="text-xs font-bold text-gray-800 block">Onboarding Iniciado</span>
                 <span className="text-[11px] text-gray-500 block">
                   {formatDate(onboarding.created)}
@@ -1619,7 +1619,7 @@ export default function DetalheOnboarding() {
                   size="sm"
                   onClick={() => setNovoItemTipo('manual')}
                   className={
-                    novoItemTipo === 'manual' ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''
+                    novoItemTipo === 'manual' ? 'bg-brand-600 hover:bg-brand-700 text-white' : ''
                   }
                 >
                   <FileText className="w-3.5 h-3.5 mr-1" />
@@ -1631,7 +1631,7 @@ export default function DetalheOnboarding() {
                   size="sm"
                   onClick={() => setNovoItemTipo('video')}
                   className={
-                    novoItemTipo === 'video' ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''
+                    novoItemTipo === 'video' ? 'bg-brand-600 hover:bg-brand-700 text-white' : ''
                   }
                 >
                   <Video className="w-3.5 h-3.5 mr-1" />
@@ -1651,7 +1651,7 @@ export default function DetalheOnboarding() {
                   variant={novoItemOrigem === 'upload' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setNovoItemOrigem('upload')}
-                  className={`text-xs h-8 ${novoItemOrigem === 'upload' ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}`}
+                  className={`text-xs h-8 ${novoItemOrigem === 'upload' ? 'bg-brand-600 hover:bg-brand-700 text-white' : ''}`}
                 >
                   <Upload className="w-3 h-3 mr-1" />
                   Upload Direto
@@ -1702,7 +1702,7 @@ export default function DetalheOnboarding() {
                       const file = e.target.files?.[0] || null
                       setNovoItemFile(file)
                     }}
-                    className="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    className="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100"
                     disabled={enviandoItem}
                   />
                 </div>
@@ -1723,7 +1723,7 @@ export default function DetalheOnboarding() {
                 type="submit"
                 size="sm"
                 disabled={enviandoItem}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                className="bg-brand-600 hover:bg-brand-700 text-white font-semibold"
               >
                 {enviandoItem ? 'Enviando...' : 'Adicionar ao Onboarding'}
               </Button>
@@ -1740,7 +1740,7 @@ export default function DetalheOnboarding() {
               {previewItem?.tipo === 'video' ? (
                 <Video className="w-5 h-5 text-purple-600" />
               ) : (
-                <FileText className="w-5 h-5 text-blue-600" />
+                <FileText className="w-5 h-5 text-brand-600" />
               )}
               <span>{previewItem?.titulo}</span>
             </DialogTitle>
@@ -1756,7 +1756,7 @@ export default function DetalheOnboarding() {
                 </div>
               ) : (
                 <div className="p-6 rounded-lg bg-gray-50 border border-gray-200 text-center space-y-4">
-                  <FileCheck2 className="w-12 h-12 text-blue-600 mx-auto" />
+                  <FileCheck2 className="w-12 h-12 text-brand-600 mx-auto" />
                   <div>
                     <h4 className="text-sm font-bold text-gray-800">
                       Documento disponível para leitura
@@ -1765,7 +1765,7 @@ export default function DetalheOnboarding() {
                       Você pode abrir o arquivo original ou fazer download para estudar.
                     </p>
                   </div>
-                  <Button asChild size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+                  <Button asChild size="sm" className="bg-brand-600 hover:bg-brand-700 text-white">
                     <a
                       href={previewItem.url}
                       target="_blank"

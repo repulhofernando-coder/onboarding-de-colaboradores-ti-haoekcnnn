@@ -1,10 +1,11 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import pb from '@/lib/pocketbase/client'
-import { CheckCircle2, Mail, ArrowLeft, AlertCircle } from 'lucide-react'
+import { Mail, ArrowLeft, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
+import MundoOpenLogo from '@/components/MundoOpenLogo'
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('')
@@ -36,11 +37,11 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F6F7F9] px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center bg-[#F6F7F9] px-4 py-12 relative">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 mb-3">
-            <CheckCircle2 className="w-8 h-8 stroke-[2.2]" />
+          <div className="bg-white p-3.5 rounded-2xl shadow-sm border border-gray-100 mb-4 inline-flex items-center justify-center">
+            <MundoOpenLogo variant="full" size="md" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-[#1A2233]">Recuperar Senha</h1>
           <p className="text-sm text-[#6B7280] mt-1">
@@ -48,7 +49,7 @@ export default function ForgotPassword() {
           </p>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm p-8">
+        <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-8">
           {errorMsg && (
             <div className="mb-5 flex items-start gap-2.5 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
@@ -69,7 +70,7 @@ export default function ForgotPassword() {
                   placeholder="seu.email@empresa.com.br"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-9 h-11 border-gray-300 focus-visible:ring-blue-500 text-sm"
+                  className="pl-9 h-11 border-gray-300 focus-visible:ring-brand-500 text-sm"
                   disabled={loading}
                 />
               </div>
@@ -78,7 +79,7 @@ export default function ForgotPassword() {
             <Button
               type="submit"
               disabled={loading}
-              className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm"
+              className="w-full h-11 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm"
             >
               {loading ? 'Enviando link...' : 'Enviar link de recuperação'}
             </Button>
@@ -86,7 +87,7 @@ export default function ForgotPassword() {
             <div className="pt-2 text-center">
               <Link
                 to="/login"
-                className="inline-flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 font-medium"
+                className="inline-flex items-center gap-1.5 text-xs text-gray-600 hover:text-brand-600 font-medium"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 Voltar para o login
