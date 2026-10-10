@@ -653,13 +653,27 @@ export const confirmacaoColaboradorService = {
 export const avaliacaoService = {
   async getByOnboarding(onboardingId: string): Promise<Avaliacao | null> {
     try {
-      return await pb
-        .collection('avaliacoes')
-        .getFirstListItem<Avaliacao>(`onboarding_id = '${onboardingId}'`, {
-          expand: 'avaliador_id',
-        })
+      const list = await pb.collection('avaliacoes').getFullList<Avaliacao>({
+        filter: `onboarding_id = '${onboardingId}'`,
+        sort: '-created',
+        expand: 'avaliador_id',
+      })
+      return list.length > 0 ? list[0] : null
     } catch (_) {
       return null
+    }
+  },
+
+  async listByOnboarding(onboardingId: string): Promise<Avaliacao[]> {
+    if (!onboardingId) return []
+    try {
+      return await pb.collection('avaliacoes').getFullList<Avaliacao>({
+        filter: `onboarding_id = '${onboardingId}'`,
+        sort: '-created',
+        expand: 'avaliador_id',
+      })
+    } catch (_) {
+      return []
     }
   },
 
@@ -675,26 +689,152 @@ export const avaliacaoService = {
     avaliadorId: string
     decisao: AvaliacaoDecisao
     observacoes?: string
+    faseRetornoId?: string
+    prazoSuplementarDias?: number
+    definitivo?: boolean
   }): Promise<{ avaliacao: Avaliacao; onboarding: Onboarding }> {
     const hoje = new Date().toISOString()
+    const onb = await pb.collection('onboardings').getOne<Onboarding>(params.onboardingId)
 
-    // Cria registro de avaliacao
+    const reavaliacoesAtuais = onb.reavaliacoes_count || 0
+    const ciclo = reavaliacoesAtuais + 1
+
+    // Cria registro de avaliacao preservando histórico
     const avaliacao = await pb.collection('avaliacoes').create<Avaliacao>({
       onboarding_id: params.onboardingId,
       avaliador_id: params.avaliadorId,
       decisao: params.decisao,
       observacoes: params.observacoes || '',
+      ciclo,
+      fase_retorno_id: params.faseRetornoId || '',
+      prazo_suplementar_dias: params.prazoSuplementarDias || 0,
+      definitivo: Boolean(params.definitivo),
     })
 
-    // Atualiza status do onboarding
-    const novoStatus: Onboarding['status'] = params.decisao === 'apto' ? 'concluido' : 'nao_apto'
+    let novoStatus: Onboarding['status'] = 'concluido'
+    const updatePayload: Partial<Onboarding> = {}
 
-    const onboarding = await pb.collection('onboardings').update<Onboarding>(params.onboardingId, {
-      status: novoStatus,
-      etapa3_concluida: true,
-      data_conclusao_etapa3: hoje,
-    })
+    if (params.decisao === 'apto') {
+      novoStatus = 'concluido'
+      updatePayload.status = novoStatus
+      updatePayload.etapa3_concluida = true
+      updatePayload.data_conclusao_etapa3 = hoje
+    } else {
+      // Não apto
+      if (params.definitivo || ciclo > 2) {
+        novoStatus = 'nao_apto'
+        updatePayload.status = 'nao_apto'
+        updatePayload.etapa3_concluida = true
+        updatePayload.data_conclusao_etapa3 = hoje
+      } else {
+        // Retorno à fase escolhida com status "em_acompanhamento"
+        novoStatus = 'em_acompanhamento'
+        const prazoExtra = Number(params.prazoSuplementarDias) || 5
+        const prazoTotal = (onb.prazo_suplementar_dias || 0) + prazoExtra
+
+        // Calcular nova data_fim somando o prazo suplementar
+        let novaDataFim = onb.data_fim
+        try {
+          const [a, m, d] = onb.data_fim.split('-').map(Number)
+          const fimAtual = new Date(a, m - 1, d)
+          fimAtual.setDate(fimAtual.getDate() + prazoExtra)
+          novaDataFim = fimAtual.toISOString().split('T')[0]
+        } catch {
+          /* intentionally ignored */
+        }
+
+        updatePayload.status = 'em_acompanhamento'
+        updatePayload.etapa_atual = 2
+        updatePayload.etapa2_concluida = false
+        updatePayload.etapa3_concluida = false
+        updatePayload.reavaliacoes_count = ciclo
+        updatePayload.prazo_suplementar_dias = prazoTotal
+        updatePayload.data_fim = novaDataFim
+        if (params.faseRetornoId) {
+          updatePayload.fase_atual_id = params.faseRetornoId
+        }
+      }
+    }
+
+    const onboarding = await pb
+      .collection('onboardings')
+      .update<Onboarding>(params.onboardingId, updatePayload)
 
     return { avaliacao, onboarding }
+  },
+}
+
+export const auditoriaService = {
+  async registrar(dados: {
+    onboardingId?: string
+    colaboradorNome?: string
+    usuarioId?: string
+    usuarioNome?: string
+    usuarioRole?: string
+    gestorNome?: string
+    acao: string
+    detalhes?: string
+    foraPrazo?: boolean
+    destaquePrazo?: string
+    metadata?: Record<string, unknown>
+  }): Promise<LogAuditoria | null> {
+    try {
+      return await pb.collection('logs_auditoria').create<LogAuditoria>({
+        onboarding_id: dados.onboardingId || null,
+        colaborador_nome: dados.colaboradorNome || '',
+        usuario_id: dados.usuarioId || null,
+        usuario_nome: dados.usuarioNome || '',
+        usuario_role: dados.usuarioRole || '',
+        gestor_nome: dados.gestorNome || '',
+        acao: dados.acao,
+        detalhes: dados.detalhes || '',
+        fora_prazo: Boolean(dados.foraPrazo),
+        destaque_prazo: dados.destaquePrazo || '',
+        metadata: dados.metadata || {},
+      })
+    } catch (err) {
+      console.warn('Aviso ao registrar log de auditoria:', err)
+      return null
+    }
+  },
+
+  async listByOnboarding(onboardingId: string): Promise<LogAuditoria[]> {
+    if (!onboardingId) return []
+    try {
+      return await pb.collection('logs_auditoria').getFullList<LogAuditoria>({
+        filter: `onboarding_id = '${onboardingId}'`,
+        sort: '-created',
+      })
+    } catch (_) {
+      return []
+    }
+  },
+
+  async listAll(filtro?: {
+    buscaColaborador?: string
+    buscaGestor?: string
+    apenasForaPrazo?: boolean
+  }): Promise<LogAuditoria[]> {
+    const filters: string[] = []
+    if (filtro?.buscaColaborador) {
+      filters.push(`colaborador_nome ~ '${filtro.buscaColaborador}'`)
+    }
+    if (filtro?.buscaGestor) {
+      filters.push(
+        `(gestor_nome ~ '${filtro.buscaGestor}' || usuario_nome ~ '${filtro.buscaGestor}')`,
+      )
+    }
+    if (filtro?.apenasForaPrazo) {
+      filters.push(`fora_prazo = true`)
+    }
+
+    try {
+      return await pb.collection('logs_auditoria').getFullList<LogAuditoria>({
+        filter: filters.length > 0 ? filters.join(' && ') : '',
+        sort: '-created',
+      })
+    } catch (_) {
+      return []
+    }
   },
 }

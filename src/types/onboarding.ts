@@ -10,6 +10,7 @@ export type OnboardingStatus =
   | 'avaliacao_pendente'
   | 'concluido'
   | 'nao_apto'
+  | 'em_acompanhamento'
 
 export type TarefaTipo = 'video' | 'manual'
 
@@ -90,12 +91,48 @@ export interface FaseModelo extends RecordModel {
   titulo: string
   descricao?: string
   ordem?: number
+  dias_previstos?: number
   setor_ref?: string
   setor?: string
   etapa?: number
   expand?: {
     setor_ref?: SetorModel
   }
+}
+
+export interface FaseConcluidaInfo {
+  fase_id: string
+  titulo?: string
+  concluida_em: string
+  concluida_por: string
+  concluida_por_nome?: string
+  dias_planejados?: number
+  dias_gastos?: number
+  fora_prazo?: boolean
+  destaque_prazo?: string
+}
+
+export interface CronogramaFaseItem {
+  fase_id: string
+  titulo: string
+  ordem: number
+  dias: number
+  data_inicio: string
+  data_limite: string
+}
+
+export interface LogAuditoria extends RecordModel {
+  onboarding_id?: string
+  colaborador_nome?: string
+  usuario_id?: string
+  usuario_nome?: string
+  usuario_role?: string
+  gestor_nome?: string
+  acao: string
+  detalhes?: string
+  fora_prazo?: boolean
+  destaque_prazo?: string
+  metadata?: Record<string, unknown>
 }
 
 export interface ModeloTarefa extends RecordModel {
@@ -153,6 +190,11 @@ export interface Onboarding extends RecordModel {
   email_etapa2_enviado?: boolean
   email_avaliacao_enviado?: boolean
   token_acesso_colaborador?: string
+  fases_concluidas?: FaseConcluidaInfo[]
+  fase_atual_id?: string
+  reavaliacoes_count?: number
+  prazo_suplementar_dias?: number
+  cronograma_fases?: CronogramaFaseItem[]
   expand?: {
     gestor_id?: User
     etapa1_concluida_por?: User
@@ -186,6 +228,14 @@ export interface Avaliacao extends RecordModel {
   avaliador_id: string
   decisao: AvaliacaoDecisao
   observacoes?: string
+  ciclo?: number
+  fase_retorno_id?: string
+  prazo_suplementar_dias?: number
+  definitivo?: boolean
+  expand?: {
+    avaliador_id?: User
+    onboarding_id?: Onboarding
+  }
 }
 export const SETORES_INFO: Record<
   string,
@@ -377,5 +427,10 @@ export const STATUS_INFO: Record<
     nome: 'Não apto',
     corBg: 'bg-red-50 text-red-700 border-red-200',
     corDot: 'bg-red-500',
+  },
+  em_acompanhamento: {
+    nome: 'Em acompanhamento',
+    corBg: 'bg-amber-50 text-amber-800 border-amber-300',
+    corDot: 'bg-amber-500',
   },
 }
