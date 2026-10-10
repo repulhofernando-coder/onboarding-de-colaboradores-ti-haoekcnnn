@@ -12,6 +12,7 @@ import type {
   AvaliacaoDecisao,
   SetorModel,
   ConfirmacaoColaborador,
+  FaseModelo,
 } from '@/types/onboarding'
 
 function generateRandomToken(length = 32): string {
@@ -263,6 +264,47 @@ export const materialService = {
   },
 }
 
+export const faseService = {
+  async listBySetor(setor: Setor, setorId?: string): Promise<FaseModelo[]> {
+    const setorVal = typeof setor === 'string' ? setor : String(setor || '')
+    const setorLower = setorVal.toLowerCase()
+    let filter = `(setor = '${setorLower}' || setor = '${setorVal}' || setor ~ '${setorVal}'`
+    if (setorId) {
+      filter += ` || setor_ref = '${setorId}'`
+    }
+    filter += `)`
+
+    return pb.collection('fases_modelo').getFullList<FaseModelo>({
+      filter,
+      sort: 'ordem,created',
+      expand: 'setor_ref',
+    })
+  },
+
+  async listAll(): Promise<FaseModelo[]> {
+    return pb.collection('fases_modelo').getFullList<FaseModelo>({
+      sort: 'ordem,created',
+      expand: 'setor_ref',
+    })
+  },
+
+  async create(data: Partial<FaseModelo>): Promise<FaseModelo> {
+    return pb.collection('fases_modelo').create<FaseModelo>(data, {
+      expand: 'setor_ref',
+    })
+  },
+
+  async update(id: string, data: Partial<FaseModelo>): Promise<FaseModelo> {
+    return pb.collection('fases_modelo').update<FaseModelo>(id, data, {
+      expand: 'setor_ref',
+    })
+  },
+
+  async delete(id: string): Promise<boolean> {
+    return pb.collection('fases_modelo').delete(id)
+  },
+}
+
 export const modeloService = {
   async listBySetor(setor: Setor, setorId?: string): Promise<ModeloTarefa[]> {
     // Busca por relation setor_ref ou por setor chave/string para total retrocompatibilidade
@@ -277,7 +319,7 @@ export const modeloService = {
     return pb.collection('modelo_tarefas').getFullList<ModeloTarefa>({
       filter,
       sort: 'ordem,titulo',
-      expand: 'material,setor_ref',
+      expand: 'material,setor_ref,fase',
     })
   },
 
@@ -285,26 +327,26 @@ export const modeloService = {
     return pb.collection('modelo_tarefas').getFullList<ModeloTarefa>({
       filter: 'etapa = 1',
       sort: 'ordem,titulo',
-      expand: 'material,setor_ref',
+      expand: 'material,setor_ref,fase',
     })
   },
 
   async listAll(): Promise<ModeloTarefa[]> {
     return pb.collection('modelo_tarefas').getFullList<ModeloTarefa>({
       sort: 'etapa,ordem,titulo',
-      expand: 'material,setor_ref',
+      expand: 'material,setor_ref,fase',
     })
   },
 
   async create(data: FormData | Partial<ModeloTarefa>): Promise<ModeloTarefa> {
     return pb.collection('modelo_tarefas').create<ModeloTarefa>(data, {
-      expand: 'material,setor_ref',
+      expand: 'material,setor_ref,fase',
     })
   },
 
   async update(id: string, data: FormData | Partial<ModeloTarefa>): Promise<ModeloTarefa> {
     return pb.collection('modelo_tarefas').update<ModeloTarefa>(id, data, {
-      expand: 'material,setor_ref',
+      expand: 'material,setor_ref,fase',
     })
   },
 
@@ -462,6 +504,7 @@ export const onboardingService = {
         conteudo_url: tpl.conteudo_url || null,
         conteudo_link: tpl.conteudo_link || '',
         material: tpl.material || null,
+        fase: tpl.fase || null,
         concluida: false,
         criado_automaticamente: true,
       })
@@ -506,7 +549,7 @@ export const tarefaService = {
     return pb.collection('tarefas_onboarding').getFullList<TarefaOnboarding>({
       filter: `onboarding_id = '${onboardingId}'`,
       sort: 'etapa,ordem,created',
-      expand: 'material',
+      expand: 'material,fase',
     })
   },
 
@@ -514,7 +557,7 @@ export const tarefaService = {
     return pb.collection('tarefas_onboarding').getFullList<TarefaOnboarding>({
       filter: `onboarding_id = '${onboardingId}' && etapa = 1`,
       sort: 'ordem,created',
-      expand: 'material',
+      expand: 'material,fase',
     })
   },
 
@@ -522,7 +565,7 @@ export const tarefaService = {
     return pb.collection('tarefas_onboarding').getFullList<TarefaOnboarding>({
       filter: `onboarding_id = '${onboardingId}' && (etapa = 2 || etapa = null || etapa = 0)`,
       sort: 'ordem,created',
-      expand: 'material',
+      expand: 'material,fase',
     })
   },
 
@@ -534,14 +577,14 @@ export const tarefaService = {
         concluida_em: concluida ? new Date().toISOString() : null,
       },
       {
-        expand: 'material',
+        expand: 'material,fase',
       },
     )
   },
 
   async create(data: FormData | Partial<TarefaOnboarding>): Promise<TarefaOnboarding> {
     return pb.collection('tarefas_onboarding').create<TarefaOnboarding>(data, {
-      expand: 'material',
+      expand: 'material,fase',
     })
   },
 

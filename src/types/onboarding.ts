@@ -86,6 +86,18 @@ export interface MaterialBiblioteca extends RecordModel {
   }
 }
 
+export interface FaseModelo extends RecordModel {
+  titulo: string
+  descricao?: string
+  ordem?: number
+  setor_ref?: string
+  setor?: string
+  etapa?: number
+  expand?: {
+    setor_ref?: SetorModel
+  }
+}
+
 export interface ModeloTarefa extends RecordModel {
   setor?: Setor
   setor_ref?: string
@@ -98,9 +110,11 @@ export interface ModeloTarefa extends RecordModel {
   obrigatorio?: boolean
   ordem?: number
   material?: string
+  fase?: string
   expand?: {
     material?: MaterialBiblioteca
     setor_ref?: SetorModel
+    fase?: FaseModelo
   }
 }
 
@@ -160,8 +174,10 @@ export interface TarefaOnboarding extends RecordModel {
   concluida_em?: string
   criado_automaticamente?: boolean
   material?: string
+  fase?: string
   expand?: {
     material?: MaterialBiblioteca
+    fase?: FaseModelo
   }
 }
 

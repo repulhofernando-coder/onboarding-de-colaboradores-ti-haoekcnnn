@@ -7,6 +7,7 @@ import {
   avaliacaoService,
   confirmacaoColaboradorService,
   materialService,
+  faseService,
 } from '@/services/onboarding'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -17,6 +18,7 @@ import type {
   Avaliacao,
   TarefaTipo,
   ConfirmacaoColaborador,
+  FaseModelo,
 } from '@/types/onboarding'
 import { SETORES_INFO, STATUS_INFO, getSetorVisual } from '@/types/onboarding'
 import {
@@ -44,6 +46,8 @@ import {
   Copy,
   Check,
   Share2,
+  Layers,
+  Plus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -66,6 +70,7 @@ export default function DetalheOnboarding() {
 
   const [onboarding, setOnboarding] = useState<Onboarding | null>(null)
   const [tarefas, setTarefas] = useState<TarefaOnboarding[]>([])
+  const [fasesSetor, setFasesSetor] = useState<FaseModelo[]>([])
   const [avaliacao, setAvaliacao] = useState<Avaliacao | null>(null)
   const [loading, setLoading] = useState(true)
   const [confirmacoes, setConfirmacoes] = useState<Record<string, ConfirmacaoColaborador>>({})
@@ -116,6 +121,10 @@ export default function DetalheOnboarding() {
       setOnboarding(onb)
       setTarefas(tars)
       setAvaliacao(aval)
+
+      if (onb?.setor) {
+        faseService.listBySetor(onb.setor, onb.setor_ref).then(setFasesSetor).catch(console.error)
+      }
 
       const mapConfs: Record<string, ConfirmacaoColaborador> = {}
       for (const c of confs) {
@@ -207,6 +216,66 @@ export default function DetalheOnboarding() {
     return tarefasEtapa2.filter((t) => Boolean(confirmacoes[t.id])).length
   }, [tarefasEtapa2, confirmacoes])
 
+  // Determinar status de bloqueio sequencial de cada fase na Etapa 2:
+  // Fase N só está desbloqueada se todas as fases anteriores (0 .. N-1) tiverem todos os seus itens confirmados/concluídos
+  const fasesStatusEtapa2 = useMemo(() => {
+    if (fasesSetor.length === 0) {
+      return []
+    }
+
+    let faseAnteriorCompleta = true
+
+    return fasesSetor.map((fase, index) => {
+      const itensDaFase = tarefasEtapa2.filter((t) => t.fase === fase.id)
+      const totalItens = itensDaFase.length
+      const concluidos = itensDaFase.filter((t) => t.concluida).length
+      const confirmadosColab = itensDaFase.filter((t) => Boolean(confirmacoes[t.id])).length
+
+      // Uma fase é considerada completa quando todos os itens estão concluídos (ou confirmados)
+      const estaCompleta = totalItens > 0 && concluidos === totalItens
+
+      const estaDesbloqueada = faseAnteriorCompleta
+
+      // Para a próxima fase: ela só desbloqueia se esta fase estiver completa
+      if (!estaCompleta && totalItens > 0) {
+        faseAnteriorCompleta = false
+      }
+
+      return {
+        fase,
+        index,
+        itens: itensDaFase,
+        totalItens,
+        concluidos,
+        confirmadosColab,
+        estaCompleta,
+        estaDesbloqueada,
+      }
+    })
+  }, [fasesSetor, tarefasEtapa2, confirmacoes])
+
+  // Indicador da fase atual em andamento (ex: "Fase 2 de 5 — Shadowing Ativo")
+  const faseAtualInfo = useMemo(() => {
+    if (fasesStatusEtapa2.length === 0) return null
+    if (onboarding?.etapa2_concluida) {
+      return 'Todas as fases concluídas'
+    }
+    const atual = fasesStatusEtapa2.find((f) => !f.estaCompleta && f.estaDesbloqueada)
+    if (atual) {
+      return `Fase ${atual.index + 1} de ${fasesStatusEtapa2.length} — ${atual.fase.titulo}`
+    }
+    const todasCompletas = fasesStatusEtapa2.every((f) => f.estaCompleta)
+    if (todasCompletas) {
+      return `Fase ${fasesStatusEtapa2.length} de ${fasesStatusEtapa2.length} — Pronta para Conclusão`
+    }
+    return `Fase 1 de ${fasesStatusEtapa2.length} — ${fasesStatusEtapa2[0]?.fase.titulo}`
+  }, [fasesStatusEtapa2, onboarding?.etapa2_concluida])
+
+  // Itens avulsos da Etapa 2 (sem fase ou fora das fases cadastradas)
+  const tarefasEtapa2SemFase = useMemo(() => {
+    return tarefasEtapa2.filter((t) => !t.fase || !fasesSetor.some((f) => f.id === t.fase))
+  }, [tarefasEtapa2, fasesSetor])
+
   const handleCopiarLinkColaborador = async () => {
     if (!linkColaborador) return
     try {
@@ -260,6 +329,17 @@ export default function DetalheOnboarding() {
           'Você não tem permissão para esta ação. A Etapa 2 é conduzida pelo Gestor Responsável ou Administrador.',
         )
         return
+      }
+
+      // Validar bloqueio sequencial: se o item pertencer a uma fase bloqueada, impedir marcação
+      if (tarefa.fase) {
+        const statusFase = fasesStatusEtapa2.find((f) => f.fase.id === tarefa.fase)
+        if (statusFase && !statusFase.estaDesbloqueada) {
+          toast.error(
+            'Esta fase está bloqueada. Conclua todos os itens da fase anterior para liberar.',
+          )
+          return
+        }
       }
     }
 
@@ -349,8 +429,11 @@ export default function DetalheOnboarding() {
     }
   }
 
+  // Estado para armazenar qual fase associar no novo item do onboarding (quando etapa 2)
+  const [novoItemFaseId, setNovoItemFaseId] = useState<string>('')
+
   // Abrir modal de novo item especificando a etapa (1 ou 2)
-  const openAddItemModal = (etapa: 1 | 2) => {
+  const openAddItemModal = (etapa: 1 | 2, defaultFaseId?: string) => {
     if (etapa === 1 && !podeGerenciarEtapa1) {
       toast.error('Você não tem permissão para esta ação.')
       return
@@ -367,6 +450,7 @@ export default function DetalheOnboarding() {
     setNovoItemOrigem('upload')
     setNovoItemMaterialId('')
     setNovoItemFile(null)
+    setNovoItemFaseId(defaultFaseId || '')
     setItemError('')
     if (fileInputRef.current) fileInputRef.current.value = ''
 
@@ -426,6 +510,12 @@ export default function DetalheOnboarding() {
       formData.append('etapa', String(modalItemEtapa))
       formData.append('concluida', 'false')
       formData.append('criado_automaticamente', 'false')
+
+      if (modalItemEtapa === 2 && novoItemFaseId) {
+        formData.append('fase', novoItemFaseId)
+      } else {
+        formData.append('fase', '')
+      }
 
       if (novoItemOrigem === 'biblioteca') {
         formData.append('material', novoItemMaterialId || '')
@@ -982,6 +1072,12 @@ export default function DetalheOnboarding() {
                     <h3 className="text-base font-bold text-[#1A2233]">
                       Etapa 2 — Vivência Técnica ({setorInfo.nome})
                     </h3>
+                    {faseAtualInfo && (
+                      <span className="text-[11px] font-bold bg-brand-50 text-brand-700 border border-brand-200 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+                        <Layers className="w-3 h-3 text-brand-600" />
+                        {faseAtualInfo}
+                      </span>
+                    )}
                     <Badge
                       variant="outline"
                       className="text-[11px] font-semibold bg-indigo-50/70 text-indigo-700 border-indigo-200"
@@ -990,8 +1086,9 @@ export default function DetalheOnboarding() {
                     </Badge>
                   </div>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Movidesk (chamados), Passportal (documentação), shadow técnico e atuação
-                    assistida
+                    {fasesSetor.length > 0
+                      ? 'Progressão estruturada por fases sequenciais obrigatórias com confirmação prática.'
+                      : 'Movidesk (chamados), Passportal (documentação), shadow técnico e atuação assistida.'}
                   </p>
                 </div>
               </div>
@@ -1050,135 +1147,494 @@ export default function DetalheOnboarding() {
                   </div>
                 )}
 
-                {/* Lista de Tarefas da Etapa 2 */}
-                <div className="divide-y divide-gray-100 mb-5">
-                  {tarefasEtapa2.length === 0 ? (
-                    <div className="py-6 text-center text-gray-400 text-xs">
-                      Nenhum item adicionado para este setor.
-                    </div>
-                  ) : (
-                    tarefasEtapa2.map((tarefa) => {
-                      const fileUrl = tarefaService.getFileUrl(tarefa)
+                {/* Se a área possui Fases Técnicas Ordenadas: Exibir por Fase com Trava Sequencial */}
+                {fasesSetor.length > 0 ? (
+                  <div className="space-y-5 mb-5">
+                    {fasesStatusEtapa2.map((faseStatus) => {
+                      const {
+                        fase,
+                        index,
+                        itens,
+                        totalItens,
+                        concluidos,
+                        confirmadosColab,
+                        estaCompleta,
+                        estaDesbloqueada,
+                      } = faseStatus
 
                       return (
                         <div
-                          key={tarefa.id}
-                          className="py-3 flex items-start justify-between gap-3 group"
+                          key={fase.id}
+                          className={`border rounded-xl overflow-hidden transition-all ${
+                            !estaDesbloqueada
+                              ? 'bg-gray-50/70 border-gray-200 opacity-75'
+                              : estaCompleta
+                                ? 'bg-emerald-50/20 border-emerald-200'
+                                : 'bg-white border-brand-200 shadow-xs'
+                          }`}
                         >
-                          <div className="flex items-start gap-3 flex-1">
-                            <button
-                              type="button"
-                              disabled={onboarding.etapa2_concluida || !podeGerenciarEtapa2e3}
-                              onClick={() => handleToggleTarefa(tarefa)}
-                              className={`mt-0.5 text-gray-400 transition-transform ${
-                                podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida
-                                  ? 'hover:text-brand-600 active:scale-95'
-                                  : 'cursor-default opacity-80'
-                              }`}
-                              aria-label="Marcar tarefa"
-                              title={
-                                !podeGerenciarEtapa2e3
-                                  ? 'Apenas o Gestor Responsável ou Administrador podem marcar itens da Etapa 2'
-                                  : undefined
-                              }
-                            >
-                              {tarefa.concluida ? (
-                                <CheckCircle2 className="w-5 h-5 text-emerald-600 animate-fade-in" />
-                              ) : (
-                                <Square className="w-5 h-5 text-gray-300" />
-                              )}
-                            </button>
-
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                {tarefa.tipo === 'video' ? (
-                                  <Video className="w-4 h-4 text-purple-600 shrink-0" />
+                          {/* Top Header da Fase */}
+                          <div
+                            className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b ${
+                              !estaDesbloqueada
+                                ? 'bg-gray-100/70 border-gray-200 text-gray-500'
+                                : estaCompleta
+                                  ? 'bg-emerald-50/50 border-emerald-200 text-emerald-950'
+                                  : 'bg-gradient-to-r from-brand-50/70 to-white border-brand-100 text-gray-900'
+                            }`}
+                          >
+                            <div className="flex items-start gap-3 min-w-0">
+                              <span
+                                className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 ${
+                                  !estaDesbloqueada
+                                    ? 'bg-gray-300 text-gray-600'
+                                    : estaCompleta
+                                      ? 'bg-emerald-600 text-white'
+                                      : 'bg-brand-600 text-white'
+                                }`}
+                              >
+                                {!estaDesbloqueada ? (
+                                  <Lock className="w-3.5 h-3.5" />
+                                ) : estaCompleta ? (
+                                  <CheckCircle2 className="w-4 h-4" />
                                 ) : (
-                                  <FileText className="w-4 h-4 text-brand-600 shrink-0" />
+                                  index + 1
                                 )}
-                                <span
-                                  className={`text-sm font-semibold ${
-                                    tarefa.concluida
-                                      ? 'text-gray-500 line-through'
-                                      : 'text-gray-800'
-                                  }`}
-                                >
-                                  {tarefa.titulo}
-                                </span>
-                                {tarefa.conteudo_url ? (
-                                  <span className="text-[10px] bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded font-medium">
-                                    Arquivo próprio
-                                  </span>
-                                ) : tarefa.material ? (
-                                  <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-medium">
-                                    Material biblioteca
-                                  </span>
-                                ) : null}
-                              </div>
+                              </span>
 
-                              {/* Confirmação do Colaborador na Etapa 2 */}
-                              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                {confirmacoes[tarefa.id] ? (
-                                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                    Confirmado pelo colaborador em{' '}
-                                    {formatDate(
-                                      confirmacoes[tarefa.id].confirmado_em ||
-                                        confirmacoes[tarefa.id].created,
-                                    )}
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-medium">
-                                    <Clock className="w-3 h-3" />
-                                    Aguardando confirmação do colaborador
-                                  </span>
-                                )}
-
-                                {tarefa.concluida_em && (
-                                  <span className="text-[11px] text-gray-500">
-                                    • Validado Gestão em {formatDate(tarefa.concluida_em)}
-                                  </span>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className="font-bold text-sm">
+                                    Fase {index + 1}: {fase.titulo}
+                                  </h4>
+                                  {!estaDesbloqueada ? (
+                                    <span className="text-[10px] font-semibold bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                      <Lock className="w-3 h-3" /> Bloqueada
+                                    </span>
+                                  ) : estaCompleta ? (
+                                    <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                      <CheckCircle2 className="w-3 h-3" /> Fase Concluída (
+                                      {concluidos}/{totalItens})
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-semibold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                      Em Andamento ({concluidos}/{totalItens} validados)
+                                    </span>
+                                  )}
+                                </div>
+                                {fase.descricao && (
+                                  <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                                    {fase.descricao}
+                                  </p>
                                 )}
                               </div>
                             </div>
-                          </div>
 
-                          <div className="flex items-center gap-1 shrink-0">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                openPreview({
-                                  titulo: tarefa.titulo,
-                                  tipo: tarefa.tipo,
-                                  url: fileUrl,
-                                })
-                              }
-                              className="h-8 text-xs text-brand-600 hover:text-brand-700"
-                            >
-                              <Eye className="w-3.5 h-3.5 mr-1" />
-                              Visualizar
-                            </Button>
-
-                            {!tarefa.criado_automaticamente &&
-                              !onboarding.etapa2_concluida &&
-                              podeGerenciarEtapa2e3 && (
+                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                              {podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida && (
                                 <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleDeleteTarefa(tarefa.id, 2)}
-                                  className="h-8 w-8 text-gray-400 hover:text-red-600"
-                                  aria-label="Excluir tarefa"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openAddItemModal(2, fase.id)}
+                                  className="h-7 text-xs border-brand-200 text-brand-700 hover:bg-brand-50"
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Plus className="w-3 h-3 mr-1" />
+                                  Item
                                 </Button>
                               )}
+                            </div>
                           </div>
+
+                          {/* Mensagem quando bloqueada */}
+                          {!estaDesbloqueada ? (
+                            <div className="p-4 bg-gray-50/60 flex items-center gap-2 text-xs text-gray-500 italic">
+                              <Lock className="w-4 h-4 text-gray-400 shrink-0" />
+                              <span>
+                                Conclua a fase anterior para liberar esta etapa de vivência técnica.
+                              </span>
+                            </div>
+                          ) : (
+                            /* Lista de itens da fase */
+                            <div className="divide-y divide-gray-100 bg-white">
+                              {itens.length === 0 ? (
+                                <div className="p-4 text-center text-xs text-gray-400">
+                                  Nenhum item nesta fase ainda.{' '}
+                                  {podeGerenciarEtapa2e3 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => openAddItemModal(2, fase.id)}
+                                      className="text-brand-600 font-semibold hover:underline ml-1"
+                                    >
+                                      Adicionar item
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                itens.map((tarefa) => {
+                                  const fileUrl = tarefaService.getFileUrl(tarefa)
+
+                                  return (
+                                    <div
+                                      key={tarefa.id}
+                                      className="py-3 px-4 flex items-start justify-between gap-3 group hover:bg-gray-50/60 transition-colors"
+                                    >
+                                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                                        <button
+                                          type="button"
+                                          disabled={
+                                            onboarding.etapa2_concluida || !podeGerenciarEtapa2e3
+                                          }
+                                          onClick={() => handleToggleTarefa(tarefa)}
+                                          className={`mt-0.5 text-gray-400 transition-transform ${
+                                            podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida
+                                              ? 'hover:text-brand-600 active:scale-95'
+                                              : 'cursor-default opacity-80'
+                                          }`}
+                                          aria-label="Marcar tarefa"
+                                        >
+                                          {tarefa.concluida ? (
+                                            <CheckCircle2 className="w-5 h-5 text-emerald-600 animate-fade-in" />
+                                          ) : (
+                                            <Square className="w-5 h-5 text-gray-300" />
+                                          )}
+                                        </button>
+
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            {tarefa.tipo === 'video' ? (
+                                              <Video className="w-4 h-4 text-purple-600 shrink-0" />
+                                            ) : (
+                                              <FileText className="w-4 h-4 text-brand-600 shrink-0" />
+                                            )}
+                                            <span
+                                              className={`text-sm font-semibold truncate ${
+                                                tarefa.concluida
+                                                  ? 'text-gray-500 line-through'
+                                                  : 'text-gray-800'
+                                              }`}
+                                            >
+                                              {tarefa.titulo}
+                                            </span>
+                                            {tarefa.conteudo_url ? (
+                                              <span className="text-[10px] bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded font-medium">
+                                                Arquivo próprio
+                                              </span>
+                                            ) : tarefa.material ? (
+                                              <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-medium">
+                                                Material biblioteca
+                                              </span>
+                                            ) : null}
+                                          </div>
+
+                                          {tarefa.descricao && (
+                                            <p className="text-[11px] text-gray-500 mt-0.5 truncate">
+                                              {tarefa.descricao}
+                                            </p>
+                                          )}
+
+                                          {/* Confirmação do Colaborador na Etapa 2 */}
+                                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                            {confirmacoes[tarefa.id] ? (
+                                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                                Confirmado pelo colaborador em{' '}
+                                                {formatDate(
+                                                  confirmacoes[tarefa.id].confirmado_em ||
+                                                    confirmacoes[tarefa.id].created,
+                                                )}
+                                              </span>
+                                            ) : (
+                                              <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-medium">
+                                                <Clock className="w-3 h-3" />
+                                                Aguardando confirmação do colaborador
+                                              </span>
+                                            )}
+
+                                            {tarefa.concluida_em && (
+                                              <span className="text-[11px] text-gray-500">
+                                                • Validado Gestão em{' '}
+                                                {formatDate(tarefa.concluida_em)}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() =>
+                                            openPreview({
+                                              titulo: tarefa.titulo,
+                                              tipo: tarefa.tipo,
+                                              url: fileUrl,
+                                            })
+                                          }
+                                          className="h-8 text-xs text-brand-600 hover:text-brand-700"
+                                        >
+                                          <Eye className="w-3.5 h-3.5 mr-1" />
+                                          Visualizar
+                                        </Button>
+
+                                        {!tarefa.criado_automaticamente &&
+                                          !onboarding.etapa2_concluida &&
+                                          podeGerenciarEtapa2e3 && (
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={() => handleDeleteTarefa(tarefa.id, 2)}
+                                              className="h-8 w-8 text-gray-400 hover:text-red-600"
+                                              aria-label="Excluir tarefa"
+                                            >
+                                              <Trash2 className="w-3.5 h-3.5" />
+                                            </Button>
+                                          )}
+                                      </div>
+                                    </div>
+                                  )
+                                })
+                              )}
+                            </div>
+                          )}
                         </div>
                       )
-                    })
-                  )}
-                </div>
+                    })}
+
+                    {/* Itens sem Fase vinculada (Atividades Gerais da Área Técnica) */}
+                    {tarefasEtapa2SemFase.length > 0 && (
+                      <div className="border border-dashed border-gray-300 rounded-xl overflow-hidden bg-slate-50/50">
+                        <div className="p-3.5 bg-gray-100/70 border-b border-gray-200 flex items-center justify-between">
+                          <div>
+                            <h4 className="font-bold text-xs text-gray-700">
+                              Atividades Gerais / Outros Itens
+                            </h4>
+                            <p className="text-[11px] text-gray-500">
+                              Itens complementares executados em paralelo com as fases
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="divide-y divide-gray-100 bg-white">
+                          {tarefasEtapa2SemFase.map((tarefa) => {
+                            const fileUrl = tarefaService.getFileUrl(tarefa)
+
+                            return (
+                              <div
+                                key={tarefa.id}
+                                className="py-3 px-4 flex items-start justify-between gap-3 group hover:bg-gray-50/60 transition-colors"
+                              >
+                                <div className="flex items-start gap-3 flex-1 min-w-0">
+                                  <button
+                                    type="button"
+                                    disabled={onboarding.etapa2_concluida || !podeGerenciarEtapa2e3}
+                                    onClick={() => handleToggleTarefa(tarefa)}
+                                    className={`mt-0.5 text-gray-400 transition-transform ${
+                                      podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida
+                                        ? 'hover:text-brand-600 active:scale-95'
+                                        : 'cursor-default opacity-80'
+                                    }`}
+                                  >
+                                    {tarefa.concluida ? (
+                                      <CheckCircle2 className="w-5 h-5 text-emerald-600 animate-fade-in" />
+                                    ) : (
+                                      <Square className="w-5 h-5 text-gray-300" />
+                                    )}
+                                  </button>
+
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      {tarefa.tipo === 'video' ? (
+                                        <Video className="w-4 h-4 text-purple-600 shrink-0" />
+                                      ) : (
+                                        <FileText className="w-4 h-4 text-brand-600 shrink-0" />
+                                      )}
+                                      <span
+                                        className={`text-sm font-semibold truncate ${
+                                          tarefa.concluida
+                                            ? 'text-gray-500 line-through'
+                                            : 'text-gray-800'
+                                        }`}
+                                      >
+                                        {tarefa.titulo}
+                                      </span>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                      {confirmacoes[tarefa.id] ? (
+                                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                          Confirmado pelo colaborador em{' '}
+                                          {formatDate(
+                                            confirmacoes[tarefa.id].confirmado_em ||
+                                              confirmacoes[tarefa.id].created,
+                                          )}
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-medium">
+                                          <Clock className="w-3 h-3" />
+                                          Aguardando confirmação do colaborador
+                                        </span>
+                                      )}
+
+                                      {tarefa.concluida_em && (
+                                        <span className="text-[11px] text-gray-500">
+                                          • Validado Gestão em {formatDate(tarefa.concluida_em)}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      openPreview({
+                                        titulo: tarefa.titulo,
+                                        tipo: tarefa.tipo,
+                                        url: fileUrl,
+                                      })
+                                    }
+                                    className="h-8 text-xs text-brand-600 hover:text-brand-700"
+                                  >
+                                    <Eye className="w-3.5 h-3.5 mr-1" />
+                                    Visualizar
+                                  </Button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Modo plano para áreas sem fases (ex: RH, Comercial, Laboratório) */
+                  <div className="divide-y divide-gray-100 mb-5">
+                    {tarefasEtapa2.length === 0 ? (
+                      <div className="py-6 text-center text-gray-400 text-xs">
+                        Nenhum item adicionado para este setor.
+                      </div>
+                    ) : (
+                      tarefasEtapa2.map((tarefa) => {
+                        const fileUrl = tarefaService.getFileUrl(tarefa)
+
+                        return (
+                          <div
+                            key={tarefa.id}
+                            className="py-3 flex items-start justify-between gap-3 group"
+                          >
+                            <div className="flex items-start gap-3 flex-1">
+                              <button
+                                type="button"
+                                disabled={onboarding.etapa2_concluida || !podeGerenciarEtapa2e3}
+                                onClick={() => handleToggleTarefa(tarefa)}
+                                className={`mt-0.5 text-gray-400 transition-transform ${
+                                  podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida
+                                    ? 'hover:text-brand-600 active:scale-95'
+                                    : 'cursor-default opacity-80'
+                                }`}
+                                aria-label="Marcar tarefa"
+                              >
+                                {tarefa.concluida ? (
+                                  <CheckCircle2 className="w-5 h-5 text-emerald-600 animate-fade-in" />
+                                ) : (
+                                  <Square className="w-5 h-5 text-gray-300" />
+                                )}
+                              </button>
+
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {tarefa.tipo === 'video' ? (
+                                    <Video className="w-4 h-4 text-purple-600 shrink-0" />
+                                  ) : (
+                                    <FileText className="w-4 h-4 text-brand-600 shrink-0" />
+                                  )}
+                                  <span
+                                    className={`text-sm font-semibold ${
+                                      tarefa.concluida
+                                        ? 'text-gray-500 line-through'
+                                        : 'text-gray-800'
+                                    }`}
+                                  >
+                                    {tarefa.titulo}
+                                  </span>
+                                  {tarefa.conteudo_url ? (
+                                    <span className="text-[10px] bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded font-medium">
+                                      Arquivo próprio
+                                    </span>
+                                  ) : tarefa.material ? (
+                                    <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-medium">
+                                      Material biblioteca
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                  {confirmacoes[tarefa.id] ? (
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                      Confirmado pelo colaborador em{' '}
+                                      {formatDate(
+                                        confirmacoes[tarefa.id].confirmado_em ||
+                                          confirmacoes[tarefa.id].created,
+                                      )}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-medium">
+                                      <Clock className="w-3 h-3" />
+                                      Aguardando confirmação do colaborador
+                                    </span>
+                                  )}
+
+                                  {tarefa.concluida_em && (
+                                    <span className="text-[11px] text-gray-500">
+                                      • Validado Gestão em {formatDate(tarefa.concluida_em)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  openPreview({
+                                    titulo: tarefa.titulo,
+                                    tipo: tarefa.tipo,
+                                    url: fileUrl,
+                                  })
+                                }
+                                className="h-8 text-xs text-brand-600 hover:text-brand-700"
+                              >
+                                <Eye className="w-3.5 h-3.5 mr-1" />
+                                Visualizar
+                              </Button>
+
+                              {!tarefa.criado_automaticamente &&
+                                !onboarding.etapa2_concluida &&
+                                podeGerenciarEtapa2e3 && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDeleteTarefa(tarefa.id, 2)}
+                                    className="h-8 w-8 text-gray-400 hover:text-red-600"
+                                    aria-label="Excluir tarefa"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                )}
 
                 {/* Concluir Etapa 2 */}
                 {!onboarding.etapa2_concluida && (
@@ -1594,6 +2050,28 @@ export default function DetalheOnboarding() {
                 disabled={enviandoItem}
               />
             </div>
+
+            {/* Se estiver adicionando na Etapa 2 e houver fases técnicas no setor */}
+            {modalItemEtapa === 2 && fasesSetor.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Vincular à Fase (Opcional)
+                </label>
+                <select
+                  value={novoItemFaseId}
+                  onChange={(e) => setNovoItemFaseId(e.target.value)}
+                  className="w-full text-xs border border-gray-300 rounded-md p-2 bg-white"
+                  disabled={enviandoItem}
+                >
+                  <option value="">-- Sem fase (Atividades Gerais) --</option>
+                  {fasesSetor.map((f, idx) => (
+                    <option key={f.id} value={f.id}>
+                      Fase {idx + 1}: {f.titulo}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">

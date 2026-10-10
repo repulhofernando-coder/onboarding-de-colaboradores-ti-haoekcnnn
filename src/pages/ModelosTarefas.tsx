@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { modeloService, materialService, setorService } from '@/services/onboarding'
+import { modeloService, materialService, setorService, faseService } from '@/services/onboarding'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
 import type {
   ModeloTarefa,
@@ -8,6 +8,7 @@ import type {
   TarefaTipo,
   SetorModel,
   SetorVisualInfo,
+  FaseModelo,
 } from '@/types/onboarding'
 import { SETORES_INFO, getSetorVisual, setorToString } from '@/types/onboarding'
 import {
@@ -29,6 +30,9 @@ import {
   Layers,
   Sparkles,
   ArrowRight,
+  ArrowUp,
+  ArrowDown,
+  Lock,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -55,6 +59,7 @@ export default function ModelosTarefas() {
   // Aba selecionada: 'biblioteca' | 'etapa1' | setor.id ou setor.chave
   const [selectedTab, setSelectedTab] = useState<TabType>('biblioteca')
   const [modelos, setModelos] = useState<ModeloTarefa[]>([])
+  const [fases, setFases] = useState<FaseModelo[]>([])
   const [materiais, setMateriais] = useState<MaterialBiblioteca[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -108,6 +113,7 @@ export default function ModelosTarefas() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formTitulo, setFormTitulo] = useState('')
   const [formDescricao, setFormDescricao] = useState('')
+  const [formFaseId, setFormFaseId] = useState<string>('')
   const [formOrigemArquivo, setFormOrigemArquivo] = useState<'biblioteca' | 'upload_direto'>(
     'biblioteca',
   )
@@ -117,6 +123,14 @@ export default function ModelosTarefas() {
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Modal Novo / Edição de Fase do Modelo
+  const [faseModalOpen, setFaseModalOpen] = useState(false)
+  const [faseEditingId, setFaseEditingId] = useState<string | null>(null)
+  const [faseTitulo, setFaseTitulo] = useState('')
+  const [faseDescricao, setFaseDescricao] = useState('')
+  const [faseSubmitting, setFaseSubmitting] = useState(false)
+  const [faseError, setFaseError] = useState('')
 
   // Modal Preview
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -167,6 +181,23 @@ export default function ModelosTarefas() {
     )
   }, [selectedTab, setoresList])
 
+  // Carregar fases da área ativa (quando não for biblioteca e nem etapa1)
+  const fetchFases = async () => {
+    if (selectedTab === 'biblioteca' || selectedTab === 'etapa1') {
+      setFases([])
+      return
+    }
+    try {
+      const setorId = activeSetorModel?.id
+      const setorChave = activeSetorModel?.chave || selectedTab
+      const list = await faseService.listBySetor(setorChave, setorId)
+      setFases(list)
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao carregar fases do setor.')
+    }
+  }
+
   // Carregar modelos da aba ativa
   const fetchModelos = async () => {
     if (selectedTab === 'biblioteca') {
@@ -177,11 +208,16 @@ export default function ModelosTarefas() {
       if (selectedTab === 'etapa1') {
         const list = await modeloService.listEtapa1()
         setModelos(list)
+        setFases([])
       } else {
         const setorId = activeSetorModel?.id
         const setorChave = activeSetorModel?.chave || selectedTab
-        const list = await modeloService.listBySetor(setorChave, setorId)
-        setModelos(list)
+        const [listMod, listFas] = await Promise.all([
+          modeloService.listBySetor(setorChave, setorId),
+          faseService.listBySetor(setorChave, setorId),
+        ])
+        setModelos(listMod)
+        setFases(listFas)
       }
     } catch (err) {
       console.error(err)
@@ -349,12 +385,135 @@ export default function ModelosTarefas() {
     setPreviewOpen(true)
   }
 
+  // ==================== AÇÕES DE FASES DO MODELO ====================
+  const openNewFaseModal = () => {
+    setFaseEditingId(null)
+    setFaseTitulo('')
+    setFaseDescricao('')
+    setFaseError('')
+    setFaseModalOpen(true)
+  }
+
+  const openEditFaseModal = (fase: FaseModelo) => {
+    setFaseEditingId(fase.id)
+    setFaseTitulo(fase.titulo)
+    setFaseDescricao(fase.descricao || '')
+    setFaseError('')
+    setFaseModalOpen(true)
+  }
+
+  const handleSaveFase = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setFaseError('')
+
+    if (!faseTitulo.trim()) {
+      setFaseError('O título da fase é obrigatório.')
+      return
+    }
+
+    try {
+      setFaseSubmitting(true)
+      const setorChave = (
+        activeSetorModel?.chave ||
+        activeSetorModel?.nome ||
+        selectedTab
+      ).toLowerCase()
+
+      if (faseEditingId) {
+        await faseService.update(faseEditingId, {
+          titulo: faseTitulo.trim(),
+          descricao: faseDescricao.trim(),
+        })
+        toast.success('Fase atualizada com sucesso!')
+      } else {
+        await faseService.create({
+          titulo: faseTitulo.trim(),
+          descricao: faseDescricao.trim(),
+          ordem: fases.length + 1,
+          setor: setorChave,
+          setor_ref: activeSetorModel?.id || '',
+          etapa: 2,
+        })
+        toast.success('Nova fase criada com sucesso!')
+      }
+
+      setFaseModalOpen(false)
+      fetchModelos()
+    } catch (err) {
+      console.error(err)
+      const msg = getErrorMessage(err)
+      setFaseError(msg || 'Erro ao salvar fase.')
+      toast.error(msg ? `Erro ao salvar fase: ${msg}` : 'Erro ao salvar fase.')
+    } finally {
+      setFaseSubmitting(false)
+    }
+  }
+
+  const handleDeleteFase = async (fase: FaseModelo) => {
+    const itensVinculados = modelos.filter((m) => m.fase === fase.id)
+    if (
+      !confirm(
+        `Tem certeza que deseja excluir a fase "${fase.titulo}"?${
+          itensVinculados.length > 0
+            ? `\n\nATENÇÃO: Existem ${itensVinculados.length} item(ns) nesta fase. Eles serão movidos para "Atividades Gerais".`
+            : ''
+        }`,
+      )
+    ) {
+      return
+    }
+
+    try {
+      // Desvincular itens da fase antes de excluí-la
+      for (const item of itensVinculados) {
+        await modeloService.update(item.id, { fase: '' })
+      }
+      await faseService.delete(fase.id)
+      toast.success('Fase excluída com sucesso.')
+      fetchModelos()
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao excluir fase.')
+    }
+  }
+
+  const handleMoverFase = async (faseId: string, direcao: 'cima' | 'baixo') => {
+    const index = fases.findIndex((f) => f.id === faseId)
+    if (index === -1) return
+    if (direcao === 'cima' && index === 0) return
+    if (direcao === 'baixo' && index === fases.length - 1) return
+
+    const targetIndex = direcao === 'cima' ? index - 1 : index + 1
+    const currentFase = fases[index]
+    const targetFase = fases[targetIndex]
+
+    const newFases = [...fases]
+    newFases[index] = targetFase
+    newFases[targetIndex] = currentFase
+
+    setFases(newFases)
+
+    try {
+      await Promise.all([
+        faseService.update(currentFase.id, { ordem: targetIndex + 1 }),
+        faseService.update(targetFase.id, { ordem: index + 1 }),
+      ])
+      toast.success('Ordem das fases atualizada!')
+      fetchModelos()
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao reordenar fases.')
+      fetchModelos()
+    }
+  }
+
   // ==================== AÇÕES DE MODELOS DE TAREFAS ====================
-  const openNewModal = (tipo: TarefaTipo) => {
+  const openNewModal = (tipo: TarefaTipo, defaultFaseId?: string) => {
     setEditingId(null)
     setModalTipo(tipo)
     setFormTitulo('')
     setFormDescricao('')
+    setFormFaseId(defaultFaseId || '')
     setFormOrigemArquivo('biblioteca')
     setSelectedMaterialId('')
     setFormFile(null)
@@ -369,6 +528,7 @@ export default function ModelosTarefas() {
     setModalTipo(item.tipo)
     setFormTitulo(item.titulo)
     setFormDescricao(item.descricao || '')
+    setFormFaseId(item.fase || '')
     if (item.material) {
       setFormOrigemArquivo('biblioteca')
       setSelectedMaterialId(item.material)
@@ -428,6 +588,7 @@ export default function ModelosTarefas() {
         formData.append('etapa', '1')
         formData.append('setor', '')
         formData.append('setor_ref', '')
+        formData.append('fase', '')
       } else {
         formData.append('etapa', '2')
         const setorChave = (
@@ -439,6 +600,7 @@ export default function ModelosTarefas() {
         if (activeSetorModel?.id) {
           formData.append('setor_ref', activeSetorModel.id)
         }
+        formData.append('fase', formFaseId || '')
       }
 
       if (formOrigemArquivo === 'biblioteca') {
@@ -650,6 +812,11 @@ export default function ModelosTarefas() {
   const materiaisCompativeis = useMemo(() => {
     return materiais.filter((m) => m.tipo === modalTipo)
   }, [materiais, modalTipo])
+
+  // Modelos agrupados por fase na aba de setor
+  const modelosSemFase = useMemo(() => {
+    return modelos.filter((m) => !m.fase || !fases.some((f) => f.id === m.fase))
+  }, [modelos, fases])
 
   return (
     <div className="space-y-6">
@@ -1062,201 +1229,558 @@ export default function ModelosTarefas() {
             </span>
           </div>
 
-          {/* 1. Vídeos Obrigatórios */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-brand-600" />
-                <h4 className="text-sm font-bold text-gray-800">Manuais & Documentos</h4>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => openNewModal('manual')}
-                className="h-8 text-xs text-brand-700 border-brand-200 hover:bg-brand-50"
-              >
-                <Plus className="w-3.5 h-3.5 mr-1" />
-                Adicionar Manual
-              </Button>{' '}
-            </div>
+          {/* SE ETAPA 1: MANTER FLAT (VÍDEOS E MANUAIS SEM FASES) */}
+          {isEtapa1 ? (
+            <>
+              {/* 1. Vídeos Obrigatórios Etapa 1 */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Video className="w-4 h-4 text-purple-600" />
+                    <h4 className="text-sm font-bold text-gray-800">Vídeos Institucionais</h4>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openNewModal('video')}
+                    className="h-8 text-xs text-purple-700 border-purple-200 hover:bg-purple-50"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    Adicionar Vídeo
+                  </Button>
+                </div>
 
-            <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden bg-gray-50/30">
+                <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden bg-gray-50/30">
+                  {loading ? (
+                    <div className="p-6 text-center text-xs text-gray-400">
+                      Carregando modelos...
+                    </div>
+                  ) : videosModelos.length === 0 ? (
+                    <div className="p-6 text-center text-xs text-gray-400">
+                      Nenhum vídeo cadastrado para a Etapa 1.
+                    </div>
+                  ) : (
+                    videosModelos.map((item) => (
+                      <div
+                        key={item.id}
+                        className="p-3.5 flex items-center justify-between gap-3 hover:bg-white transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                            <Video className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-semibold text-xs text-gray-900 block truncate">
+                                {item.titulo}
+                              </span>
+                              {item.material ? (
+                                <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.2 rounded font-medium inline-flex items-center gap-1 shrink-0">
+                                  <Library className="w-3 h-3" /> Material da Biblioteca
+                                </span>
+                              ) : item.conteudo_url ? (
+                                <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.2 rounded font-medium shrink-0">
+                                  Upload direto
+                                </span>
+                              ) : (
+                                <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.2 rounded font-medium shrink-0">
+                                  Sem anexo
+                                </span>
+                              )}
+                            </div>
+                            {item.descricao && (
+                              <p className="text-[11px] text-gray-500 truncate mt-0.5">
+                                {item.descricao}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openPreviewModelo(item)}
+                            className="h-8 text-xs text-brand-600 hover:text-brand-700"
+                          >
+                            Visualizar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEditModal(item)}
+                            className="h-8 w-8 text-gray-500 hover:text-gray-800"
+                            aria-label="Editar"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteModelo(item.id, item.titulo)}
+                            className="h-8 w-8 text-gray-400 hover:text-red-600"
+                            aria-label="Excluir"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* 2. Manuais Obrigatórios Etapa 1 */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-blue-600" />
+                    <h4 className="text-sm font-bold text-gray-800">
+                      Manuais e Documentos Obrigatórios
+                    </h4>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openNewModal('manual')}
+                    className="h-8 text-xs text-blue-700 border-blue-200 hover:bg-blue-50"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    Adicionar Manual
+                  </Button>
+                </div>
+
+                <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden bg-gray-50/30">
+                  {loading ? (
+                    <div className="p-6 text-center text-xs text-gray-400">
+                      Carregando modelos...
+                    </div>
+                  ) : manuaisModelos.length === 0 ? (
+                    <div className="p-6 text-center text-xs text-gray-400">
+                      Nenhum manual cadastrado para a Etapa 1.
+                    </div>
+                  ) : (
+                    manuaisModelos.map((item) => (
+                      <div
+                        key={item.id}
+                        className="p-3.5 flex items-center justify-between gap-3 hover:bg-white transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                            <FileText className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-semibold text-xs text-gray-900 block truncate">
+                                {item.titulo}
+                              </span>
+                              {item.material ? (
+                                <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.2 rounded font-medium inline-flex items-center gap-1 shrink-0">
+                                  <Library className="w-3 h-3" /> Material da Biblioteca
+                                </span>
+                              ) : item.conteudo_url ? (
+                                <span className="text-[10px] bg-brand-50 text-brand-700 border border-brand-200 px-1.5 py-0.2 rounded font-medium shrink-0">
+                                  Upload direto
+                                </span>
+                              ) : (
+                                <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.2 rounded font-medium shrink-0">
+                                  Sem anexo
+                                </span>
+                              )}
+                            </div>
+                            {item.descricao && (
+                              <p className="text-[11px] text-gray-500 truncate mt-0.5">
+                                {item.descricao}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openPreviewModelo(item)}
+                            className="h-8 text-xs text-brand-600 hover:text-brand-700"
+                          >
+                            Visualizar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEditModal(item)}
+                            className="h-8 w-8 text-gray-500 hover:text-gray-800"
+                            aria-label="Editar"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteModelo(item.id, item.titulo)}
+                            className="h-8 w-8 text-gray-400 hover:text-red-600"
+                            aria-label="Excluir"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            /* SE ETAPA 2 (ÁREA/SETOR): PROGRESSÃO DE FASES ORDENADAS + ATIVIDADES GERAIS */
+            <div className="space-y-6">
+              {/* Barra de Ações de Fases da Área */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-brand-600" />
+                    <h4 className="text-sm font-bold text-gray-900">
+                      Progressão de Fases Técnicas ({fases.length}{' '}
+                      {fases.length === 1 ? 'fase' : 'fases'})
+                    </h4>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {fases.length > 0
+                      ? 'No onboarding, o colaborador só desbloqueia a fase seguinte quando concluir todos os itens da fase anterior.'
+                      : 'Esta área não possui fases ordenadas. Seus itens são exibidos no grupo de atividades gerais.'}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={openNewFaseModal}
+                  className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold h-8 rounded-lg shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" />
+                  Nova Fase
+                </Button>
+              </div>
+
+              {/* Lista das Fases Ordenadas */}
               {loading ? (
-                <div className="p-6 text-center text-xs text-gray-400">Carregando modelos...</div>
-              ) : videosModelos.length === 0 ? (
-                <div className="p-6 text-center text-xs text-gray-400">
-                  Nenhum vídeo cadastrado{' '}
-                  {isEtapa1 ? 'para a Etapa 1' : `para o setor ${currentSetorInfo?.nome}`}.
+                <div className="p-8 text-center text-xs text-gray-400">
+                  Carregando fases e tarefas...
                 </div>
               ) : (
-                videosModelos.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-3.5 flex items-center justify-between gap-3 hover:bg-white transition-colors"
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
-                        <Video className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-xs text-gray-900 block truncate">
-                            {item.titulo}
-                          </span>
-                          {item.material ? (
-                            <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.2 rounded font-medium inline-flex items-center gap-1 shrink-0">
-                              <Library className="w-3 h-3" /> Material da Biblioteca
+                <div className="space-y-5">
+                  {fases.map((fase, idx) => {
+                    const itensDaFase = modelos.filter((m) => m.fase === fase.id)
+                    return (
+                      <div
+                        key={fase.id}
+                        className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-xs"
+                      >
+                        {/* Header da Fase */}
+                        <div className="bg-gradient-to-r from-slate-50 to-white px-4 py-3.5 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                          <div className="flex items-start gap-3 min-w-0">
+                            <span className="w-7 h-7 rounded-lg bg-brand-600 text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                              {idx + 1}
                             </span>
-                          ) : item.conteudo_url ? (
-                            <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.2 rounded font-medium shrink-0">
-                              Upload direto
-                            </span>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h5 className="font-bold text-sm text-gray-900">{fase.titulo}</h5>
+                                <span className="text-[11px] font-semibold text-brand-700 bg-brand-50 border border-brand-200 px-2 py-0.2 rounded-full">
+                                  Fase {idx + 1} de {fases.length}
+                                </span>
+                                <span className="text-[11px] text-gray-400">
+                                  {itensDaFase.length} {itensDaFase.length === 1 ? 'item' : 'itens'}
+                                </span>
+                              </div>
+                              {fase.descricao && (
+                                <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                                  {fase.descricao}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Ações da Fase */}
+                          <div className="flex items-center gap-1 shrink-0 self-end md:self-center">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              disabled={idx === 0}
+                              onClick={() => handleMoverFase(fase.id, 'cima')}
+                              className="h-7 w-7 text-gray-500 hover:text-gray-900 disabled:opacity-30"
+                              title="Mover para cima"
+                            >
+                              <ArrowUp className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              disabled={idx === fases.length - 1}
+                              onClick={() => handleMoverFase(fase.id, 'baixo')}
+                              className="h-7 w-7 text-gray-500 hover:text-gray-900 disabled:opacity-30"
+                              title="Mover para baixo"
+                            >
+                              <ArrowDown className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openEditFaseModal(fase)}
+                              className="h-7 w-7 text-gray-500 hover:text-gray-900"
+                              title="Editar fase"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteFase(fase)}
+                              className="h-7 w-7 text-gray-400 hover:text-red-600"
+                              title="Excluir fase"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                            <div className="h-4 w-[1px] bg-gray-200 mx-1" />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openNewModal('manual', fase.id)}
+                              className="h-7 text-xs border-brand-200 text-brand-700 hover:bg-brand-50"
+                            >
+                              <Plus className="w-3 h-3 mr-1" />
+                              Item
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Itens vinculados à Fase */}
+                        <div className="divide-y divide-gray-100 bg-white">
+                          {itensDaFase.length === 0 ? (
+                            <div className="p-4 text-center text-xs text-gray-400">
+                              Nenhum item adicionado a esta fase ainda.{' '}
+                              <button
+                                type="button"
+                                onClick={() => openNewModal('manual', fase.id)}
+                                className="text-brand-600 font-semibold hover:underline ml-1"
+                              >
+                                Adicionar primeiro item
+                              </button>
+                            </div>
                           ) : (
-                            <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.2 rounded font-medium shrink-0">
-                              Sem anexo
-                            </span>
+                            itensDaFase.map((item) => (
+                              <div
+                                key={item.id}
+                                className="p-3.5 flex items-center justify-between gap-3 hover:bg-gray-50/60 transition-colors"
+                              >
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                  <div
+                                    className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                      item.tipo === 'video'
+                                        ? 'bg-purple-100 text-purple-700'
+                                        : 'bg-brand-100 text-brand-700'
+                                    }`}
+                                  >
+                                    {item.tipo === 'video' ? (
+                                      <Video className="w-4 h-4" />
+                                    ) : (
+                                      <FileText className="w-4 h-4" />
+                                    )}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-semibold text-xs text-gray-900 block truncate">
+                                        {item.titulo}
+                                      </span>
+                                      <span
+                                        className={`text-[10px] font-medium px-2 py-0.2 rounded border ${
+                                          item.tipo === 'video'
+                                            ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                            : 'bg-brand-50 text-brand-700 border-brand-200'
+                                        }`}
+                                      >
+                                        {item.tipo === 'video' ? 'Vídeo' : 'Manual'}
+                                      </span>
+                                      {item.material ? (
+                                        <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.2 rounded font-medium inline-flex items-center gap-1 shrink-0">
+                                          <Library className="w-3 h-3" /> Biblioteca
+                                        </span>
+                                      ) : item.conteudo_url ? (
+                                        <span className="text-[10px] bg-gray-100 text-gray-700 border border-gray-200 px-1.5 py-0.2 rounded font-medium shrink-0">
+                                          Upload direto
+                                        </span>
+                                      ) : (
+                                        <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.2 rounded font-medium shrink-0">
+                                          Sem anexo
+                                        </span>
+                                      )}
+                                    </div>
+                                    {item.descricao && (
+                                      <p className="text-[11px] text-gray-500 truncate mt-0.5">
+                                        {item.descricao}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => openPreviewModelo(item)}
+                                    className="h-8 text-xs text-brand-600 hover:text-brand-700"
+                                  >
+                                    Visualizar
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => openEditModal(item)}
+                                    className="h-8 w-8 text-gray-500 hover:text-gray-800"
+                                    aria-label="Editar"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDeleteModelo(item.id, item.titulo)}
+                                    className="h-8 w-8 text-gray-400 hover:text-red-600"
+                                    aria-label="Excluir"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))
                           )}
                         </div>
-                        {item.descricao && (
-                          <p className="text-[11px] text-gray-500 truncate mt-0.5">
-                            {item.descricao}
+                      </div>
+                    )
+                  })}
+
+                  {/* Grupo Fallback: Itens sem fase ou Atividades Gerais */}
+                  {(fases.length === 0 || modelosSemFase.length > 0) && (
+                    <div className="border border-dashed border-gray-300 rounded-xl overflow-hidden bg-slate-50/50">
+                      <div className="px-4 py-3 bg-gray-100/70 border-b border-gray-200 flex items-center justify-between">
+                        <div>
+                          <h5 className="font-bold text-xs text-gray-700">
+                            {fases.length > 0
+                              ? 'Atividades Gerais / Sem Fase Específica'
+                              : 'Atividades e Treinamentos da Área'}
+                          </h5>
+                          <p className="text-[11px] text-gray-500">
+                            {fases.length > 0
+                              ? 'Itens executados como atividades gerais desta área (disponíveis para confirmação).'
+                              : 'Esta área não utiliza fases. Todos os itens ficam reunidos aqui.'}
                           </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openNewModal('manual')}
+                          className="h-7 text-xs border-gray-300 hover:bg-white"
+                        >
+                          <Plus className="w-3 h-3 mr-1" />
+                          Adicionar Item
+                        </Button>
+                      </div>
+
+                      <div className="divide-y divide-gray-100 bg-white">
+                        {modelosSemFase.length === 0 ? (
+                          <div className="p-4 text-center text-xs text-gray-400">
+                            Nenhum item avulso neste grupo.
+                          </div>
+                        ) : (
+                          modelosSemFase.map((item) => (
+                            <div
+                              key={item.id}
+                              className="p-3.5 flex items-center justify-between gap-3 hover:bg-gray-50/60 transition-colors"
+                            >
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <div
+                                  className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                    item.tipo === 'video'
+                                      ? 'bg-purple-100 text-purple-700'
+                                      : 'bg-brand-100 text-brand-700'
+                                  }`}
+                                >
+                                  {item.tipo === 'video' ? (
+                                    <Video className="w-4 h-4" />
+                                  ) : (
+                                    <FileText className="w-4 h-4" />
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-semibold text-xs text-gray-900 block truncate">
+                                      {item.titulo}
+                                    </span>
+                                    <span
+                                      className={`text-[10px] font-medium px-2 py-0.2 rounded border ${
+                                        item.tipo === 'video'
+                                          ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                          : 'bg-brand-50 text-brand-700 border-brand-200'
+                                      }`}
+                                    >
+                                      {item.tipo === 'video' ? 'Vídeo' : 'Manual'}
+                                    </span>
+                                    {item.material ? (
+                                      <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.2 rounded font-medium inline-flex items-center gap-1 shrink-0">
+                                        <Library className="w-3 h-3" /> Biblioteca
+                                      </span>
+                                    ) : item.conteudo_url ? (
+                                      <span className="text-[10px] bg-gray-100 text-gray-700 border border-gray-200 px-1.5 py-0.2 rounded font-medium shrink-0">
+                                        Upload direto
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.2 rounded font-medium shrink-0">
+                                        Sem anexo
+                                      </span>
+                                    )}
+                                  </div>
+                                  {item.descricao && (
+                                    <p className="text-[11px] text-gray-500 truncate mt-0.5">
+                                      {item.descricao}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openPreviewModelo(item)}
+                                  className="h-8 text-xs text-brand-600 hover:text-brand-700"
+                                >
+                                  Visualizar
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => openEditModal(item)}
+                                  className="h-8 w-8 text-gray-500 hover:text-gray-800"
+                                  aria-label="Editar"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteModelo(item.id, item.titulo)}
+                                  className="h-8 w-8 text-gray-400 hover:text-red-600"
+                                  aria-label="Excluir"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))
                         )}
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openPreviewModelo(item)}
-                        className="h-8 text-xs text-brand-600 hover:text-brand-700"
-                      >
-                        Visualizar
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEditModal(item)}
-                        className="h-8 w-8 text-gray-500 hover:text-gray-800"
-                        aria-label="Editar"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteModelo(item.id, item.titulo)}
-                        className="h-8 w-8 text-gray-400 hover:text-red-600"
-                        aria-label="Excluir"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* 2. Manuais Obrigatórios */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-blue-600" />
-                <h4 className="text-sm font-bold text-gray-800">
-                  Manuais e Documentos Obrigatórios
-                </h4>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => openNewModal('manual')}
-                className="h-8 text-xs text-blue-700 border-blue-200 hover:bg-blue-50"
-              >
-                <Plus className="w-3.5 h-3.5 mr-1" />
-                Adicionar Manual
-              </Button>
-            </div>
-
-            <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden bg-gray-50/30">
-              {loading ? (
-                <div className="p-6 text-center text-xs text-gray-400">Carregando modelos...</div>
-              ) : manuaisModelos.length === 0 ? (
-                <div className="p-6 text-center text-xs text-gray-400">
-                  Nenhum manual cadastrado{' '}
-                  {isEtapa1 ? 'para a Etapa 1' : `para o setor ${currentSetorInfo?.nome}`}.
+                  )}
                 </div>
-              ) : (
-                manuaisModelos.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-3.5 flex items-center justify-between gap-3 hover:bg-white transition-colors"
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
-                        <FileText className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-xs text-gray-900 block truncate">
-                            {item.titulo}
-                          </span>
-                          {item.material ? (
-                            <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.2 rounded font-medium inline-flex items-center gap-1 shrink-0">
-                              <Library className="w-3 h-3" /> Material da Biblioteca
-                            </span>
-                          ) : item.conteudo_url ? (
-                            <span className="text-[10px] bg-brand-50 text-brand-700 border border-brand-200 px-1.5 py-0.2 rounded font-medium shrink-0">
-                              Upload direto
-                            </span>
-                          ) : (
-                            <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.2 rounded font-medium shrink-0">
-                              Sem anexo
-                            </span>
-                          )}
-                        </div>
-                        {item.descricao && (
-                          <p className="text-[11px] text-gray-500 truncate mt-0.5">
-                            {item.descricao}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openPreviewModelo(item)}
-                        className="h-8 text-xs text-brand-600 hover:text-brand-700"
-                      >
-                        Visualizar
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEditModal(item)}
-                        className="h-8 w-8 text-gray-500 hover:text-gray-800"
-                        aria-label="Editar"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteModelo(item.id, item.titulo)}
-                        className="h-8 w-8 text-gray-400 hover:text-red-600"
-                        aria-label="Excluir"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ))
               )}
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -1501,6 +2025,32 @@ export default function ModelosTarefas() {
               />
             </div>
 
+            {/* Se estiver em uma área com fases (Etapa 2), permite escolher a fase */}
+            {!isEtapa1 && fases.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Vincular à Fase (Opcional)
+                </label>
+                <select
+                  value={formFaseId}
+                  onChange={(e) => setFormFaseId(e.target.value)}
+                  className="w-full text-xs border border-gray-300 rounded-md p-2 bg-white"
+                  disabled={submitting}
+                >
+                  <option value="">-- Sem fase (Atividades Gerais) --</option>
+                  {fases.map((f, idx) => (
+                    <option key={f.id} value={f.id}>
+                      Fase {idx + 1}: {f.titulo}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Itens vinculados a uma fase só poderão ser validados quando as fases anteriores
+                  estiverem concluídas no onboarding.
+                </p>
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
                 Descrição ou Instruções
@@ -1630,6 +2180,79 @@ export default function ModelosTarefas() {
               >
                 {submitting ? 'Salvando...' : 'Salvar Modelo'}
               </Button>{' '}
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL: CRIAR / EDITAR FASE DO MODELO                                      */}
+      {/* ========================================================================= */}
+      <Dialog open={faseModalOpen} onOpenChange={setFaseModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-gray-900 flex items-center gap-2">
+              <Layers className="w-5 h-5 text-brand-600" />
+              <span>{faseEditingId ? 'Editar Fase Técnica' : 'Nova Fase Técnica'}</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveFase} className="space-y-4 py-2">
+            {faseError && (
+              <div className="p-2.5 rounded bg-red-50 text-red-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{faseError}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Título da Fase *
+              </label>
+              <Input
+                placeholder="Ex.: Mapeamento de Ambientes, Shadowing Ativo..."
+                value={faseTitulo}
+                onChange={(e) => setFaseTitulo(e.target.value)}
+                className="h-10 text-xs"
+                disabled={faseSubmitting}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Descrição Curta e Instruções da Fase
+              </label>
+              <Textarea
+                placeholder="Ex.: Estudo aprofundado da documentação no Passportal. Identificação de topologia de rede e faixas de IP..."
+                value={faseDescricao}
+                onChange={(e) => setFaseDescricao(e.target.value)}
+                className="text-xs min-h-[90px]"
+                disabled={faseSubmitting}
+              />
+              <p className="text-[11px] text-gray-400 mt-1">
+                Esta descrição será exibida para o colaborador no portal e para o gestor durante a
+                condução.
+              </p>
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setFaseModalOpen(false)}
+                disabled={faseSubmitting}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={faseSubmitting}
+                className="bg-brand-600 hover:bg-brand-700 text-white font-semibold"
+              >
+                {faseSubmitting ? 'Salvando...' : faseEditingId ? 'Salvar Fase' : 'Criar Fase'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

@@ -32,14 +32,17 @@ import {
   onboardingService,
   tarefaService,
   confirmacaoColaboradorService,
+  faseService,
 } from '@/services/onboarding'
 import type {
   Onboarding,
   TarefaOnboarding,
   ConfirmacaoColaborador,
   TarefaTipo,
+  FaseModelo,
 } from '@/types/onboarding'
 import { getSetorVisual } from '@/types/onboarding'
+import { Layers } from 'lucide-react'
 
 export default function ColaboradorPublico() {
   const { token } = useParams<{ token: string }>()
@@ -47,6 +50,7 @@ export default function ColaboradorPublico() {
   const [loading, setLoading] = useState(true)
   const [onboarding, setOnboarding] = useState<Onboarding | null>(null)
   const [tarefas, setTarefas] = useState<TarefaOnboarding[]>([])
+  const [fasesSetor, setFasesSetor] = useState<FaseModelo[]>([])
   const [confirmacoes, setConfirmacoes] = useState<Record<string, ConfirmacaoColaborador>>({})
   const [confirmandoId, setConfirmandoId] = useState<string | null>(null)
 
@@ -77,12 +81,16 @@ export default function ColaboradorPublico() {
 
       setOnboarding(onb)
 
-      // Carregar tarefas do onboarding
-      const items = await tarefaService.listByOnboarding(onb.id)
+      // Carregar tarefas do onboarding e fases do setor
+      const [items, confs, fasesList] = await Promise.all([
+        tarefaService.listByOnboarding(onb.id),
+        confirmacaoColaboradorService.listByOnboarding(onb.id),
+        onb.setor ? faseService.listBySetor(onb.setor, onb.setor_ref) : Promise.resolve([]),
+      ])
       setTarefas(items)
+      setFasesSetor(fasesList)
 
       // Carregar confirmações do colaborador
-      const confs = await confirmacaoColaboradorService.listByOnboarding(onb.id)
       const mapConfs: Record<string, ConfirmacaoColaborador> = {}
       for (const c of confs) {
         mapConfs[c.tarefa] = c
@@ -112,6 +120,61 @@ export default function ColaboradorPublico() {
   const etapa2Liberada = Boolean(
     onboarding?.etapa1_concluida || (onboarding && onboarding.etapa_atual >= 2),
   )
+
+  // Estado das fases da Etapa 2 para o colaborador:
+  // Fase N só é desbloqueada se a fase anterior N-1 tiver TODOS os seus itens confirmados pelo colaborador
+  const fasesStatusColaborador = useMemo(() => {
+    if (fasesSetor.length === 0) return []
+
+    let faseAnteriorCompleta = true
+
+    return fasesSetor.map((fase, index) => {
+      const itensDaFase = tarefasEtapa2.filter((t) => t.fase === fase.id)
+      const totalItens = itensDaFase.length
+      const confirmados = itensDaFase.filter((t) => Boolean(confirmacoes[t.id])).length
+
+      // Uma fase é considerada completa pelo colaborador quando todos os itens dela foram confirmados
+      const estaCompleta = totalItens > 0 && confirmados === totalItens
+
+      const estaDesbloqueada = faseAnteriorCompleta
+
+      if (!estaCompleta && totalItens > 0) {
+        faseAnteriorCompleta = false
+      }
+
+      return {
+        fase,
+        index,
+        itens: itensDaFase,
+        totalItens,
+        confirmados,
+        estaCompleta,
+        estaDesbloqueada,
+      }
+    })
+  }, [fasesSetor, tarefasEtapa2, confirmacoes])
+
+  // Fase em andamento do colaborador para badge
+  const faseAtualColabInfo = useMemo(() => {
+    if (fasesStatusColaborador.length === 0) return null
+    if (onboarding?.etapa2_concluida) {
+      return 'Todas as fases concluídas'
+    }
+    const atual = fasesStatusColaborador.find((f) => !f.estaCompleta && f.estaDesbloqueada)
+    if (atual) {
+      return `Fase ${atual.index + 1} de ${fasesStatusColaborador.length} — ${atual.fase.titulo}`
+    }
+    const todasCompletas = fasesStatusColaborador.every((f) => f.estaCompleta)
+    if (todasCompletas) {
+      return `Fase ${fasesStatusColaborador.length} de ${fasesStatusColaborador.length} — Concluída`
+    }
+    return `Fase 1 de ${fasesStatusColaborador.length} — ${fasesStatusColaborador[0]?.fase.titulo}`
+  }, [fasesStatusColaborador, onboarding?.etapa2_concluida])
+
+  // Itens avulsos da Etapa 2
+  const tarefasEtapa2SemFase = useMemo(() => {
+    return tarefasEtapa2.filter((t) => !t.fase || !fasesSetor.some((f) => f.id === t.fase))
+  }, [tarefasEtapa2, fasesSetor])
 
   // Itens visíveis no cômputo do progresso do colaborador
   const tarefasVisiveis = useMemo(() => {
@@ -150,6 +213,16 @@ export default function ColaboradorPublico() {
     if (confirmacoes[tarefaId]) {
       toast.info('Você já confirmou a visualização deste documento!')
       return
+    }
+
+    // Trava de segurança no colaborador: verificar se a fase está desbloqueada
+    const tarefaAlvo = tarefas.find((t) => t.id === tarefaId)
+    if (tarefaAlvo?.fase) {
+      const statusFase = fasesStatusColaborador.find((f) => f.fase.id === tarefaAlvo.fase)
+      if (statusFase && !statusFase.estaDesbloqueada) {
+        toast.error('Esta fase ainda está bloqueada. Conclua os itens da fase anterior primeiro.')
+        return
+      }
     }
 
     try {
@@ -514,44 +587,56 @@ export default function ColaboradorPublico() {
         </section>
 
         {/* ======================================================== */}
-        {/* ETAPA 2 — VIVÊNCIA TÉCNICA (POR SETOR)                  */}
+        {/* ETAPA 2 — VIVÊNCIA TÉCNICA (SETOR ESPECÍFICO)            */}
         {/* ======================================================== */}
         <section
           className={`bg-white rounded-2xl border p-5 sm:p-6 shadow-sm space-y-5 transition-all ${
-            !etapa2Liberada ? 'border-slate-200 bg-slate-50/70 opacity-70' : 'border-slate-200/90'
+            !etapa2Liberada ? 'border-slate-200/60 opacity-90' : 'border-slate-200/90'
           }`}
         >
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div
-                className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shadow-sm ${
-                  !etapa2Liberada ? 'bg-slate-300 text-slate-600' : 'bg-brand-600 text-white'
+                className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shadow-sm text-white ${
+                  etapa2Liberada ? 'bg-brand-600' : 'bg-slate-400'
                 }`}
               >
-                {!etapa2Liberada ? <Lock className="w-4 h-4" /> : '2'}
+                {!etapa2Liberada ? <Lock className="w-4 h-4" /> : 2}
               </div>
               <div>
-                <h3 className="text-base sm:text-lg font-bold text-slate-900">
-                  Etapa 2 — Vivência Técnica ({setorInfo.nome})
-                </h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900">
+                    Etapa 2 — Vivência Técnica ({setorInfo.nome})
+                  </h3>
+                  {faseAtualColabInfo && etapa2Liberada && (
+                    <span className="text-[11px] font-bold bg-brand-50 text-brand-700 border border-brand-200 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+                      <Layers className="w-3 h-3 text-brand-600" />
+                      {faseAtualColabInfo}
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-slate-500">
-                  Movidesk (chamados), Passportal (documentação) e ferramentas específicas da sua
-                  área.
+                  {fasesSetor.length > 0
+                    ? 'Progressão em fases sequenciais. Conclua cada fase para destravar a seguinte.'
+                    : 'Procedimentos operacionais, manuais técnicos e sistemas de suporte (Movidesk, Passportal).'}
                 </p>
               </div>
             </div>
 
-            {!etapa2Liberada ? (
-              <Badge variant="outline" className="text-slate-400 text-xs">
-                Bloqueada (Aguardando RH)
-              </Badge>
-            ) : onboarding.etapa2_concluida ? (
+            {onboarding.etapa2_concluida ? (
               <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs font-semibold">
-                Etapa Concluída pelo Gestor
+                Etapa Validada pelo Gestor
+              </Badge>
+            ) : etapa2Liberada ? (
+              <Badge className="bg-brand-50 text-brand-700 border-brand-200 text-xs font-semibold">
+                Em andamento
               </Badge>
             ) : (
-              <Badge className="bg-brand-50 text-brand-700 border-brand-200 text-xs font-semibold">
-                Liberada para Estudo
+              <Badge
+                variant="outline"
+                className="text-slate-400 border-slate-200 text-xs font-medium"
+              >
+                Bloqueada (Aguardando RH)
               </Badge>
             )}
           </div>
@@ -565,7 +650,309 @@ export default function ColaboradorPublico() {
                 da sua área estarão disponíveis aqui.
               </p>
             </div>
+          ) : fasesSetor.length > 0 ? (
+            /* PROGRESSÃO DE FASES ORDENADAS COM TRAVA SEQUENCIAL PARA O COLABORADOR */
+            <div className="space-y-5">
+              {fasesStatusColaborador.map((faseStatus) => {
+                const {
+                  fase,
+                  index,
+                  itens,
+                  totalItens,
+                  confirmados,
+                  estaCompleta,
+                  estaDesbloqueada,
+                } = faseStatus
+
+                return (
+                  <div
+                    key={fase.id}
+                    className={`rounded-2xl border transition-all overflow-hidden ${
+                      !estaDesbloqueada
+                        ? 'bg-slate-50/70 border-slate-200 opacity-80'
+                        : estaCompleta
+                          ? 'bg-emerald-50/20 border-emerald-200 shadow-xs'
+                          : 'bg-white border-brand-200 shadow-sm'
+                    }`}
+                  >
+                    {/* Header da Fase */}
+                    <div
+                      className={`p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                        !estaDesbloqueada
+                          ? 'bg-slate-100/70 border-slate-200 text-slate-500'
+                          : estaCompleta
+                            ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
+                            : 'bg-gradient-to-r from-brand-50/70 to-white border-brand-100 text-slate-900'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span
+                          className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 ${
+                            !estaDesbloqueada
+                              ? 'bg-slate-300 text-slate-600'
+                              : estaCompleta
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-brand-600 text-white'
+                          }`}
+                        >
+                          {!estaDesbloqueada ? (
+                            <Lock className="w-3.5 h-3.5" />
+                          ) : estaCompleta ? (
+                            <CheckCircle2 className="w-4 h-4" />
+                          ) : (
+                            index + 1
+                          )}
+                        </span>
+
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-bold text-sm">
+                              Fase {index + 1}: {fase.titulo}
+                            </h4>
+                            {!estaDesbloqueada ? (
+                              <span className="text-[10px] font-semibold bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                <Lock className="w-3 h-3" /> Aguardando Liberação
+                              </span>
+                            ) : estaCompleta ? (
+                              <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" /> Fase Concluída ({confirmados}/
+                                {totalItens})
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-semibold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                Em Andamento ({confirmados}/{totalItens} confirmados)
+                              </span>
+                            )}
+                          </div>
+                          {fase.descricao && (
+                            <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                              {fase.descricao}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Conteúdo / Itens da Fase */}
+                    {!estaDesbloqueada ? (
+                      <div className="p-4 bg-slate-50/70 flex items-center gap-2 text-xs text-slate-500 italic">
+                        <Lock className="w-4 h-4 text-slate-400 shrink-0" />
+                        <span>
+                          Conclua a confirmação de todos os itens da fase anterior para liberar o
+                          conteúdo e as ações desta fase.
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-100 bg-white">
+                        {itens.length === 0 ? (
+                          <div className="p-4 text-center text-xs text-slate-400">
+                            Nenhum item adicionado nesta fase.
+                          </div>
+                        ) : (
+                          itens.map((item) => {
+                            const conf = confirmacoes[item.id]
+                            const fileUrl = tarefaService.getFileUrl(item)
+                            const isConfirmando = confirmandoId === item.id
+
+                            return (
+                              <div
+                                key={item.id}
+                                className={`p-4 transition-all ${
+                                  conf ? 'bg-emerald-50/15' : 'hover:bg-slate-50/60'
+                                }`}
+                              >
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                                    <div
+                                      className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                                        item.tipo === 'video'
+                                          ? 'bg-purple-50 text-purple-600'
+                                          : 'bg-brand-50 text-brand-600'
+                                      }`}
+                                    >
+                                      {item.tipo === 'video' ? (
+                                        <Video className="w-5 h-5" />
+                                      ) : (
+                                        <FileText className="w-5 h-5" />
+                                      )}
+                                    </div>
+
+                                    <div className="space-y-1 min-w-0 flex-1">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-bold text-slate-900 truncate">
+                                          {item.titulo}
+                                        </span>
+                                        <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
+                                          {item.tipo === 'video'
+                                            ? 'Vídeo Técnico'
+                                            : 'Manual de Procedimento'}
+                                        </span>
+                                      </div>
+
+                                      {item.descricao && (
+                                        <p className="text-xs text-slate-600 leading-relaxed max-w-xl">
+                                          {item.descricao}
+                                        </p>
+                                      )}
+
+                                      <div className="pt-1 flex items-center gap-2">
+                                        {conf ? (
+                                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
+                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                            Confirmado em{' '}
+                                            {formatDateTime(conf.confirmado_em || conf.created)}
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 font-medium">
+                                            <Clock className="w-3.5 h-3.5" />
+                                            Aguardando sua visualização e confirmação
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() =>
+                                        openPreview({
+                                          titulo: item.titulo,
+                                          tipo: item.tipo,
+                                          url: fileUrl,
+                                          descricao: item.descricao,
+                                          tarefaId: item.id,
+                                        })
+                                      }
+                                      className="h-9 text-xs text-brand-700 border-brand-200 hover:bg-brand-50"
+                                    >
+                                      {item.tipo === 'video' ? 'Assistir' : 'Abrir/Ler'}
+                                    </Button>
+
+                                    {!conf ? (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        disabled={isConfirmando}
+                                        onClick={() => handleConfirmar(item.id)}
+                                        className="h-9 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                                      >
+                                        <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                                        {isConfirmando
+                                          ? 'Registrando...'
+                                          : 'Confirmo que assisti/li'}
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        disabled
+                                        className="h-9 text-xs text-emerald-700 font-semibold bg-emerald-50 cursor-default"
+                                      >
+                                        <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                                        Já Confirmado
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+
+              {/* Itens avulsos da Etapa 2 se existirem */}
+              {tarefasEtapa2SemFase.length > 0 && (
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 p-4 space-y-3">
+                  <div className="border-b border-slate-200 pb-2">
+                    <h4 className="font-bold text-xs text-slate-700">
+                      Atividades Complementares da Área
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      Itens gerais de vivência técnica disponíveis para confirmação
+                    </p>
+                  </div>
+                  <div className="divide-y divide-slate-100 bg-white rounded-xl border border-slate-200 overflow-hidden">
+                    {tarefasEtapa2SemFase.map((item) => {
+                      const conf = confirmacoes[item.id]
+                      const fileUrl = tarefaService.getFileUrl(item)
+                      const isConfirmando = confirmandoId === item.id
+
+                      return (
+                        <div
+                          key={item.id}
+                          className="p-3.5 flex items-center justify-between gap-3"
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className="w-8 h-8 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
+                              <FileText className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-xs font-bold text-slate-900 block truncate">
+                                {item.titulo}
+                              </span>
+                              {conf ? (
+                                <span className="text-[10px] text-emerald-700 font-semibold inline-flex items-center gap-1 mt-0.5">
+                                  <CheckCircle2 className="w-3 h-3" /> Confirmado
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-amber-700 inline-flex items-center gap-1 mt-0.5">
+                                  <Clock className="w-3 h-3" /> Pendente
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                openPreview({
+                                  titulo: item.titulo,
+                                  tipo: item.tipo,
+                                  url: fileUrl,
+                                  descricao: item.descricao,
+                                  tarefaId: item.id,
+                                })
+                              }
+                              className="h-8 text-xs text-brand-700"
+                            >
+                              Ver
+                            </Button>
+                            {!conf ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={isConfirmando}
+                                onClick={() => handleConfirmar(item.id)}
+                                className="h-8 text-xs bg-emerald-600 text-white font-semibold"
+                              >
+                                Confirmar
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-emerald-700 font-semibold px-2">
+                                OK
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
+            /* Modo plano para áreas sem fases (ex: RH, Comercial) */
             <div className="space-y-3">
               {tarefasEtapa2.length === 0 ? (
                 <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
@@ -688,7 +1075,6 @@ export default function ColaboradorPublico() {
             </div>
           )}
         </section>
-
         {/* Rodapé informativo */}
         <div className="text-center text-xs text-slate-400 py-4 space-y-1">
           <div className="flex items-center justify-center gap-2 mb-1">
