@@ -19,6 +19,7 @@ import ModelosTarefas from './pages/ModelosTarefas'
 import Avaliacoes from './pages/Avaliacoes'
 import Colaboradores from './pages/Colaboradores'
 import Usuarios from './pages/Usuarios'
+import Logs from './pages/Logs'
 import ColaboradorPublico from './pages/ColaboradorPublico'
 import NotFound from './pages/NotFound'
 
@@ -58,6 +59,14 @@ const App = () => (
               }
             />
             <Route path="/avaliacoes" element={<Avaliacoes />} />
+            <Route
+              path="/logs"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <Logs />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/usuarios"
               element={

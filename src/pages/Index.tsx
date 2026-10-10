@@ -62,6 +62,7 @@ export default function Index() {
 
   // Métricas
   const emAndamento = onboardings.filter((o) => o.status === 'em_andamento').length
+  const emAcompanhamento = onboardings.filter((o) => o.status === 'em_acompanhamento').length
   const concluidos = onboardings.filter((o) => o.status === 'concluido').length
   const aguardandoAvaliacao = onboardings.filter((o) => o.status === 'avaliacao_pendente').length
   const naoAptos = onboardings.filter((o) => o.status === 'nao_apto').length
@@ -266,97 +267,120 @@ export default function Index() {
         </div>
       </div>
 
-      {/* 4 Cards de Resumo Clicáveis */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 5 Cards de Resumo Clicáveis (incluindo Em Acompanhamento) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Em andamento */}
         <div
           onClick={() => navigate('/onboardings?status=em_andamento')}
-          className="bg-white p-5 rounded-xl border border-gray-200/90 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group"
+          className="bg-white p-4 rounded-xl border border-gray-200/90 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
               Em andamento
             </span>
-            <div className="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center group-hover:bg-brand-600 group-hover:text-white transition-colors">
-              <Clock className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center group-hover:bg-brand-600 group-hover:text-white transition-colors">
+              <Clock className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-[#1A2233]">{emAndamento}</span>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-extrabold text-[#1A2233]">{emAndamento}</span>
             <span className="text-xs text-gray-400 font-medium">técnicos</span>
           </div>
-          <div className="mt-2 text-xs text-blue-600 font-medium flex items-center gap-1 group-hover:underline">
+          <div className="mt-1.5 text-xs text-blue-600 font-medium flex items-center gap-1 group-hover:underline">
             <span>Ver lista</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            <ArrowRight className="w-3 h-3" />
+          </div>
+        </div>
+
+        {/* Em acompanhamento (Âmbar) */}
+        <div
+          onClick={() => navigate('/onboardings?status=em_acompanhamento')}
+          className="bg-white p-4 rounded-xl border border-amber-200/90 bg-amber-50/20 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-800">
+              Acompanhamento
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition-colors">
+              <AlertCircle className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-extrabold text-[#1A2233]">{emAcompanhamento}</span>
+            <span className="text-xs text-amber-600 font-medium">reavaliação</span>
+          </div>
+          <div className="mt-1.5 text-xs text-amber-700 font-medium flex items-center gap-1 group-hover:underline">
+            <span>Ver pendentes</span>
+            <ArrowRight className="w-3 h-3" />
           </div>
         </div>
 
         {/* Concluídos */}
         <div
           onClick={() => navigate('/onboardings?status=concluido')}
-          className="bg-white p-5 rounded-xl border border-gray-200/90 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group"
+          className="bg-white p-4 rounded-xl border border-gray-200/90 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
               Concluídos (Aptos)
             </span>
-            <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-              <CheckCircle2 className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+              <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-[#1A2233]">{concluidos}</span>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-extrabold text-[#1A2233]">{concluidos}</span>
             <span className="text-xs text-gray-400 font-medium">liberados</span>
           </div>
-          <div className="mt-2 text-xs text-emerald-600 font-medium flex items-center gap-1 group-hover:underline">
+          <div className="mt-1.5 text-xs text-emerald-600 font-medium flex items-center gap-1 group-hover:underline">
             <span>Ver aprovados</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            <ArrowRight className="w-3 h-3" />
           </div>
         </div>
 
         {/* Aguardando avaliação */}
         <div
           onClick={() => navigate('/onboardings?status=avaliacao_pendente')}
-          className="bg-white p-5 rounded-xl border border-gray-200/90 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group"
+          className="bg-white p-4 rounded-xl border border-gray-200/90 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
               Aguardando Avaliação
             </span>
-            <div className="w-9 h-9 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition-colors">
-              <AlertTriangle className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center group-hover:bg-purple-600 group-hover:text-white transition-colors">
+              <AlertTriangle className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-[#1A2233]">{aguardandoAvaliacao}</span>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-extrabold text-[#1A2233]">{aguardandoAvaliacao}</span>
             <span className="text-xs text-gray-400 font-medium">etapa 3</span>
           </div>
-          <div className="mt-2 text-xs text-amber-600 font-medium flex items-center gap-1 group-hover:underline">
+          <div className="mt-1.5 text-xs text-purple-600 font-medium flex items-center gap-1 group-hover:underline">
             <span>Avaliar agora</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            <ArrowRight className="w-3 h-3" />
           </div>
         </div>
 
         {/* Não aptos */}
         <div
           onClick={() => navigate('/onboardings?status=nao_apto')}
-          className="bg-white p-5 rounded-xl border border-gray-200/90 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group"
+          className="bg-white p-4 rounded-xl border border-gray-200/90 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
               Não Aptos
             </span>
-            <div className="w-9 h-9 rounded-lg bg-red-50 text-red-600 flex items-center justify-center group-hover:bg-red-600 group-hover:text-white transition-colors">
-              <XCircle className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center group-hover:bg-red-600 group-hover:text-white transition-colors">
+              <XCircle className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-[#1A2233]">{naoAptos}</span>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-extrabold text-[#1A2233]">{naoAptos}</span>
             <span className="text-xs text-gray-400 font-medium">reprovados</span>
           </div>
-          <div className="mt-2 text-xs text-red-600 font-medium flex items-center gap-1 group-hover:underline">
+          <div className="mt-1.5 text-xs text-red-600 font-medium flex items-center gap-1 group-hover:underline">
             <span>Ver detalhes</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            <ArrowRight className="w-3 h-3" />
           </div>
         </div>
       </div>

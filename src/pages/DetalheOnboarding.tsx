@@ -8,6 +8,7 @@ import {
   confirmacaoColaboradorService,
   materialService,
   faseService,
+  auditoriaService,
 } from '@/services/onboarding'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -19,6 +20,8 @@ import type {
   TarefaTipo,
   ConfirmacaoColaborador,
   FaseModelo,
+  LogAuditoria,
+  FaseConcluidaInfo,
 } from '@/types/onboarding'
 import { SETORES_INFO, STATUS_INFO, getSetorVisual } from '@/types/onboarding'
 import {
@@ -80,6 +83,17 @@ export default function DetalheOnboarding() {
   // Estados de ações
   const [concluindoEtapa1, setConcluindoEtapa1] = useState(false)
   const [concluindoEtapa2, setConcluindoEtapa2] = useState(false)
+  const [concluindoFaseId, setConcluindoFaseId] = useState<string | null>(null)
+
+  // Aba ativa: 'etapas' ou 'auditoria'
+  const [abaAtiva, setAbaAtiva] = useState<'etapas' | 'auditoria'>('etapas')
+  const [logsAuditoria, setLogsAuditoria] = useState<LogAuditoria[]>([])
+  const [loadingLogs, setLoadingLogs] = useState(false)
+
+  // Estado para fluxo "Não Apto" na Avaliação
+  const [faseRetornoId, setFaseRetornoId] = useState<string>('')
+  const [prazoSuplementarDias, setPrazoSuplementarDias] = useState<number>(5)
+  const [naoAptoDefinitivo, setNaoAptoDefinitivo] = useState(false)
 
   // Modal de Adicionar Item (Etapa 1 ou Etapa 2)
   const [modalItemOpen, setModalItemOpen] = useState(false)
@@ -143,9 +157,28 @@ export default function DetalheOnboarding() {
     }
   }
 
+  const carregarLogs = async () => {
+    if (!id) return
+    setLoadingLogs(true)
+    try {
+      const logs = await auditoriaService.listByOnboarding(id)
+      setLogsAuditoria(logs)
+    } catch (e) {
+      console.error('Erro ao carregar logs:', e)
+    } finally {
+      setLoadingLogs(false)
+    }
+  }
+
   useEffect(() => {
     fetchData()
   }, [id])
+
+  useEffect(() => {
+    if (abaAtiva === 'auditoria') {
+      carregarLogs()
+    }
+  }, [abaAtiva, id])
 
   // Realtime para refletir mudanças sincronizadas
   useRealtime<Onboarding>('onboardings', () => {
@@ -231,13 +264,18 @@ export default function DetalheOnboarding() {
       const concluidos = itensDaFase.filter((t) => t.concluida).length
       const confirmadosColab = itensDaFase.filter((t) => Boolean(confirmacoes[t.id])).length
 
-      // Uma fase é considerada completa quando todos os itens estão concluídos (ou confirmados)
-      const estaCompleta = totalItens > 0 && concluidos === totalItens
+      // Verificar se a fase já foi registrada como concluída em fases_concluidas
+      const registroConclusao = onboarding?.fases_concluidas?.find((f) => f.fase_id === fase.id)
+
+      // Uma fase é considerada completa se foi registrada em fases_concluidas OU se tem itens e todos concluídos
+      const todosItensConcluidos = totalItens === 0 || concluidos === totalItens
+      const estaCompleta =
+        Boolean(registroConclusao) || (totalItens > 0 && concluidos === totalItens)
 
       const estaDesbloqueada = faseAnteriorCompleta
 
       // Para a próxima fase: ela só desbloqueia se esta fase estiver completa
-      if (!estaCompleta && totalItens > 0) {
+      if (!estaCompleta) {
         faseAnteriorCompleta = false
       }
 
@@ -250,9 +288,11 @@ export default function DetalheOnboarding() {
         confirmadosColab,
         estaCompleta,
         estaDesbloqueada,
+        registroConclusao,
+        podeConcluirFase: estaDesbloqueada && !registroConclusao && todosItensConcluidos,
       }
     })
-  }, [fasesSetor, tarefasEtapa2, confirmacoes])
+  }, [fasesSetor, tarefasEtapa2, confirmacoes, onboarding?.fases_concluidas])
 
   // Indicador da fase atual em andamento (ex: "Fase 2 de 5 — Shadowing Ativo")
   const faseAtualInfo = useMemo(() => {
@@ -365,6 +405,20 @@ export default function DetalheOnboarding() {
     try {
       setConcluindoEtapa1(true)
       await onboardingService.concluirEtapa1(onboarding.id, user.id)
+
+      // Registrar auditoria
+      await auditoriaService.registrar({
+        onboardingId: onboarding.id,
+        colaboradorNome: onboarding.colaborador_nome,
+        usuarioId: user.id,
+        usuarioNome: user.name || user.email,
+        usuarioRole: role || '',
+        gestorNome: onboarding.expand?.gestor_id?.name || '',
+        acao: 'Etapa 1 Concluída (RH)',
+        detalhes: 'Integração institucional finalizada e Etapa 2 liberada ao gestor.',
+        foraPrazo: false,
+      })
+
       toast.success(
         'Etapa 1 concluída com sucesso! O gestor responsável receberá uma notificação por e-mail com a liberação da Etapa 2.',
       )
@@ -374,6 +428,46 @@ export default function DetalheOnboarding() {
       toast.error('Erro ao concluir Etapa 1.')
     } finally {
       setConcluindoEtapa1(false)
+    }
+  }
+
+  // Concluir Fase Uniforme da Etapa 2
+  const handleConcluirFase = async (fase: FaseModelo, index: number) => {
+    if (!onboarding || !user) return
+    if (!podeGerenciarEtapa2e3) {
+      toast.error('Conclusão restrita ao gestor responsável e administrador.')
+      return
+    }
+
+    // Identificar a data planejada limite no cronograma_fases (se houver)
+    const itemCronograma = onboarding.cronograma_fases?.find((c) => c.fase_id === fase.id)
+    const dataLimite = itemCronograma?.data_limite
+
+    try {
+      setConcluindoFaseId(fase.id)
+      const res = await onboardingService.concluirFase({
+        onboardingId: onboarding.id,
+        faseId: fase.id,
+        faseTitulo: fase.titulo,
+        usuarioId: user.id,
+        usuarioNome: user.name || user.email,
+        usuarioRole: role || '',
+        gestorNome: onboarding.expand?.gestor_id?.name || '',
+        colaboradorNome: onboarding.colaborador_nome,
+        diasPlanejados: fase.dias_previstos || 2,
+        dataPlanejadaLimite: dataLimite,
+      })
+
+      setOnboarding(res.onboarding)
+      toast.success(
+        `Fase "${fase.titulo}" concluída com sucesso! ${res.faseInfo.destaque_prazo ? `(${res.faseInfo.destaque_prazo})` : ''}`,
+      )
+      fetchData()
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao concluir fase.')
+    } finally {
+      setConcluindoFaseId(null)
     }
   }
 
@@ -417,6 +511,21 @@ export default function DetalheOnboarding() {
     try {
       setConcluindoEtapa2(true)
       await onboardingService.concluirEtapa2(onboarding.id, user.id)
+
+      // Registrar auditoria
+      await auditoriaService.registrar({
+        onboardingId: onboarding.id,
+        colaboradorNome: onboarding.colaborador_nome,
+        usuarioId: user.id,
+        usuarioNome: user.name || user.email,
+        usuarioRole: role || '',
+        gestorNome: onboarding.expand?.gestor_id?.name || '',
+        acao: 'Etapa 2 Concluída (Vivência Técnica)',
+        detalhes:
+          'Todas as fases e tarefas técnicas cumpridas. Liberada Avaliação Final (Etapa 3).',
+        foraPrazo: false,
+      })
+
       toast.success(
         'Etapa 2 (Vivência Técnica) concluída! O gestor responsável receberá uma notificação por e-mail para realizar a Avaliação Final.',
       )
@@ -566,6 +675,14 @@ export default function DetalheOnboarding() {
       return
     }
 
+    const reavaliacoesCount = onboarding.reavaliacoes_count || 0
+    const atingiuTeto = reavaliacoesCount >= 2
+
+    if (decisaoAvaliacao === 'nao_apto' && !atingiuTeto && !naoAptoDefinitivo && !faseRetornoId) {
+      toast.error('Selecione a fase de retorno para o colaborador.')
+      return
+    }
+
     try {
       setSalvandoAvaliacao(true)
       const res = await avaliacaoService.registrarDecisao({
@@ -573,15 +690,52 @@ export default function DetalheOnboarding() {
         avaliadorId: user.id,
         decisao: decisaoAvaliacao,
         observacoes: observacoesAvaliacao.trim(),
+        faseRetornoId: decisaoAvaliacao === 'nao_apto' ? faseRetornoId : undefined,
+        prazoSuplementarDias: decisaoAvaliacao === 'nao_apto' ? prazoSuplementarDias : undefined,
+        definitivo: decisaoAvaliacao === 'nao_apto' ? atingiuTeto || naoAptoDefinitivo : false,
       })
 
       setAvaliacao(res.avaliacao)
       setOnboarding(res.onboarding)
-      toast.success(
-        decisaoAvaliacao === 'apto'
-          ? 'Avaliação registrada! Colaborador marcado como Apto. Notificação por e-mail enviada para o RH e Administração.'
-          : 'Avaliação registrada! Colaborador marcado como Não Apto. Notificação por e-mail enviada para o RH e Administração.',
-      )
+
+      // Identificar título da fase de retorno se houver
+      const faseRetornoObj = fasesSetor.find((f) => f.id === faseRetornoId)
+
+      // Auditoria
+      await auditoriaService.registrar({
+        onboardingId: onboarding.id,
+        colaboradorNome: onboarding.colaborador_nome,
+        usuarioId: user.id,
+        usuarioNome: user.name || user.email,
+        usuarioRole: role || '',
+        gestorNome: onboarding.expand?.gestor_id?.name || '',
+        acao:
+          decisaoAvaliacao === 'apto'
+            ? 'Avaliação: Aprovado (Apto)'
+            : atingiuTeto || naoAptoDefinitivo
+              ? 'Avaliação: Não Apto Definitivo'
+              : `Avaliação: Não Apto (Retorno à fase ${faseRetornoObj?.titulo || 'técnica'})`,
+        detalhes:
+          decisaoAvaliacao === 'apto'
+            ? `Colaborador aprovado como APTO. Parecer: ${observacoesAvaliacao.trim() || 'Sem observações'}`
+            : atingiuTeto || naoAptoDefinitivo
+              ? `Reprovado em caráter definitivo após ${reavaliacoesCount + 1} ciclos. Parecer: ${observacoesAvaliacao.trim() || 'Sem observações'}`
+              : `Retorno para a fase "${faseRetornoObj?.titulo || 'selecionada'}" com +${prazoSuplementarDias} dias de prazo suplementar. Status: Em acompanhamento. Parecer: ${observacoesAvaliacao.trim() || 'Sem observações'}`,
+        foraPrazo: false,
+      })
+
+      if (decisaoAvaliacao === 'apto') {
+        toast.success(
+          'Avaliação registrada! Colaborador marcado como Apto. Notificação por e-mail enviada para o RH e Administração.',
+        )
+      } else if (atingiuTeto || naoAptoDefinitivo) {
+        toast.error('Avaliação registrada! Colaborador marcado como Não Apto Definitivo.')
+      } else {
+        toast.info(
+          `Colaborador retornou para acompanhamento na fase "${faseRetornoObj?.titulo || 'selecionada'}" com +${prazoSuplementarDias} dias suplementares.`,
+        )
+      }
+      fetchData()
     } catch (err) {
       console.error(err)
       const msg = getErrorMessage(err)
@@ -781,1239 +935,1554 @@ export default function DetalheOnboarding() {
           </div>
           <Progress value={progressoPercent} className="h-2.5 rounded-full" />
         </div>
+
+        {/* Abas Superiores: Etapas & Treinamento / Histórico & Auditoria */}
+        <div className="pt-3 border-t border-gray-100 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setAbaAtiva('etapas')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              abaAtiva === 'etapas'
+                ? 'bg-brand-600 text-white shadow-xs'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Etapas & Fases do Treinamento</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAbaAtiva('auditoria')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              abaAtiva === 'auditoria'
+                ? 'bg-brand-600 text-white shadow-xs'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Histórico & Auditoria</span>
+            {logsAuditoria.length > 0 && (
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  abaAtiva === 'auditoria' ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'
+                }`}
+              >
+                {logsAuditoria.length}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
-      {/* Layout Principal: 3 Etapas Conectadas (2 colunas) + Timeline Lateral (1 coluna) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Coluna das 3 Etapas */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* ETAPA 1 — APRESENTAÇÃO DA EMPRESA (RH) */}
-          <div
-            className={`bg-white rounded-xl border p-6 shadow-sm transition-all relative ${
-              onboarding.etapa1_concluida
-                ? 'border-emerald-200 bg-emerald-50/10'
-                : 'border-brand-200 ring-1 ring-brand-100'
-            }`}
-          >
-            {/* Header da Etapa */}
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm ${
-                    onboarding.etapa1_concluida
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-brand-600 text-white'
-                  }`}
-                >
-                  {onboarding.etapa1_concluida ? <CheckCircle2 className="w-5 h-5" /> : '1'}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base font-bold text-[#1A2233]">
-                      Etapa 1 — Apresentação da Empresa
-                    </h3>
-                    <Badge
-                      variant="outline"
-                      className="text-[11px] font-semibold bg-indigo-50/70 text-indigo-700 border-indigo-200"
-                    >
-                      {confirmacoesEtapa1} de {tarefasEtapa1.length} confirmados pelo colaborador
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Conduzida e validada pelo setor de RH • Integração institucional
-                  </p>
-                </div>
-              </div>
-
-              {onboarding.etapa1_concluida ? (
-                <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 text-xs font-semibold">
-                  Concluída em {formatShortDate(onboarding.data_conclusao_etapa1)}
-                </Badge>
-              ) : (
-                <Badge className="bg-brand-50 text-brand-700 hover:bg-brand-50 text-xs font-semibold">
-                  Em andamento
-                </Badge>
-              )}
+      {/* Exibição condicional da Aba Histórico & Auditoria */}
+      {abaAtiva === 'auditoria' ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+            <div>
+              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-brand-600" />
+                <span>Trilha de Auditoria & Histórico de Conclusões</span>
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Registro imutável de todas as etapas, fases concluídas, decisões de avaliação e
+                conformidade de prazo.
+              </p>
             </div>
-
-            {/* Ações de topo da Etapa 1: Adicionar item de upload */}
-            {!onboarding.etapa1_concluida && (
-              <div className="flex justify-between items-center mb-3 pt-1">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  Materiais & Validações do RH
-                </span>
-                {podeGerenciarEtapa1 ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => openAddItemModal(1)}
-                    className="h-8 text-xs text-brand-700 border-brand-200 hover:bg-brand-50"
-                  >
-                    <Upload className="w-3.5 h-3.5 mr-1" />
-                    Adicionar item (upload)
-                  </Button>
-                ) : (
-                  <span className="text-[11px] text-gray-400 italic">
-                    (Modo visualização — condução do RH)
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Lista de itens da Etapa 1 */}
-            <div className="divide-y divide-gray-100 mb-5">
-              {tarefasEtapa1.length === 0 ? (
-                <div className="py-6 text-center text-gray-400 text-xs">
-                  Nenhum item configurado para a Etapa 1.
-                </div>
-              ) : (
-                tarefasEtapa1.map((item) => {
-                  const fileUrl = tarefaService.getFileUrl(item)
-                  const checked = onboarding.etapa1_concluida || item.concluida
-
-                  return (
-                    <div
-                      key={item.id}
-                      className="py-3 flex items-start justify-between gap-3 group"
-                    >
-                      <div className="flex items-start gap-3 flex-1">
-                        <button
-                          type="button"
-                          disabled={onboarding.etapa1_concluida || !podeGerenciarEtapa1}
-                          onClick={() => handleToggleTarefa(item)}
-                          className={`mt-0.5 text-gray-400 transition-transform ${
-                            podeGerenciarEtapa1 && !onboarding.etapa1_concluida
-                              ? 'hover:text-brand-600 active:scale-95'
-                              : 'cursor-default opacity-80'
-                          }`}
-                          aria-label="Marcar item"
-                          title={
-                            !podeGerenciarEtapa1
-                              ? 'Apenas RH ou Administrador podem marcar itens da Etapa 1'
-                              : undefined
-                          }
-                        >
-                          {checked ? (
-                            <CheckCircle2 className="w-5 h-5 text-emerald-600 animate-fade-in" />
-                          ) : (
-                            <Square className="w-5 h-5 text-gray-300" />
-                          )}
-                        </button>
-
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {item.tipo === 'video' ? (
-                              <Video className="w-4 h-4 text-purple-600 shrink-0" />
-                            ) : (
-                              <FileText className="w-4 h-4 text-brand-600 shrink-0" />
-                            )}
-                            <span
-                              className={`text-sm font-semibold ${
-                                checked ? 'text-gray-500 line-through' : 'text-gray-800'
-                              }`}
-                            >
-                              {item.titulo}
-                            </span>
-                            {item.conteudo_url ? (
-                              <span className="text-[10px] bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded font-medium">
-                                Arquivo próprio
-                              </span>
-                            ) : item.material ? (
-                              <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-medium">
-                                Material biblioteca
-                              </span>
-                            ) : (
-                              <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-medium">
-                                Sem arquivo
-                              </span>
-                            )}
-                          </div>
-                          {item.descricao && (
-                            <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
-                              {item.descricao}
-                            </p>
-                          )}
-                          {/* Estado de Confirmação do Colaborador vs. Marcação do RH */}
-                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                            {confirmacoes[item.id] ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                Confirmado pelo colaborador em{' '}
-                                {formatDate(
-                                  confirmacoes[item.id].confirmado_em ||
-                                    confirmacoes[item.id].created,
-                                )}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-medium">
-                                <Clock className="w-3 h-3" />
-                                Aguardando confirmação do colaborador
-                              </span>
-                            )}
-
-                            {item.concluida_em && (
-                              <span className="text-[11px] text-gray-500">
-                                • Validado RH em {formatDate(item.concluida_em)}
-                              </span>
-                            )}
-                          </div>{' '}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            openPreview({
-                              titulo: item.titulo,
-                              tipo: item.tipo,
-                              url: fileUrl,
-                            })
-                          }
-                          className="h-8 text-xs text-brand-600 hover:text-brand-700 shrink-0"
-                        >
-                          <Eye className="w-3.5 h-3.5 mr-1" />
-                          Visualizar
-                        </Button>
-
-                        {!item.criado_automaticamente &&
-                          !onboarding.etapa1_concluida &&
-                          podeGerenciarEtapa1 && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteTarefa(item.id, 1)}
-                              className="h-8 w-8 text-gray-400 hover:text-red-600"
-                              aria-label="Excluir item"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          )}
-                      </div>
-                    </div>
-                  )
-                })
-              )}
+            <div className="text-xs text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-gray-400" />
+              <span>Registros mantidos por 6 meses</span>
             </div>
-
-            {/* Ação Concluir Etapa 1 */}
-            {!onboarding.etapa1_concluida && (
-              <div className="pt-3 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <span className="text-xs text-gray-500">
-                  {!podeGerenciarEtapa1
-                    ? 'O Gestor acompanha esta etapa em modo leitura. A conclusão cabe ao RH ou Administrador.'
-                    : allEtapa1Checked
-                      ? 'Todos os itens conferidos! O RH pode concluir a etapa e repassar ao Gestor.'
-                      : 'Marque todos os itens acima para liberar a conclusão.'}
-                </span>
-
-                {podeGerenciarEtapa1 ? (
-                  <Button
-                    onClick={handleConcluirEtapa1}
-                    disabled={!allEtapa1Checked || concluindoEtapa1}
-                    className="bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm"
-                  >
-                    {concluindoEtapa1 ? (
-                      <span>Concluindo...</span>
-                    ) : (
-                      <span>Concluir Etapa 1 (RH)</span>
-                    )}
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    disabled
-                    className="text-xs text-gray-400 border-gray-200"
-                    title="Apenas RH ou Administrador podem concluir a Etapa 1."
-                  >
-                    Somente RH / Admin
-                  </Button>
-                )}
-              </div>
-            )}
           </div>
 
-          {/* Linha conectora vertical */}
-          <div className="w-0.5 h-4 bg-gray-200 mx-auto" />
-
-          {/* ETAPA 2 — VIVÊNCIA TÉCNICA (POR SETOR) */}
-          <div
-            className={`bg-white rounded-xl border p-6 shadow-sm transition-all ${
-              !onboarding.etapa1_concluida
-                ? 'opacity-60 bg-gray-50/50 border-gray-200'
-                : onboarding.etapa2_concluida
-                  ? 'border-emerald-200 bg-emerald-50/10'
-                  : 'border-blue-200 ring-1 ring-blue-100'
-            }`}
-          >
-            {/* Header Etapa 2 */}
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <div className="flex items-center gap-3">
+          {loadingLogs ? (
+            <div className="py-12 text-center text-xs text-gray-500">
+              <div className="w-6 h-6 border-2 border-brand-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+              Carregando registros de auditoria...
+            </div>
+          ) : logsAuditoria.length === 0 ? (
+            <div className="py-12 text-center text-xs text-gray-400">
+              <ShieldCheck className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+              Nenhum registro de auditoria registrado para este onboarding ainda.
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {logsAuditoria.map((log) => (
                 <div
-                  className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm ${
-                    !onboarding.etapa1_concluida
-                      ? 'bg-gray-300 text-gray-600'
-                      : onboarding.etapa2_concluida
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-blue-600 text-white'
-                  }`}
+                  key={log.id}
+                  className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 >
-                  {!onboarding.etapa1_concluida ? (
-                    <Lock className="w-4 h-4" />
-                  ) : onboarding.etapa2_concluida ? (
-                    <CheckCircle2 className="w-5 h-5" />
-                  ) : (
-                    '2'
-                  )}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base font-bold text-[#1A2233]">
-                      Etapa 2 — Vivência Técnica ({setorInfo.nome})
-                    </h3>
-                    {faseAtualInfo && (
-                      <span className="text-[11px] font-bold bg-brand-50 text-brand-700 border border-brand-200 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
-                        <Layers className="w-3 h-3 text-brand-600" />
-                        {faseAtualInfo}
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-xs text-gray-900">{log.acao}</span>
+                      {log.fora_prazo ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-100 text-red-800 border border-red-200 inline-flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 text-red-600" />
+                          Fora do Prazo
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          No Prazo
+                        </span>
+                      )}
+                      {log.destaque_prazo && (
+                        <span className="text-[11px] text-gray-500 font-medium">
+                          • {log.destaque_prazo}
+                        </span>
+                      )}
+                    </div>
+                    {log.detalhes && <p className="text-xs text-gray-600">{log.detalhes}</p>}
+                    <div className="text-[11px] text-gray-400 flex items-center gap-3">
+                      <span>
+                        Executado por: <strong>{log.usuario_nome || 'Sistema'}</strong> (
+                        {log.usuario_role || 'gestor'})
                       </span>
-                    )}
-                    <Badge
-                      variant="outline"
-                      className="text-[11px] font-semibold bg-indigo-50/70 text-indigo-700 border-indigo-200"
-                    >
-                      {confirmacoesEtapa2} de {tarefasEtapa2.length} confirmados pelo colaborador
-                    </Badge>
+                      {log.gestor_nome && <span>• Gestor: {log.gestor_nome}</span>}
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {fasesSetor.length > 0
-                      ? 'Progressão estruturada por fases sequenciais obrigatórias com confirmação prática.'
-                      : 'Movidesk (chamados), Passportal (documentação), shadow técnico e atuação assistida.'}
-                  </p>
+
+                  <div className="text-right shrink-0 text-xs text-gray-400 font-mono">
+                    {formatDate(log.created)}
+                  </div>
                 </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Layout Principal: 3 Etapas Conectadas (2 colunas) + Timeline Lateral (1 coluna) */
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Coluna das 3 Etapas */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* ETAPA 1 — APRESENTAÇÃO DA EMPRESA (RH) */}
+            <div
+              className={`bg-white rounded-xl border p-6 shadow-sm transition-all relative ${
+                onboarding.etapa1_concluida
+                  ? 'border-emerald-200 bg-emerald-50/10'
+                  : 'border-brand-200 ring-1 ring-brand-100'
+              }`}
+            >
+              {/* Header da Etapa */}
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm ${
+                      onboarding.etapa1_concluida
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-brand-600 text-white'
+                    }`}
+                  >
+                    {onboarding.etapa1_concluida ? <CheckCircle2 className="w-5 h-5" /> : '1'}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-base font-bold text-[#1A2233]">
+                        Etapa 1 — Apresentação da Empresa
+                      </h3>
+                      <Badge
+                        variant="outline"
+                        className="text-[11px] font-semibold bg-indigo-50/70 text-indigo-700 border-indigo-200"
+                      >
+                        {confirmacoesEtapa1} de {tarefasEtapa1.length} confirmados pelo colaborador
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Conduzida e validada pelo setor de RH • Integração institucional
+                    </p>
+                  </div>
+                </div>
+
+                {onboarding.etapa1_concluida ? (
+                  <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 text-xs font-semibold">
+                    Concluída em {formatShortDate(onboarding.data_conclusao_etapa1)}
+                  </Badge>
+                ) : (
+                  <Badge className="bg-brand-50 text-brand-700 hover:bg-brand-50 text-xs font-semibold">
+                    Em andamento
+                  </Badge>
+                )}
               </div>
 
-              {!onboarding.etapa1_concluida ? (
-                <Badge variant="outline" className="text-gray-400 text-xs">
-                  Bloqueada
-                </Badge>
-              ) : onboarding.etapa2_concluida ? (
-                <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 text-xs font-semibold">
-                  Concluída em {formatShortDate(onboarding.data_conclusao_etapa2)}
-                </Badge>
-              ) : (
-                <Badge className="bg-brand-50 text-brand-700 hover:bg-brand-50 text-xs font-semibold">
-                  Liberada para atuação
-                </Badge>
+              {/* Ações de topo da Etapa 1: Adicionar item de upload */}
+              {!onboarding.etapa1_concluida && (
+                <div className="flex justify-between items-center mb-3 pt-1">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Materiais & Validações do RH
+                  </span>
+                  {podeGerenciarEtapa1 ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openAddItemModal(1)}
+                      className="h-8 text-xs text-brand-700 border-brand-200 hover:bg-brand-50"
+                    >
+                      <Upload className="w-3.5 h-3.5 mr-1" />
+                      Adicionar item (upload)
+                    </Button>
+                  ) : (
+                    <span className="text-[11px] text-gray-400 italic">
+                      (Modo visualização — condução do RH)
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Lista de itens da Etapa 1 */}
+              <div className="divide-y divide-gray-100 mb-5">
+                {tarefasEtapa1.length === 0 ? (
+                  <div className="py-6 text-center text-gray-400 text-xs">
+                    Nenhum item configurado para a Etapa 1.
+                  </div>
+                ) : (
+                  tarefasEtapa1.map((item) => {
+                    const fileUrl = tarefaService.getFileUrl(item)
+                    const checked = onboarding.etapa1_concluida || item.concluida
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="py-3 flex items-start justify-between gap-3 group"
+                      >
+                        <div className="flex items-start gap-3 flex-1">
+                          <button
+                            type="button"
+                            disabled={onboarding.etapa1_concluida || !podeGerenciarEtapa1}
+                            onClick={() => handleToggleTarefa(item)}
+                            className={`mt-0.5 text-gray-400 transition-transform ${
+                              podeGerenciarEtapa1 && !onboarding.etapa1_concluida
+                                ? 'hover:text-brand-600 active:scale-95'
+                                : 'cursor-default opacity-80'
+                            }`}
+                            aria-label="Marcar item"
+                            title={
+                              !podeGerenciarEtapa1
+                                ? 'Apenas RH ou Administrador podem marcar itens da Etapa 1'
+                                : undefined
+                            }
+                          >
+                            {checked ? (
+                              <CheckCircle2 className="w-5 h-5 text-emerald-600 animate-fade-in" />
+                            ) : (
+                              <Square className="w-5 h-5 text-gray-300" />
+                            )}
+                          </button>
+
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {item.tipo === 'video' ? (
+                                <Video className="w-4 h-4 text-purple-600 shrink-0" />
+                              ) : (
+                                <FileText className="w-4 h-4 text-brand-600 shrink-0" />
+                              )}
+                              <span
+                                className={`text-sm font-semibold ${
+                                  checked ? 'text-gray-500 line-through' : 'text-gray-800'
+                                }`}
+                              >
+                                {item.titulo}
+                              </span>
+                              {item.conteudo_url ? (
+                                <span className="text-[10px] bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded font-medium">
+                                  Arquivo próprio
+                                </span>
+                              ) : item.material ? (
+                                <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-medium">
+                                  Material biblioteca
+                                </span>
+                              ) : (
+                                <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-medium">
+                                  Sem arquivo
+                                </span>
+                              )}
+                            </div>
+                            {item.descricao && (
+                              <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                                {item.descricao}
+                              </p>
+                            )}
+                            {/* Estado de Confirmação do Colaborador vs. Marcação do RH */}
+                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                              {confirmacoes[item.id] ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  Confirmado pelo colaborador em{' '}
+                                  {formatDate(
+                                    confirmacoes[item.id].confirmado_em ||
+                                      confirmacoes[item.id].created,
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-medium">
+                                  <Clock className="w-3 h-3" />
+                                  Aguardando confirmação do colaborador
+                                </span>
+                              )}
+
+                              {item.concluida_em && (
+                                <span className="text-[11px] text-gray-500">
+                                  • Validado RH em {formatDate(item.concluida_em)}
+                                </span>
+                              )}
+                            </div>{' '}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              openPreview({
+                                titulo: item.titulo,
+                                tipo: item.tipo,
+                                url: fileUrl,
+                              })
+                            }
+                            className="h-8 text-xs text-brand-600 hover:text-brand-700 shrink-0"
+                          >
+                            <Eye className="w-3.5 h-3.5 mr-1" />
+                            Visualizar
+                          </Button>
+
+                          {!item.criado_automaticamente &&
+                            !onboarding.etapa1_concluida &&
+                            podeGerenciarEtapa1 && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeleteTarefa(item.id, 1)}
+                                className="h-8 w-8 text-gray-400 hover:text-red-600"
+                                aria-label="Excluir item"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+
+              {/* Ação Concluir Etapa 1 */}
+              {!onboarding.etapa1_concluida && (
+                <div className="pt-3 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <span className="text-xs text-gray-500">
+                    {!podeGerenciarEtapa1
+                      ? 'O Gestor acompanha esta etapa em modo leitura. A conclusão cabe ao RH ou Administrador.'
+                      : allEtapa1Checked
+                        ? 'Todos os itens conferidos! O RH pode concluir a etapa e repassar ao Gestor.'
+                        : 'Marque todos os itens acima para liberar a conclusão.'}
+                  </span>
+
+                  {podeGerenciarEtapa1 ? (
+                    <Button
+                      onClick={handleConcluirEtapa1}
+                      disabled={!allEtapa1Checked || concluindoEtapa1}
+                      className="bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm"
+                    >
+                      {concluindoEtapa1 ? (
+                        <span>Concluindo...</span>
+                      ) : (
+                        <span>Concluir Etapa 1 (RH)</span>
+                      )}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      disabled
+                      className="text-xs text-gray-400 border-gray-200"
+                      title="Apenas RH ou Administrador podem concluir a Etapa 1."
+                    >
+                      Somente RH / Admin
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
 
-            {/* Conteúdo Etapa 2 */}
-            {!onboarding.etapa1_concluida ? (
-              <div className="py-8 text-center text-gray-400 text-xs flex flex-col items-center justify-center">
-                <Lock className="w-8 h-8 text-gray-300 mb-2" />
-                <p className="font-semibold text-gray-600">
-                  Aguarde a conclusão da Etapa 1 pelo RH
-                </p>
-                <p className="text-[11px] text-gray-400 mt-0.5">
-                  Esta etapa será destravada automaticamente quando a integração RH for finalizada.
-                </p>
-              </div>
-            ) : (
-              <div>
-                {/* Ações de topo da Etapa 2: Adicionar item de upload */}
-                {!onboarding.etapa2_concluida && (
-                  <div className="flex justify-between items-center mb-3 pt-1">
-                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                      Itens do Setor & Materiais de Apoio
-                    </span>
-                    {podeGerenciarEtapa2e3 ? (
-                      <Button
-                        size="sm"
+            {/* Linha conectora vertical */}
+            <div className="w-0.5 h-4 bg-gray-200 mx-auto" />
+
+            {/* ETAPA 2 — VIVÊNCIA TÉCNICA (POR SETOR) */}
+            <div
+              className={`bg-white rounded-xl border p-6 shadow-sm transition-all ${
+                !onboarding.etapa1_concluida
+                  ? 'opacity-60 bg-gray-50/50 border-gray-200'
+                  : onboarding.etapa2_concluida
+                    ? 'border-emerald-200 bg-emerald-50/10'
+                    : 'border-blue-200 ring-1 ring-blue-100'
+              }`}
+            >
+              {/* Header Etapa 2 */}
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm ${
+                      !onboarding.etapa1_concluida
+                        ? 'bg-gray-300 text-gray-600'
+                        : onboarding.etapa2_concluida
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-blue-600 text-white'
+                    }`}
+                  >
+                    {!onboarding.etapa1_concluida ? (
+                      <Lock className="w-4 h-4" />
+                    ) : onboarding.etapa2_concluida ? (
+                      <CheckCircle2 className="w-5 h-5" />
+                    ) : (
+                      '2'
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-base font-bold text-[#1A2233]">
+                        Etapa 2 — Vivência Técnica ({setorInfo.nome})
+                      </h3>
+                      {faseAtualInfo && (
+                        <span className="text-[11px] font-bold bg-brand-50 text-brand-700 border border-brand-200 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+                          <Layers className="w-3 h-3 text-brand-600" />
+                          {faseAtualInfo}
+                        </span>
+                      )}
+                      <Badge
                         variant="outline"
-                        onClick={() => openAddItemModal(2)}
-                        className="h-8 text-xs text-brand-700 border-brand-200 hover:bg-brand-50"
+                        className="text-[11px] font-semibold bg-indigo-50/70 text-indigo-700 border-indigo-200"
                       >
-                        <Upload className="w-3.5 h-3.5 mr-1" />
-                        Adicionar item (upload)
-                      </Button>
-                    ) : (
-                      <span className="text-[11px] text-gray-400 italic">
-                        {role === 'rh'
-                          ? '(Etapa técnica sob condução do Gestor Responsável)'
-                          : '(Apenas o Gestor Responsável ou Administrador conduzem)'}
-                      </span>
-                    )}
+                        {confirmacoesEtapa2} de {tarefasEtapa2.length} confirmados pelo colaborador
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {fasesSetor.length > 0
+                        ? 'Progressão estruturada por fases sequenciais obrigatórias com confirmação prática.'
+                        : 'Movidesk (chamados), Passportal (documentação), shadow técnico e atuação assistida.'}
+                    </p>
                   </div>
-                )}
+                </div>
 
-                {/* Se a área possui Fases Técnicas Ordenadas: Exibir por Fase com Trava Sequencial */}
-                {fasesSetor.length > 0 ? (
-                  <div className="space-y-5 mb-5">
-                    {fasesStatusEtapa2.map((faseStatus) => {
-                      const {
-                        fase,
-                        index,
-                        itens,
-                        totalItens,
-                        concluidos,
-                        confirmadosColab,
-                        estaCompleta,
-                        estaDesbloqueada,
-                      } = faseStatus
-
-                      return (
-                        <div
-                          key={fase.id}
-                          className={`border rounded-xl overflow-hidden transition-all ${
-                            !estaDesbloqueada
-                              ? 'bg-gray-50/70 border-gray-200 opacity-75'
-                              : estaCompleta
-                                ? 'bg-emerald-50/20 border-emerald-200'
-                                : 'bg-white border-brand-200 shadow-xs'
-                          }`}
-                        >
-                          {/* Top Header da Fase */}
-                          <div
-                            className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b ${
-                              !estaDesbloqueada
-                                ? 'bg-gray-100/70 border-gray-200 text-gray-500'
-                                : estaCompleta
-                                  ? 'bg-emerald-50/50 border-emerald-200 text-emerald-950'
-                                  : 'bg-gradient-to-r from-brand-50/70 to-white border-brand-100 text-gray-900'
-                            }`}
-                          >
-                            <div className="flex items-start gap-3 min-w-0">
-                              <span
-                                className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 ${
-                                  !estaDesbloqueada
-                                    ? 'bg-gray-300 text-gray-600'
-                                    : estaCompleta
-                                      ? 'bg-emerald-600 text-white'
-                                      : 'bg-brand-600 text-white'
-                                }`}
-                              >
-                                {!estaDesbloqueada ? (
-                                  <Lock className="w-3.5 h-3.5" />
-                                ) : estaCompleta ? (
-                                  <CheckCircle2 className="w-4 h-4" />
-                                ) : (
-                                  index + 1
-                                )}
-                              </span>
-
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <h4 className="font-bold text-sm">
-                                    Fase {index + 1}: {fase.titulo}
-                                  </h4>
-                                  {!estaDesbloqueada ? (
-                                    <span className="text-[10px] font-semibold bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                                      <Lock className="w-3 h-3" /> Bloqueada
-                                    </span>
-                                  ) : estaCompleta ? (
-                                    <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                                      <CheckCircle2 className="w-3 h-3" /> Fase Concluída (
-                                      {concluidos}/{totalItens})
-                                    </span>
-                                  ) : (
-                                    <span className="text-[10px] font-semibold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                                      Em Andamento ({concluidos}/{totalItens} validados)
-                                    </span>
-                                  )}
-                                </div>
-                                {fase.descricao && (
-                                  <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                                    {fase.descricao}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                              {podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => openAddItemModal(2, fase.id)}
-                                  className="h-7 text-xs border-brand-200 text-brand-700 hover:bg-brand-50"
-                                >
-                                  <Plus className="w-3 h-3 mr-1" />
-                                  Item
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Mensagem quando bloqueada */}
-                          {!estaDesbloqueada ? (
-                            <div className="p-4 bg-gray-50/60 flex items-center gap-2 text-xs text-gray-500 italic">
-                              <Lock className="w-4 h-4 text-gray-400 shrink-0" />
-                              <span>
-                                Conclua a fase anterior para liberar esta etapa de vivência técnica.
-                              </span>
-                            </div>
-                          ) : (
-                            /* Lista de itens da fase */
-                            <div className="divide-y divide-gray-100 bg-white">
-                              {itens.length === 0 ? (
-                                <div className="p-4 text-center text-xs text-gray-400">
-                                  Nenhum item nesta fase ainda.{' '}
-                                  {podeGerenciarEtapa2e3 && (
-                                    <button
-                                      type="button"
-                                      onClick={() => openAddItemModal(2, fase.id)}
-                                      className="text-brand-600 font-semibold hover:underline ml-1"
-                                    >
-                                      Adicionar item
-                                    </button>
-                                  )}
-                                </div>
-                              ) : (
-                                itens.map((tarefa) => {
-                                  const fileUrl = tarefaService.getFileUrl(tarefa)
-
-                                  return (
-                                    <div
-                                      key={tarefa.id}
-                                      className="py-3 px-4 flex items-start justify-between gap-3 group hover:bg-gray-50/60 transition-colors"
-                                    >
-                                      <div className="flex items-start gap-3 flex-1 min-w-0">
-                                        <button
-                                          type="button"
-                                          disabled={
-                                            onboarding.etapa2_concluida || !podeGerenciarEtapa2e3
-                                          }
-                                          onClick={() => handleToggleTarefa(tarefa)}
-                                          className={`mt-0.5 text-gray-400 transition-transform ${
-                                            podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida
-                                              ? 'hover:text-brand-600 active:scale-95'
-                                              : 'cursor-default opacity-80'
-                                          }`}
-                                          aria-label="Marcar tarefa"
-                                        >
-                                          {tarefa.concluida ? (
-                                            <CheckCircle2 className="w-5 h-5 text-emerald-600 animate-fade-in" />
-                                          ) : (
-                                            <Square className="w-5 h-5 text-gray-300" />
-                                          )}
-                                        </button>
-
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-2 flex-wrap">
-                                            {tarefa.tipo === 'video' ? (
-                                              <Video className="w-4 h-4 text-purple-600 shrink-0" />
-                                            ) : (
-                                              <FileText className="w-4 h-4 text-brand-600 shrink-0" />
-                                            )}
-                                            <span
-                                              className={`text-sm font-semibold truncate ${
-                                                tarefa.concluida
-                                                  ? 'text-gray-500 line-through'
-                                                  : 'text-gray-800'
-                                              }`}
-                                            >
-                                              {tarefa.titulo}
-                                            </span>
-                                            {tarefa.conteudo_url ? (
-                                              <span className="text-[10px] bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded font-medium">
-                                                Arquivo próprio
-                                              </span>
-                                            ) : tarefa.material ? (
-                                              <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-medium">
-                                                Material biblioteca
-                                              </span>
-                                            ) : null}
-                                          </div>
-
-                                          {tarefa.descricao && (
-                                            <p className="text-[11px] text-gray-500 mt-0.5 truncate">
-                                              {tarefa.descricao}
-                                            </p>
-                                          )}
-
-                                          {/* Confirmação do Colaborador na Etapa 2 */}
-                                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                            {confirmacoes[tarefa.id] ? (
-                                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                                Confirmado pelo colaborador em{' '}
-                                                {formatDate(
-                                                  confirmacoes[tarefa.id].confirmado_em ||
-                                                    confirmacoes[tarefa.id].created,
-                                                )}
-                                              </span>
-                                            ) : (
-                                              <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-medium">
-                                                <Clock className="w-3 h-3" />
-                                                Aguardando confirmação do colaborador
-                                              </span>
-                                            )}
-
-                                            {tarefa.concluida_em && (
-                                              <span className="text-[11px] text-gray-500">
-                                                • Validado Gestão em{' '}
-                                                {formatDate(tarefa.concluida_em)}
-                                              </span>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </div>
-
-                                      <div className="flex items-center gap-1 shrink-0">
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            openPreview({
-                                              titulo: tarefa.titulo,
-                                              tipo: tarefa.tipo,
-                                              url: fileUrl,
-                                            })
-                                          }
-                                          className="h-8 text-xs text-brand-600 hover:text-brand-700"
-                                        >
-                                          <Eye className="w-3.5 h-3.5 mr-1" />
-                                          Visualizar
-                                        </Button>
-
-                                        {!tarefa.criado_automaticamente &&
-                                          !onboarding.etapa2_concluida &&
-                                          podeGerenciarEtapa2e3 && (
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              onClick={() => handleDeleteTarefa(tarefa.id, 2)}
-                                              className="h-8 w-8 text-gray-400 hover:text-red-600"
-                                              aria-label="Excluir tarefa"
-                                            >
-                                              <Trash2 className="w-3.5 h-3.5" />
-                                            </Button>
-                                          )}
-                                      </div>
-                                    </div>
-                                  )
-                                })
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-
-                    {/* Itens sem Fase vinculada (Atividades Gerais da Área Técnica) */}
-                    {tarefasEtapa2SemFase.length > 0 && (
-                      <div className="border border-dashed border-gray-300 rounded-xl overflow-hidden bg-slate-50/50">
-                        <div className="p-3.5 bg-gray-100/70 border-b border-gray-200 flex items-center justify-between">
-                          <div>
-                            <h4 className="font-bold text-xs text-gray-700">
-                              Atividades Gerais / Outros Itens
-                            </h4>
-                            <p className="text-[11px] text-gray-500">
-                              Itens complementares executados em paralelo com as fases
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="divide-y divide-gray-100 bg-white">
-                          {tarefasEtapa2SemFase.map((tarefa) => {
-                            const fileUrl = tarefaService.getFileUrl(tarefa)
-
-                            return (
-                              <div
-                                key={tarefa.id}
-                                className="py-3 px-4 flex items-start justify-between gap-3 group hover:bg-gray-50/60 transition-colors"
-                              >
-                                <div className="flex items-start gap-3 flex-1 min-w-0">
-                                  <button
-                                    type="button"
-                                    disabled={onboarding.etapa2_concluida || !podeGerenciarEtapa2e3}
-                                    onClick={() => handleToggleTarefa(tarefa)}
-                                    className={`mt-0.5 text-gray-400 transition-transform ${
-                                      podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida
-                                        ? 'hover:text-brand-600 active:scale-95'
-                                        : 'cursor-default opacity-80'
-                                    }`}
-                                  >
-                                    {tarefa.concluida ? (
-                                      <CheckCircle2 className="w-5 h-5 text-emerald-600 animate-fade-in" />
-                                    ) : (
-                                      <Square className="w-5 h-5 text-gray-300" />
-                                    )}
-                                  </button>
-
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      {tarefa.tipo === 'video' ? (
-                                        <Video className="w-4 h-4 text-purple-600 shrink-0" />
-                                      ) : (
-                                        <FileText className="w-4 h-4 text-brand-600 shrink-0" />
-                                      )}
-                                      <span
-                                        className={`text-sm font-semibold truncate ${
-                                          tarefa.concluida
-                                            ? 'text-gray-500 line-through'
-                                            : 'text-gray-800'
-                                        }`}
-                                      >
-                                        {tarefa.titulo}
-                                      </span>
-                                    </div>
-
-                                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                      {confirmacoes[tarefa.id] ? (
-                                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                          Confirmado pelo colaborador em{' '}
-                                          {formatDate(
-                                            confirmacoes[tarefa.id].confirmado_em ||
-                                              confirmacoes[tarefa.id].created,
-                                          )}
-                                        </span>
-                                      ) : (
-                                        <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-medium">
-                                          <Clock className="w-3 h-3" />
-                                          Aguardando confirmação do colaborador
-                                        </span>
-                                      )}
-
-                                      {tarefa.concluida_em && (
-                                        <span className="text-[11px] text-gray-500">
-                                          • Validado Gestão em {formatDate(tarefa.concluida_em)}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      openPreview({
-                                        titulo: tarefa.titulo,
-                                        tipo: tarefa.tipo,
-                                        url: fileUrl,
-                                      })
-                                    }
-                                    className="h-8 text-xs text-brand-600 hover:text-brand-700"
-                                  >
-                                    <Eye className="w-3.5 h-3.5 mr-1" />
-                                    Visualizar
-                                  </Button>
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                {!onboarding.etapa1_concluida ? (
+                  <Badge variant="outline" className="text-gray-400 text-xs">
+                    Bloqueada
+                  </Badge>
+                ) : onboarding.etapa2_concluida ? (
+                  <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 text-xs font-semibold">
+                    Concluída em {formatShortDate(onboarding.data_conclusao_etapa2)}
+                  </Badge>
                 ) : (
-                  /* Modo plano para áreas sem fases (ex: RH, Comercial, Laboratório) */
-                  <div className="divide-y divide-gray-100 mb-5">
-                    {tarefasEtapa2.length === 0 ? (
-                      <div className="py-6 text-center text-gray-400 text-xs">
-                        Nenhum item adicionado para este setor.
-                      </div>
-                    ) : (
-                      tarefasEtapa2.map((tarefa) => {
-                        const fileUrl = tarefaService.getFileUrl(tarefa)
+                  <Badge className="bg-brand-50 text-brand-700 hover:bg-brand-50 text-xs font-semibold">
+                    Liberada para atuação
+                  </Badge>
+                )}
+              </div>
+
+              {/* Conteúdo Etapa 2 */}
+              {!onboarding.etapa1_concluida ? (
+                <div className="py-8 text-center text-gray-400 text-xs flex flex-col items-center justify-center">
+                  <Lock className="w-8 h-8 text-gray-300 mb-2" />
+                  <p className="font-semibold text-gray-600">
+                    Aguarde a conclusão da Etapa 1 pelo RH
+                  </p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    Esta etapa será destravada automaticamente quando a integração RH for
+                    finalizada.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  {/* Ações de topo da Etapa 2: Adicionar item de upload */}
+                  {!onboarding.etapa2_concluida && (
+                    <div className="flex justify-between items-center mb-3 pt-1">
+                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        Itens do Setor & Materiais de Apoio
+                      </span>
+                      {podeGerenciarEtapa2e3 ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openAddItemModal(2)}
+                          className="h-8 text-xs text-brand-700 border-brand-200 hover:bg-brand-50"
+                        >
+                          <Upload className="w-3.5 h-3.5 mr-1" />
+                          Adicionar item (upload)
+                        </Button>
+                      ) : (
+                        <span className="text-[11px] text-gray-400 italic">
+                          {role === 'rh'
+                            ? '(Etapa técnica sob condução do Gestor Responsável)'
+                            : '(Apenas o Gestor Responsável ou Administrador conduzem)'}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Se a área possui Fases Técnicas Ordenadas: Exibir por Fase com Trava Sequencial */}
+                  {fasesSetor.length > 0 ? (
+                    <div className="space-y-5 mb-5">
+                      {fasesStatusEtapa2.map((faseStatus) => {
+                        const {
+                          fase,
+                          index,
+                          itens,
+                          totalItens,
+                          concluidos,
+                          confirmadosColab,
+                          estaCompleta,
+                          estaDesbloqueada,
+                        } = faseStatus
 
                         return (
                           <div
-                            key={tarefa.id}
-                            className="py-3 flex items-start justify-between gap-3 group"
+                            key={fase.id}
+                            className={`border rounded-xl overflow-hidden transition-all ${
+                              !estaDesbloqueada
+                                ? 'bg-gray-50/70 border-gray-200 opacity-75'
+                                : estaCompleta
+                                  ? 'bg-emerald-50/20 border-emerald-200'
+                                  : 'bg-white border-brand-200 shadow-xs'
+                            }`}
                           >
-                            <div className="flex items-start gap-3 flex-1">
-                              <button
-                                type="button"
-                                disabled={onboarding.etapa2_concluida || !podeGerenciarEtapa2e3}
-                                onClick={() => handleToggleTarefa(tarefa)}
-                                className={`mt-0.5 text-gray-400 transition-transform ${
-                                  podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida
-                                    ? 'hover:text-brand-600 active:scale-95'
-                                    : 'cursor-default opacity-80'
-                                }`}
-                                aria-label="Marcar tarefa"
-                              >
-                                {tarefa.concluida ? (
-                                  <CheckCircle2 className="w-5 h-5 text-emerald-600 animate-fade-in" />
-                                ) : (
-                                  <Square className="w-5 h-5 text-gray-300" />
-                                )}
-                              </button>
-
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  {tarefa.tipo === 'video' ? (
-                                    <Video className="w-4 h-4 text-purple-600 shrink-0" />
+                            {/* Top Header da Fase */}
+                            <div
+                              className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b ${
+                                !estaDesbloqueada
+                                  ? 'bg-gray-100/70 border-gray-200 text-gray-500'
+                                  : estaCompleta
+                                    ? 'bg-emerald-50/50 border-emerald-200 text-emerald-950'
+                                    : 'bg-gradient-to-r from-brand-50/70 to-white border-brand-100 text-gray-900'
+                              }`}
+                            >
+                              <div className="flex items-start gap-3 min-w-0">
+                                <span
+                                  className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 ${
+                                    !estaDesbloqueada
+                                      ? 'bg-gray-300 text-gray-600'
+                                      : estaCompleta
+                                        ? 'bg-emerald-600 text-white'
+                                        : 'bg-brand-600 text-white'
+                                  }`}
+                                >
+                                  {!estaDesbloqueada ? (
+                                    <Lock className="w-3.5 h-3.5" />
+                                  ) : estaCompleta ? (
+                                    <CheckCircle2 className="w-4 h-4" />
                                   ) : (
-                                    <FileText className="w-4 h-4 text-brand-600 shrink-0" />
+                                    index + 1
                                   )}
-                                  <span
-                                    className={`text-sm font-semibold ${
-                                      tarefa.concluida
-                                        ? 'text-gray-500 line-through'
-                                        : 'text-gray-800'
-                                    }`}
-                                  >
-                                    {tarefa.titulo}
-                                  </span>
-                                  {tarefa.conteudo_url ? (
-                                    <span className="text-[10px] bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded font-medium">
-                                      Arquivo próprio
-                                    </span>
-                                  ) : tarefa.material ? (
-                                    <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-medium">
-                                      Material biblioteca
-                                    </span>
-                                  ) : null}
-                                </div>
+                                </span>
 
-                                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                  {confirmacoes[tarefa.id] ? (
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                      Confirmado pelo colaborador em{' '}
-                                      {formatDate(
-                                        confirmacoes[tarefa.id].confirmado_em ||
-                                          confirmacoes[tarefa.id].created,
-                                      )}
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-medium">
-                                      <Clock className="w-3 h-3" />
-                                      Aguardando confirmação do colaborador
-                                    </span>
-                                  )}
-
-                                  {tarefa.concluida_em && (
-                                    <span className="text-[11px] text-gray-500">
-                                      • Validado Gestão em {formatDate(tarefa.concluida_em)}
-                                    </span>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h4 className="font-bold text-sm">
+                                      Fase {index + 1}: {fase.titulo}
+                                    </h4>
+                                    {!estaDesbloqueada ? (
+                                      <span className="text-[10px] font-semibold bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                        <Lock className="w-3 h-3" /> Bloqueada
+                                      </span>
+                                    ) : estaCompleta ? (
+                                      <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                        <CheckCircle2 className="w-3 h-3" /> Fase Concluída (
+                                        {concluidos}/{totalItens})
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] font-semibold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                        Em Andamento ({concluidos}/{totalItens} validados)
+                                      </span>
+                                    )}
+                                  </div>
+                                  {fase.descricao && (
+                                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                                      {fase.descricao}
+                                    </p>
                                   )}
                                 </div>
                               </div>
-                            </div>
 
-                            <div className="flex items-center gap-1 shrink-0">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  openPreview({
-                                    titulo: tarefa.titulo,
-                                    tipo: tarefa.tipo,
-                                    url: fileUrl,
-                                  })
-                                }
-                                className="h-8 text-xs text-brand-600 hover:text-brand-700"
-                              >
-                                <Eye className="w-3.5 h-3.5 mr-1" />
-                                Visualizar
-                              </Button>
+                              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center flex-wrap">
+                                {/* Botão de Concluir Fase Uniforme */}
+                                {!onboarding.etapa2_concluida && (
+                                  <>
+                                    {faseStatus.registroConclusao ? (
+                                      <div className="flex flex-col items-end">
+                                        <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded border border-emerald-300 inline-flex items-center gap-1">
+                                          <CheckCircle2 className="w-3 h-3" />
+                                          Fase Concluída
+                                        </span>
+                                        {faseStatus.registroConclusao.destaque_prazo && (
+                                          <span
+                                            className={`text-[10px] mt-0.5 font-semibold ${
+                                              faseStatus.registroConclusao.fora_prazo
+                                                ? 'text-red-600'
+                                                : 'text-emerald-700'
+                                            }`}
+                                          >
+                                            {faseStatus.registroConclusao.destaque_prazo}
+                                          </span>
+                                        )}
+                                      </div>
+                                    ) : podeGerenciarEtapa2e3 ? (
+                                      <Button
+                                        size="sm"
+                                        disabled={
+                                          !faseStatus.podeConcluirFase ||
+                                          concluindoFaseId === fase.id
+                                        }
+                                        onClick={() => handleConcluirFase(fase, index)}
+                                        className={`h-8 text-xs font-semibold shadow-xs ${
+                                          faseStatus.podeConcluirFase
+                                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                            : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+                                        }`}
+                                        title={
+                                          !faseStatus.estaDesbloqueada
+                                            ? 'Conclua a fase anterior primeiro'
+                                            : !faseStatus.podeConcluirFase
+                                              ? 'Valide todos os itens da fase antes de concluir'
+                                              : 'Concluir esta fase e liberar a próxima'
+                                        }
+                                      >
+                                        {concluindoFaseId === fase.id ? (
+                                          'Concluindo...'
+                                        ) : (
+                                          <>
+                                            <CheckSquare className="w-3.5 h-3.5 mr-1" />
+                                            Concluir Fase
+                                          </>
+                                        )}
+                                      </Button>
+                                    ) : (
+                                      <span
+                                        className="text-[11px] text-gray-400 italic px-2 py-1 bg-gray-50 rounded border border-gray-200"
+                                        title="Apenas o Gestor Responsável ou Administrador podem concluir a fase"
+                                      >
+                                        Conclusão restrita ao gestor
+                                      </span>
+                                    )}
+                                  </>
+                                )}
 
-                              {!tarefa.criado_automaticamente &&
-                                !onboarding.etapa2_concluida &&
-                                podeGerenciarEtapa2e3 && (
+                                {podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida && (
                                   <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleDeleteTarefa(tarefa.id, 2)}
-                                    className="h-8 w-8 text-gray-400 hover:text-red-600"
-                                    aria-label="Excluir tarefa"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => openAddItemModal(2, fase.id)}
+                                    className="h-8 text-xs border-brand-200 text-brand-700 hover:bg-brand-50"
                                   >
-                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <Plus className="w-3 h-3 mr-1" />
+                                    Item
                                   </Button>
                                 )}
+                              </div>
                             </div>
+
+                            {/* Destaque explícito de prazo se a fase estiver concluída */}
+                            {faseStatus.registroConclusao && (
+                              <div
+                                className={`px-4 py-2 border-b text-xs flex items-center justify-between ${
+                                  faseStatus.registroConclusao.fora_prazo
+                                    ? 'bg-red-50 text-red-800 border-red-200'
+                                    : 'bg-emerald-50/70 text-emerald-800 border-emerald-200'
+                                }`}
+                              >
+                                <div className="flex items-center gap-1.5 font-medium">
+                                  <Clock className="w-3.5 h-3.5" />
+                                  <span>
+                                    {faseStatus.registroConclusao.destaque_prazo ||
+                                      'Concluída no prazo'}
+                                  </span>
+                                </div>
+                                <span className="text-[11px] text-gray-500">
+                                  Responsável:{' '}
+                                  <strong>
+                                    {faseStatus.registroConclusao.concluida_por_nome || 'Gestão TI'}
+                                  </strong>{' '}
+                                  em {formatDate(faseStatus.registroConclusao.concluida_em)}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Mensagem quando bloqueada */}
+                            {!estaDesbloqueada ? (
+                              <div className="p-4 bg-gray-50/60 flex items-center gap-2 text-xs text-gray-500 italic">
+                                <Lock className="w-4 h-4 text-gray-400 shrink-0" />
+                                <span>
+                                  Conclua a fase anterior para liberar esta etapa de vivência
+                                  técnica.
+                                </span>
+                              </div>
+                            ) : (
+                              /* Lista de itens da fase */
+                              <div className="divide-y divide-gray-100 bg-white">
+                                {itens.length === 0 ? (
+                                  <div className="p-4 text-center text-xs text-gray-400">
+                                    Nenhum item nesta fase ainda.{' '}
+                                    {podeGerenciarEtapa2e3 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => openAddItemModal(2, fase.id)}
+                                        className="text-brand-600 font-semibold hover:underline ml-1"
+                                      >
+                                        Adicionar item
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  itens.map((tarefa) => {
+                                    const fileUrl = tarefaService.getFileUrl(tarefa)
+
+                                    return (
+                                      <div
+                                        key={tarefa.id}
+                                        className="py-3 px-4 flex items-start justify-between gap-3 group hover:bg-gray-50/60 transition-colors"
+                                      >
+                                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                                          <button
+                                            type="button"
+                                            disabled={
+                                              onboarding.etapa2_concluida || !podeGerenciarEtapa2e3
+                                            }
+                                            onClick={() => handleToggleTarefa(tarefa)}
+                                            className={`mt-0.5 text-gray-400 transition-transform ${
+                                              podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida
+                                                ? 'hover:text-brand-600 active:scale-95'
+                                                : 'cursor-default opacity-80'
+                                            }`}
+                                            aria-label="Marcar tarefa"
+                                          >
+                                            {tarefa.concluida ? (
+                                              <CheckCircle2 className="w-5 h-5 text-emerald-600 animate-fade-in" />
+                                            ) : (
+                                              <Square className="w-5 h-5 text-gray-300" />
+                                            )}
+                                          </button>
+
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                              {tarefa.tipo === 'video' ? (
+                                                <Video className="w-4 h-4 text-purple-600 shrink-0" />
+                                              ) : (
+                                                <FileText className="w-4 h-4 text-brand-600 shrink-0" />
+                                              )}
+                                              <span
+                                                className={`text-sm font-semibold truncate ${
+                                                  tarefa.concluida
+                                                    ? 'text-gray-500 line-through'
+                                                    : 'text-gray-800'
+                                                }`}
+                                              >
+                                                {tarefa.titulo}
+                                              </span>
+                                              {tarefa.conteudo_url ? (
+                                                <span className="text-[10px] bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded font-medium">
+                                                  Arquivo próprio
+                                                </span>
+                                              ) : tarefa.material ? (
+                                                <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-medium">
+                                                  Material biblioteca
+                                                </span>
+                                              ) : null}
+                                            </div>
+
+                                            {tarefa.descricao && (
+                                              <p className="text-[11px] text-gray-500 mt-0.5 truncate">
+                                                {tarefa.descricao}
+                                              </p>
+                                            )}
+
+                                            {/* Confirmação do Colaborador na Etapa 2 */}
+                                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                              {confirmacoes[tarefa.id] ? (
+                                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                                  Confirmado pelo colaborador em{' '}
+                                                  {formatDate(
+                                                    confirmacoes[tarefa.id].confirmado_em ||
+                                                      confirmacoes[tarefa.id].created,
+                                                  )}
+                                                </span>
+                                              ) : (
+                                                <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-medium">
+                                                  <Clock className="w-3 h-3" />
+                                                  Aguardando confirmação do colaborador
+                                                </span>
+                                              )}
+
+                                              {tarefa.concluida_em && (
+                                                <span className="text-[11px] text-gray-500">
+                                                  • Validado Gestão em{' '}
+                                                  {formatDate(tarefa.concluida_em)}
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() =>
+                                              openPreview({
+                                                titulo: tarefa.titulo,
+                                                tipo: tarefa.tipo,
+                                                url: fileUrl,
+                                              })
+                                            }
+                                            className="h-8 text-xs text-brand-600 hover:text-brand-700"
+                                          >
+                                            <Eye className="w-3.5 h-3.5 mr-1" />
+                                            Visualizar
+                                          </Button>
+
+                                          {!tarefa.criado_automaticamente &&
+                                            !onboarding.etapa2_concluida &&
+                                            podeGerenciarEtapa2e3 && (
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => handleDeleteTarefa(tarefa.id, 2)}
+                                                className="h-8 w-8 text-gray-400 hover:text-red-600"
+                                                aria-label="Excluir tarefa"
+                                              >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                              </Button>
+                                            )}
+                                        </div>
+                                      </div>
+                                    )
+                                  })
+                                )}
+                              </div>
+                            )}
                           </div>
                         )
-                      })
-                    )}
-                  </div>
-                )}
+                      })}
 
-                {/* Concluir Etapa 2 */}
-                {!onboarding.etapa2_concluida && (
-                  <div className="pt-3 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <span className="text-xs text-gray-500">
-                      {!podeGerenciarEtapa2e3
-                        ? role === 'rh'
-                          ? 'A Etapa 2 é conduzida pelo Gestor Responsável.'
-                          : 'Apenas o Gestor Responsável atribuído ou o Administrador concluem a Etapa 2.'
-                        : allEtapa2TarefasChecked
-                          ? 'Todas as tarefas técnicas concluídas! Liberado para finalizar etapa 2.'
-                          : 'Marque todas as tarefas técnicas para liberar a avaliação do gestor.'}
-                    </span>
+                      {/* Itens sem Fase vinculada (Atividades Gerais da Área Técnica) */}
+                      {tarefasEtapa2SemFase.length > 0 && (
+                        <div className="border border-dashed border-gray-300 rounded-xl overflow-hidden bg-slate-50/50">
+                          <div className="p-3.5 bg-gray-100/70 border-b border-gray-200 flex items-center justify-between">
+                            <div>
+                              <h4 className="font-bold text-xs text-gray-700">
+                                Atividades Gerais / Outros Itens
+                              </h4>
+                              <p className="text-[11px] text-gray-500">
+                                Itens complementares executados em paralelo com as fases
+                              </p>
+                            </div>
+                          </div>
 
-                    {podeGerenciarEtapa2e3 ? (
-                      <Button
-                        onClick={handleConcluirEtapa2}
-                        disabled={!allEtapa2TarefasChecked || concluindoEtapa2}
-                        className="bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm"
-                      >
-                        {concluindoEtapa2 ? (
-                          <span>Concluindo...</span>
-                        ) : (
-                          <span>Concluir Etapa 2 (Vivência Técnica)</span>
-                        )}
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        disabled
-                        className="text-xs text-gray-400 border-gray-200"
-                        title="Apenas o Gestor Responsável ou Administrador podem concluir a Etapa 2."
-                      >
-                        Somente Gestor / Admin
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+                          <div className="divide-y divide-gray-100 bg-white">
+                            {tarefasEtapa2SemFase.map((tarefa) => {
+                              const fileUrl = tarefaService.getFileUrl(tarefa)
 
-          {/* Linha conectora vertical */}
-          <div className="w-0.5 h-4 bg-gray-200 mx-auto" />
+                              return (
+                                <div
+                                  key={tarefa.id}
+                                  className="py-3 px-4 flex items-start justify-between gap-3 group hover:bg-gray-50/60 transition-colors"
+                                >
+                                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                                    <button
+                                      type="button"
+                                      disabled={
+                                        onboarding.etapa2_concluida || !podeGerenciarEtapa2e3
+                                      }
+                                      onClick={() => handleToggleTarefa(tarefa)}
+                                      className={`mt-0.5 text-gray-400 transition-transform ${
+                                        podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida
+                                          ? 'hover:text-brand-600 active:scale-95'
+                                          : 'cursor-default opacity-80'
+                                      }`}
+                                    >
+                                      {tarefa.concluida ? (
+                                        <CheckCircle2 className="w-5 h-5 text-emerald-600 animate-fade-in" />
+                                      ) : (
+                                        <Square className="w-5 h-5 text-gray-300" />
+                                      )}
+                                    </button>
 
-          {/* ETAPA 3 — AVALIAÇÃO DO GESTOR */}
-          <div
-            className={`bg-white rounded-xl border p-6 shadow-sm transition-all ${
-              !onboarding.etapa2_concluida
-                ? 'opacity-60 bg-gray-50/50 border-gray-200'
-                : onboarding.etapa3_concluida
-                  ? 'border-emerald-200 bg-emerald-50/10'
-                  : 'border-amber-200 ring-1 ring-amber-100'
-            }`}
-          >
-            {/* Header Etapa 3 */}
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm ${
-                    !onboarding.etapa2_concluida
-                      ? 'bg-gray-300 text-gray-600'
-                      : onboarding.etapa3_concluida
-                        ? onboarding.status === 'concluido'
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-red-600 text-white'
-                        : 'bg-amber-600 text-white'
-                  }`}
-                >
-                  {!onboarding.etapa2_concluida ? (
-                    <Lock className="w-4 h-4" />
-                  ) : onboarding.etapa3_concluida ? (
-                    onboarding.status === 'concluido' ? (
-                      <CheckCircle2 className="w-5 h-5" />
-                    ) : (
-                      <XCircle className="w-5 h-5" />
-                    )
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        {tarefa.tipo === 'video' ? (
+                                          <Video className="w-4 h-4 text-purple-600 shrink-0" />
+                                        ) : (
+                                          <FileText className="w-4 h-4 text-brand-600 shrink-0" />
+                                        )}
+                                        <span
+                                          className={`text-sm font-semibold truncate ${
+                                            tarefa.concluida
+                                              ? 'text-gray-500 line-through'
+                                              : 'text-gray-800'
+                                          }`}
+                                        >
+                                          {tarefa.titulo}
+                                        </span>
+                                      </div>
+
+                                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                        {confirmacoes[tarefa.id] ? (
+                                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                            Confirmado pelo colaborador em{' '}
+                                            {formatDate(
+                                              confirmacoes[tarefa.id].confirmado_em ||
+                                                confirmacoes[tarefa.id].created,
+                                            )}
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-medium">
+                                            <Clock className="w-3 h-3" />
+                                            Aguardando confirmação do colaborador
+                                          </span>
+                                        )}
+
+                                        {tarefa.concluida_em && (
+                                          <span className="text-[11px] text-gray-500">
+                                            • Validado Gestão em {formatDate(tarefa.concluida_em)}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() =>
+                                        openPreview({
+                                          titulo: tarefa.titulo,
+                                          tipo: tarefa.tipo,
+                                          url: fileUrl,
+                                        })
+                                      }
+                                      className="h-8 text-xs text-brand-600 hover:text-brand-700"
+                                    >
+                                      <Eye className="w-3.5 h-3.5 mr-1" />
+                                      Visualizar
+                                    </Button>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   ) : (
-                    '3'
+                    /* Modo plano para áreas sem fases (ex: RH, Comercial, Laboratório) */
+                    <div className="divide-y divide-gray-100 mb-5">
+                      {tarefasEtapa2.length === 0 ? (
+                        <div className="py-6 text-center text-gray-400 text-xs">
+                          Nenhum item adicionado para este setor.
+                        </div>
+                      ) : (
+                        tarefasEtapa2.map((tarefa) => {
+                          const fileUrl = tarefaService.getFileUrl(tarefa)
+
+                          return (
+                            <div
+                              key={tarefa.id}
+                              className="py-3 flex items-start justify-between gap-3 group"
+                            >
+                              <div className="flex items-start gap-3 flex-1">
+                                <button
+                                  type="button"
+                                  disabled={onboarding.etapa2_concluida || !podeGerenciarEtapa2e3}
+                                  onClick={() => handleToggleTarefa(tarefa)}
+                                  className={`mt-0.5 text-gray-400 transition-transform ${
+                                    podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida
+                                      ? 'hover:text-brand-600 active:scale-95'
+                                      : 'cursor-default opacity-80'
+                                  }`}
+                                  aria-label="Marcar tarefa"
+                                >
+                                  {tarefa.concluida ? (
+                                    <CheckCircle2 className="w-5 h-5 text-emerald-600 animate-fade-in" />
+                                  ) : (
+                                    <Square className="w-5 h-5 text-gray-300" />
+                                  )}
+                                </button>
+
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    {tarefa.tipo === 'video' ? (
+                                      <Video className="w-4 h-4 text-purple-600 shrink-0" />
+                                    ) : (
+                                      <FileText className="w-4 h-4 text-brand-600 shrink-0" />
+                                    )}
+                                    <span
+                                      className={`text-sm font-semibold ${
+                                        tarefa.concluida
+                                          ? 'text-gray-500 line-through'
+                                          : 'text-gray-800'
+                                      }`}
+                                    >
+                                      {tarefa.titulo}
+                                    </span>
+                                    {tarefa.conteudo_url ? (
+                                      <span className="text-[10px] bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded font-medium">
+                                        Arquivo próprio
+                                      </span>
+                                    ) : tarefa.material ? (
+                                      <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-medium">
+                                        Material biblioteca
+                                      </span>
+                                    ) : null}
+                                  </div>
+
+                                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                    {confirmacoes[tarefa.id] ? (
+                                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                        Confirmado pelo colaborador em{' '}
+                                        {formatDate(
+                                          confirmacoes[tarefa.id].confirmado_em ||
+                                            confirmacoes[tarefa.id].created,
+                                        )}
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-medium">
+                                        <Clock className="w-3 h-3" />
+                                        Aguardando confirmação do colaborador
+                                      </span>
+                                    )}
+
+                                    {tarefa.concluida_em && (
+                                      <span className="text-[11px] text-gray-500">
+                                        • Validado Gestão em {formatDate(tarefa.concluida_em)}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    openPreview({
+                                      titulo: tarefa.titulo,
+                                      tipo: tarefa.tipo,
+                                      url: fileUrl,
+                                    })
+                                  }
+                                  className="h-8 text-xs text-brand-600 hover:text-brand-700"
+                                >
+                                  <Eye className="w-3.5 h-3.5 mr-1" />
+                                  Visualizar
+                                </Button>
+
+                                {!tarefa.criado_automaticamente &&
+                                  !onboarding.etapa2_concluida &&
+                                  podeGerenciarEtapa2e3 && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleDeleteTarefa(tarefa.id, 2)}
+                                      className="h-8 w-8 text-gray-400 hover:text-red-600"
+                                      aria-label="Excluir tarefa"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </Button>
+                                  )}
+                              </div>
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
+                  )}
+
+                  {/* Concluir Etapa 2 */}
+                  {!onboarding.etapa2_concluida && (
+                    <div className="pt-3 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <span className="text-xs text-gray-500">
+                        {!podeGerenciarEtapa2e3
+                          ? role === 'rh'
+                            ? 'A Etapa 2 é conduzida pelo Gestor Responsável.'
+                            : 'Apenas o Gestor Responsável atribuído ou o Administrador concluem a Etapa 2.'
+                          : allEtapa2TarefasChecked
+                            ? 'Todas as tarefas técnicas concluídas! Liberado para finalizar etapa 2.'
+                            : 'Marque todas as tarefas técnicas para liberar a avaliação do gestor.'}
+                      </span>
+
+                      {podeGerenciarEtapa2e3 ? (
+                        <Button
+                          onClick={handleConcluirEtapa2}
+                          disabled={!allEtapa2TarefasChecked || concluindoEtapa2}
+                          className="bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm"
+                        >
+                          {concluindoEtapa2 ? (
+                            <span>Concluindo...</span>
+                          ) : (
+                            <span>Concluir Etapa 2 (Vivência Técnica)</span>
+                          )}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          disabled
+                          className="text-xs text-gray-400 border-gray-200"
+                          title="Apenas o Gestor Responsável ou Administrador podem concluir a Etapa 2."
+                        >
+                          Somente Gestor / Admin
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
-                <div>
-                  <h3 className="text-base font-bold text-[#1A2233]">
-                    Etapa 3 — Avaliação Final do Gestor
-                  </h3>
-                  <p className="text-xs text-gray-500">
-                    Reunião avaliativa de liberação para suporte 100% autônomo
-                  </p>
-                </div>
-              </div>
-
-              {!onboarding.etapa2_concluida ? (
-                <Badge variant="outline" className="text-gray-400 text-xs">
-                  Bloqueada
-                </Badge>
-              ) : onboarding.etapa3_concluida ? (
-                <Badge
-                  className={
-                    onboarding.status === 'concluido'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-red-100 text-red-800'
-                  }
-                >
-                  {onboarding.status === 'concluido' ? 'Aprovado (Apto)' : 'Reprovado (Não Apto)'}
-                </Badge>
-              ) : (
-                <Badge className="bg-amber-100 text-amber-800 text-xs font-semibold">
-                  Aguardando Decisão do Gestor
-                </Badge>
               )}
             </div>
 
-            {/* Conteúdo Etapa 3 */}
-            {!onboarding.etapa2_concluida ? (
-              <div className="py-8 text-center text-gray-400 text-xs flex flex-col items-center justify-center">
-                <Lock className="w-8 h-8 text-gray-300 mb-2" />
-                <p className="font-semibold text-gray-600">
-                  Aguarde a conclusão das etapas anteriores
-                </p>
-                <p className="text-[11px] text-gray-400 mt-0.5">
-                  A avaliação só fica disponível após o término integral da vivência técnica.
-                </p>
-              </div>
-            ) : onboarding.etapa3_concluida && avaliacao ? (
-              /* Resultado já gravado */
-              <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Decisão Registrada
-                  </span>
-                  <span className="text-xs text-gray-400">{formatDate(avaliacao.created)}</span>
+            {/* Linha conectora vertical */}
+            <div className="w-0.5 h-4 bg-gray-200 mx-auto" />
+
+            {/* ETAPA 3 — AVALIAÇÃO DO GESTOR */}
+            <div
+              className={`bg-white rounded-xl border p-6 shadow-sm transition-all ${
+                !onboarding.etapa2_concluida
+                  ? 'opacity-60 bg-gray-50/50 border-gray-200'
+                  : onboarding.etapa3_concluida
+                    ? 'border-emerald-200 bg-emerald-50/10'
+                    : 'border-amber-200 ring-1 ring-amber-100'
+              }`}
+            >
+              {/* Header Etapa 3 */}
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm ${
+                      !onboarding.etapa2_concluida
+                        ? 'bg-gray-300 text-gray-600'
+                        : onboarding.etapa3_concluida
+                          ? onboarding.status === 'concluido'
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-red-600 text-white'
+                          : 'bg-amber-600 text-white'
+                    }`}
+                  >
+                    {!onboarding.etapa2_concluida ? (
+                      <Lock className="w-4 h-4" />
+                    ) : onboarding.etapa3_concluida ? (
+                      onboarding.status === 'concluido' ? (
+                        <CheckCircle2 className="w-5 h-5" />
+                      ) : (
+                        <XCircle className="w-5 h-5" />
+                      )
+                    ) : (
+                      '3'
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-[#1A2233]">
+                      Etapa 3 — Avaliação Final do Gestor
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      Reunião avaliativa de liberação para suporte 100% autônomo
+                    </p>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  {avaliacao.decisao === 'apto' ? (
-                    <div className="flex items-center gap-2 text-emerald-700 font-bold text-base bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                      <span>Colaborador APTO para atendimento solo</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-red-700 font-bold text-base bg-red-50 px-3 py-1.5 rounded-lg border border-red-200">
-                      <XCircle className="w-5 h-5 text-red-600" />
-                      <span>Colaborador NÃO APTO</span>
+                {!onboarding.etapa2_concluida ? (
+                  <Badge variant="outline" className="text-gray-400 text-xs">
+                    Bloqueada
+                  </Badge>
+                ) : onboarding.etapa3_concluida ? (
+                  <Badge
+                    className={
+                      onboarding.status === 'concluido'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-red-100 text-red-800'
+                    }
+                  >
+                    {onboarding.status === 'concluido' ? 'Aprovado (Apto)' : 'Reprovado (Não Apto)'}
+                  </Badge>
+                ) : (
+                  <Badge className="bg-amber-100 text-amber-800 text-xs font-semibold">
+                    Aguardando Decisão do Gestor
+                  </Badge>
+                )}
+              </div>
+
+              {/* Conteúdo Etapa 3 */}
+              {!onboarding.etapa2_concluida ? (
+                <div className="py-8 text-center text-gray-400 text-xs flex flex-col items-center justify-center">
+                  <Lock className="w-8 h-8 text-gray-300 mb-2" />
+                  <p className="font-semibold text-gray-600">
+                    Aguarde a conclusão das etapas anteriores
+                  </p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    A avaliação só fica disponível após o término integral da vivência técnica.
+                  </p>
+                </div>
+              ) : onboarding.etapa3_concluida && avaliacao ? (
+                /* Resultado já gravado */
+                <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      Decisão Registrada
+                    </span>
+                    <span className="text-xs text-gray-400">{formatDate(avaliacao.created)}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {avaliacao.decisao === 'apto' ? (
+                      <div className="flex items-center gap-2 text-emerald-700 font-bold text-base bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                        <span>Colaborador APTO para atendimento solo</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-red-700 font-bold text-base bg-red-50 px-3 py-1.5 rounded-lg border border-red-200">
+                        <XCircle className="w-5 h-5 text-red-600" />
+                        <span>Colaborador NÃO APTO</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {avaliacao.observacoes && (
+                    <div className="mt-2 pt-2 border-t border-gray-200">
+                      <span className="text-xs font-semibold text-gray-700 block mb-1">
+                        Parecer do Gestor:
+                      </span>
+                      <p className="text-xs text-gray-600 italic bg-white p-2.5 rounded border border-gray-200">
+                        "{avaliacao.observacoes}"
+                      </p>
                     </div>
                   )}
                 </div>
-
-                {avaliacao.observacoes && (
-                  <div className="mt-2 pt-2 border-t border-gray-200">
-                    <span className="text-xs font-semibold text-gray-700 block mb-1">
-                      Parecer do Gestor:
-                    </span>
-                    <p className="text-xs text-gray-600 italic bg-white p-2.5 rounded border border-gray-200">
-                      "{avaliacao.observacoes}"
-                    </p>
+              ) : (
+                /* Formulário de Avaliação (Gestão tem permissão de escrita; RH vê modo leitura) */
+                <div className="space-y-4 pt-2">
+                  <div className="p-3.5 rounded-lg bg-amber-50/70 border border-amber-200 text-xs text-amber-900 leading-relaxed">
+                    <strong>Instrução ao Gestor:</strong> O analista realizou todo o treinamento de
+                    Movidesk, Passportal e acompanhou chamados com a equipe. Defina se o colaborador
+                    está 100% apto a assumir chamados sozinho.
                   </div>
-                )}
-              </div>
-            ) : (
-              /* Formulário de Avaliação (Gestão tem permissão de escrita; RH vê modo leitura) */
-              <div className="space-y-4 pt-2">
-                <div className="p-3.5 rounded-lg bg-amber-50/70 border border-amber-200 text-xs text-amber-900 leading-relaxed">
-                  <strong>Instrução ao Gestor:</strong> O analista realizou todo o treinamento de
-                  Movidesk, Passportal e acompanhou chamados com a equipe. Defina se o colaborador
-                  está 100% apto a assumir chamados sozinho.
-                </div>
 
-                {!podeGerenciarEtapa2e3 ? (
-                  <div className="p-4 rounded-lg bg-gray-100 text-xs text-gray-600 text-center space-y-1">
-                    <p className="font-semibold text-gray-700">Visualização em modo de leitura</p>
-                    <p className="text-[11px] text-gray-500">
-                      {role === 'rh'
-                        ? 'O perfil de RH não realiza a avaliação. A decisão final cabe exclusivamente ao Gestor de TI Responsável ou Administrador.'
-                        : 'Apenas o Gestor Responsável atribuído a este onboarding ou o Administrador podem registrar a decisão final.'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-2">
-                        Decisão Obrigatória *
-                      </label>
-                      <div className="grid grid-cols-2 gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setDecisaoAvaliacao('apto')}
-                          className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 font-bold text-sm transition-all ${
+                  {!podeGerenciarEtapa2e3 ? (
+                    <div className="p-4 rounded-lg bg-gray-100 text-xs text-gray-600 text-center space-y-1">
+                      <p className="font-semibold text-gray-700">Visualização em modo de leitura</p>
+                      <p className="text-[11px] text-gray-500">
+                        {role === 'rh'
+                          ? 'O perfil de RH não realiza a avaliação. A decisão final cabe exclusivamente ao Gestor de TI Responsável ou Administrador.'
+                          : 'Apenas o Gestor Responsável atribuído a este onboarding ou o Administrador podem registrar a decisão final.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-2">
+                          Decisão Obrigatória *
+                        </label>
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setDecisaoAvaliacao('apto')}
+                            className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 font-bold text-sm transition-all ${
+                              decisaoAvaliacao === 'apto'
+                                ? 'border-emerald-600 bg-emerald-50 text-emerald-800 shadow-sm scale-[1.01]'
+                                : 'border-gray-200 hover:border-emerald-300 text-gray-700 hover:bg-gray-50'
+                            }`}
+                          >
+                            <CheckCircle2
+                              className={`w-5 h-5 ${
+                                decisaoAvaliacao === 'apto' ? 'text-emerald-600' : 'text-gray-400'
+                              }`}
+                            />
+                            <span>Apto (Liberar Suporte)</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDecisaoAvaliacao('nao_apto')
+                              if (!faseRetornoId && fasesSetor.length > 0) {
+                                setFaseRetornoId(fasesSetor[0].id)
+                              }
+                            }}
+                            className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 font-bold text-sm transition-all ${
+                              decisaoAvaliacao === 'nao_apto'
+                                ? 'border-red-600 bg-red-50 text-red-800 shadow-sm scale-[1.01]'
+                                : 'border-gray-200 hover:border-red-300 text-gray-700 hover:bg-gray-50'
+                            }`}
+                          >
+                            <XCircle
+                              className={`w-5 h-5 ${
+                                decisaoAvaliacao === 'nao_apto' ? 'text-red-600' : 'text-gray-400'
+                              }`}
+                            />
+                            <span>Não Apto</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Bloco condicional do fluxo Não Apto: Retorno à fase e prazo suplementar */}
+                      {decisaoAvaliacao === 'nao_apto' && (
+                        <div className="p-4 rounded-xl border border-red-200 bg-red-50/50 space-y-3.5 animate-fade-in">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-red-900 uppercase tracking-wider flex items-center gap-1.5">
+                              <AlertCircle className="w-4 h-4 text-red-600" />
+                              Ajuste de Acompanhamento / Reavaliação
+                            </span>
+                            <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-red-100 text-red-800 border border-red-200">
+                              Reavaliações realizadas: {onboarding.reavaliacoes_count || 0} de 2
+                              permitidas
+                            </span>
+                          </div>
+
+                          {(onboarding.reavaliacoes_count || 0) >= 2 ? (
+                            <div className="p-3 bg-red-100 border border-red-300 rounded-lg text-xs text-red-900 space-y-1">
+                              <p className="font-bold flex items-center gap-1.5">
+                                <XCircle className="w-4 h-4 text-red-700" />
+                                Teto de 2 reavaliações atingido!
+                              </p>
+                              <p className="text-[11px]">
+                                O colaborador já passou por 2 ciclos de reavaliação. Ao confirmar, o
+                                status será definido como <strong>Não apto definitivo</strong> e o
+                                processo será encerrado.
+                              </p>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="text-xs text-gray-600 leading-relaxed">
+                                Ao marcar <strong>Não apto</strong>, o status do onboarding mudará
+                                para <strong>Em acompanhamento (âmbar)</strong>. Selecione a fase
+                                técnica para a qual o colaborador deve retornar e os dias
+                                suplementares.
+                              </p>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                <div>
+                                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                                    Fase de Retorno *
+                                  </label>
+                                  <select
+                                    value={faseRetornoId}
+                                    onChange={(e) => setFaseRetornoId(e.target.value)}
+                                    className="w-full text-xs border border-gray-300 rounded-md p-2 bg-white"
+                                    disabled={naoAptoDefinitivo}
+                                  >
+                                    {fasesSetor.length > 0 ? (
+                                      fasesSetor.map((f, idx) => (
+                                        <option key={f.id} value={f.id}>
+                                          Fase {idx + 1}: {f.titulo} ({f.dias_previstos || 2}d)
+                                        </option>
+                                      ))
+                                    ) : (
+                                      <option value="">Nenhuma fase cadastrada no setor</option>
+                                    )}
+                                  </select>
+                                </div>
+
+                                <div>
+                                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                                    Prazo Suplementar (dias) *
+                                  </label>
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    max={30}
+                                    value={prazoSuplementarDias}
+                                    onChange={(e) =>
+                                      setPrazoSuplementarDias(
+                                        Math.max(1, Number(e.target.value) || 1),
+                                      )
+                                    }
+                                    className="h-9 text-xs bg-white border-gray-300"
+                                    disabled={naoAptoDefinitivo}
+                                  />
+                                  <span className="text-[10px] text-gray-500 mt-0.5 block">
+                                    Padrão: 5 dias adicionais à data final.
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Opção para reprovação definitiva antes do teto */}
+                              <div className="pt-2 border-t border-red-200/60 flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  id="chkDefinitivo"
+                                  checked={naoAptoDefinitivo}
+                                  onChange={(e) => setNaoAptoDefinitivo(e.target.checked)}
+                                  className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                />
+                                <label
+                                  htmlFor="chkDefinitivo"
+                                  className="text-xs text-red-800 font-medium cursor-pointer"
+                                >
+                                  Encerrar imediatamente como "Não Apto Definitivo" (sem ciclo
+                                  suplementar)
+                                </label>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1.5">
+                          Observações do Gestor (Opcional)
+                        </label>
+                        <Textarea
+                          rows={3}
+                          placeholder="Ex.: Colaborador demonstrou bom domínio em roteamento, boa comunicação e postura com o cliente..."
+                          value={observacoesAvaliacao}
+                          onChange={(e) => setObservacoesAvaliacao(e.target.value)}
+                          className="text-xs border-gray-300 resize-none"
+                        />
+                      </div>
+
+                      <div className="flex justify-end pt-2">
+                        <Button
+                          onClick={handleRegistrarAvaliacao}
+                          disabled={!decisaoAvaliacao || salvandoAvaliacao}
+                          className={`h-11 px-6 font-semibold rounded-lg shadow-sm ${
                             decisaoAvaliacao === 'apto'
-                              ? 'border-emerald-600 bg-emerald-50 text-emerald-800 shadow-sm scale-[1.01]'
-                              : 'border-gray-200 hover:border-emerald-300 text-gray-700 hover:bg-gray-50'
+                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                              : decisaoAvaliacao === 'nao_apto'
+                                ? 'bg-red-600 hover:bg-red-700 text-white'
+                                : 'bg-brand-600 hover:bg-brand-700 text-white'
                           }`}
                         >
-                          <CheckCircle2
-                            className={`w-5 h-5 ${
-                              decisaoAvaliacao === 'apto' ? 'text-emerald-600' : 'text-gray-400'
-                            }`}
-                          />
-                          <span>Apto (Liberar Suporte)</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setDecisaoAvaliacao('nao_apto')}
-                          className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 font-bold text-sm transition-all ${
-                            decisaoAvaliacao === 'nao_apto'
-                              ? 'border-red-600 bg-red-50 text-red-800 shadow-sm scale-[1.01]'
-                              : 'border-gray-200 hover:border-red-300 text-gray-700 hover:bg-gray-50'
-                          }`}
-                        >
-                          <XCircle
-                            className={`w-5 h-5 ${
-                              decisaoAvaliacao === 'nao_apto' ? 'text-red-600' : 'text-gray-400'
-                            }`}
-                          />
-                          <span>Não Apto</span>
-                        </button>
+                          {salvandoAvaliacao ? 'Registrando Decisão...' : 'Registrar Decisão Final'}
+                        </Button>
                       </div>
                     </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1.5">
-                        Observações do Gestor (Opcional)
-                      </label>
-                      <Textarea
-                        rows={3}
-                        placeholder="Ex.: Colaborador demonstrou bom domínio em roteamento, boa comunicação e postura com o cliente..."
-                        value={observacoesAvaliacao}
-                        onChange={(e) => setObservacoesAvaliacao(e.target.value)}
-                        className="text-xs border-gray-300 resize-none"
-                      />
-                    </div>
-
-                    <div className="flex justify-end pt-2">
-                      <Button
-                        onClick={handleRegistrarAvaliacao}
-                        disabled={!decisaoAvaliacao || salvandoAvaliacao}
-                        className={`h-11 px-6 font-semibold rounded-lg shadow-sm ${
-                          decisaoAvaliacao === 'apto'
-                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                            : decisaoAvaliacao === 'nao_apto'
-                              ? 'bg-red-600 hover:bg-red-700 text-white'
-                              : 'bg-brand-600 hover:bg-brand-700 text-white'
-                        }`}
-                      >
-                        {salvandoAvaliacao ? 'Registrando Decisão...' : 'Registrar Decisão Final'}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Linha do Tempo / Timeline Lateral */}
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm">
-            <h3 className="text-sm font-bold text-[#1A2233] mb-4 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-brand-600" />
-              <span>Linha do Tempo do Onboarding</span>
-            </h3>
-
-            <div className="relative pl-6 space-y-6 border-l-2 border-gray-200 my-2">
-              {/* Evento 1: Criação */}
-              <div className="relative">
-                <div className="absolute -left-[31px] top-0 w-3.5 h-3.5 rounded-full bg-brand-600 border-2 border-white" />
-                <span className="text-xs font-bold text-gray-800 block">Onboarding Iniciado</span>
-                <span className="text-[11px] text-gray-500 block">
-                  {formatDate(onboarding.created)}
-                </span>
-                <span className="text-[11px] text-gray-400 mt-0.5 block">
-                  Prazo de 15 dias calculado.
-                </span>
-              </div>
-
-              {/* Evento 2: Etapa 1 */}
-              <div className="relative">
-                <div
-                  className={`absolute -left-[31px] top-0 w-3.5 h-3.5 rounded-full border-2 border-white ${
-                    onboarding.etapa1_concluida ? 'bg-emerald-600' : 'bg-gray-300'
-                  }`}
-                />
-                <span className="text-xs font-bold text-gray-800 block">Etapa 1 (RH)</span>
-                {onboarding.etapa1_concluida ? (
-                  <>
-                    <span className="text-[11px] text-emerald-600 font-semibold block">
-                      Concluída em {formatDate(onboarding.data_conclusao_etapa1)}
-                    </span>
-                    <span className="text-[11px] text-gray-400 block">
-                      Validação institucional aprovada.
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-[11px] text-gray-400 block">
-                    Pendente de validação pelo RH
-                  </span>
-                )}
-              </div>
-
-              {/* Evento 3: Etapa 2 */}
-              <div className="relative">
-                <div
-                  className={`absolute -left-[31px] top-0 w-3.5 h-3.5 rounded-full border-2 border-white ${
-                    onboarding.etapa2_concluida ? 'bg-emerald-600' : 'bg-gray-300'
-                  }`}
-                />
-                <span className="text-xs font-bold text-gray-800 block">
-                  Etapa 2 (Vivência Técnica)
-                </span>
-                {onboarding.etapa2_concluida ? (
-                  <>
-                    <span className="text-[11px] text-emerald-600 font-semibold block">
-                      Concluída em {formatDate(onboarding.data_conclusao_etapa2)}
-                    </span>
-                    <span className="text-[11px] text-gray-400 block">
-                      Tarefas do setor cumpridas.
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-[11px] text-gray-400 block">
-                    {onboarding.etapa1_concluida
-                      ? 'Em andamento na vivência'
-                      : 'Aguardando liberação'}
-                  </span>
-                )}
-              </div>
-
-              {/* Evento 4: Avaliação Final */}
-              <div className="relative">
-                <div
-                  className={`absolute -left-[31px] top-0 w-3.5 h-3.5 rounded-full border-2 border-white ${
-                    onboarding.etapa3_concluida
-                      ? onboarding.status === 'concluido'
-                        ? 'bg-emerald-600'
-                        : 'bg-red-600'
-                      : 'bg-gray-300'
-                  }`}
-                />
-                <span className="text-xs font-bold text-gray-800 block">
-                  Etapa 3 (Avaliação do Gestor)
-                </span>
-                {onboarding.etapa3_concluida ? (
-                  <>
-                    <span
-                      className={`text-[11px] font-bold block ${
-                        onboarding.status === 'concluido' ? 'text-emerald-600' : 'text-red-600'
-                      }`}
-                    >
-                      Resultado: {onboarding.status === 'concluido' ? 'Apto' : 'Não Apto'}
-                    </span>
-                    <span className="text-[11px] text-gray-400 block">
-                      {formatDate(onboarding.data_conclusao_etapa3)}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-[11px] text-gray-400 block">
-                    Aguardando decisão do gestor
-                  </span>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Card com Detalhes do Setor & Suporte Terceirizado */}
-          <div className="bg-white p-5 rounded-xl border border-gray-200/90 shadow-sm text-xs space-y-2.5">
-            <span className="font-bold text-gray-800 block uppercase tracking-wider text-[11px]">
-              Fluxo Padrão da Equipe
-            </span>
-            <p className="text-gray-600 leading-relaxed">
-              1. O gestor atribui o chamado no Movidesk para o nome do analista.
-              <br />
-              2. O analista contata o cliente por telefone e executa acesso remoto via TeamViewer.
-              <br />
-              3. Demandas não resolvidas remotamente são direcionadas para atendimento presencial
-              pela equipe de Campo.
-            </p>
+          {/* Linha do Tempo / Timeline Lateral */}
+          <div className="space-y-6">
+            <div className="bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm">
+              <h3 className="text-sm font-bold text-[#1A2233] mb-4 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-brand-600" />
+                <span>Linha do Tempo do Onboarding</span>
+              </h3>
+
+              <div className="relative pl-6 space-y-6 border-l-2 border-gray-200 my-2">
+                {/* Evento 1: Criação */}
+                <div className="relative">
+                  <div className="absolute -left-[31px] top-0 w-3.5 h-3.5 rounded-full bg-brand-600 border-2 border-white" />
+                  <span className="text-xs font-bold text-gray-800 block">Onboarding Iniciado</span>
+                  <span className="text-[11px] text-gray-500 block">
+                    {formatDate(onboarding.created)}
+                  </span>
+                  <span className="text-[11px] text-gray-400 mt-0.5 block">
+                    Prazo de 15 dias calculado.
+                  </span>
+                </div>
+
+                {/* Evento 2: Etapa 1 */}
+                <div className="relative">
+                  <div
+                    className={`absolute -left-[31px] top-0 w-3.5 h-3.5 rounded-full border-2 border-white ${
+                      onboarding.etapa1_concluida ? 'bg-emerald-600' : 'bg-gray-300'
+                    }`}
+                  />
+                  <span className="text-xs font-bold text-gray-800 block">Etapa 1 (RH)</span>
+                  {onboarding.etapa1_concluida ? (
+                    <>
+                      <span className="text-[11px] text-emerald-600 font-semibold block">
+                        Concluída em {formatDate(onboarding.data_conclusao_etapa1)}
+                      </span>
+                      <span className="text-[11px] text-gray-400 block">
+                        Validação institucional aprovada.
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-[11px] text-gray-400 block">
+                      Pendente de validação pelo RH
+                    </span>
+                  )}
+                </div>
+
+                {/* Evento 3: Etapa 2 */}
+                <div className="relative">
+                  <div
+                    className={`absolute -left-[31px] top-0 w-3.5 h-3.5 rounded-full border-2 border-white ${
+                      onboarding.etapa2_concluida ? 'bg-emerald-600' : 'bg-gray-300'
+                    }`}
+                  />
+                  <span className="text-xs font-bold text-gray-800 block">
+                    Etapa 2 (Vivência Técnica)
+                  </span>
+                  {onboarding.etapa2_concluida ? (
+                    <>
+                      <span className="text-[11px] text-emerald-600 font-semibold block">
+                        Concluída em {formatDate(onboarding.data_conclusao_etapa2)}
+                      </span>
+                      <span className="text-[11px] text-gray-400 block">
+                        Tarefas do setor cumpridas.
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-[11px] text-gray-400 block">
+                      {onboarding.etapa1_concluida
+                        ? 'Em andamento na vivência'
+                        : 'Aguardando liberação'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Evento 4: Avaliação Final */}
+                <div className="relative">
+                  <div
+                    className={`absolute -left-[31px] top-0 w-3.5 h-3.5 rounded-full border-2 border-white ${
+                      onboarding.etapa3_concluida
+                        ? onboarding.status === 'concluido'
+                          ? 'bg-emerald-600'
+                          : 'bg-red-600'
+                        : 'bg-gray-300'
+                    }`}
+                  />
+                  <span className="text-xs font-bold text-gray-800 block">
+                    Etapa 3 (Avaliação do Gestor)
+                  </span>
+                  {onboarding.etapa3_concluida ? (
+                    <>
+                      <span
+                        className={`text-[11px] font-bold block ${
+                          onboarding.status === 'concluido' ? 'text-emerald-600' : 'text-red-600'
+                        }`}
+                      >
+                        Resultado: {onboarding.status === 'concluido' ? 'Apto' : 'Não Apto'}
+                      </span>
+                      <span className="text-[11px] text-gray-400 block">
+                        {formatDate(onboarding.data_conclusao_etapa3)}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-[11px] text-gray-400 block">
+                      Aguardando decisão do gestor
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Card com Detalhes do Setor & Suporte Terceirizado */}
+            <div className="bg-white p-5 rounded-xl border border-gray-200/90 shadow-sm text-xs space-y-2.5">
+              <span className="font-bold text-gray-800 block uppercase tracking-wider text-[11px]">
+                Fluxo Padrão da Equipe
+              </span>
+              <p className="text-gray-600 leading-relaxed">
+                1. O gestor atribui o chamado no Movidesk para o nome do analista.
+                <br />
+                2. O analista contata o cliente por telefone e executa acesso remoto via TeamViewer.
+                <br />
+                3. Demandas não resolvidas remotamente são direcionadas para atendimento presencial
+                pela equipe de Campo.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Modal: Adicionar Item (Etapa 1 ou Etapa 2) */}
       <Dialog open={modalItemOpen} onOpenChange={setModalItemOpen}>

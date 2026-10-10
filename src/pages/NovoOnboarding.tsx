@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { onboardingService, userService, setorService } from '@/services/onboarding'
+import { onboardingService, userService, setorService, faseService } from '@/services/onboarding'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
-import type { Setor, User, SetorModel } from '@/types/onboarding'
+import type { Setor, User, SetorModel, FaseModelo, CronogramaFaseItem } from '@/types/onboarding'
 import { SETORES_INFO, getSetorVisual } from '@/types/onboarding'
 import {
   ArrowLeft,
@@ -42,6 +42,8 @@ export default function NovoOnboarding() {
   const [loadingSetores, setLoadingSetores] = useState(true)
   const [gestores, setGestores] = useState<User[]>([])
   const [loadingGestores, setLoadingGestores] = useState(true)
+  const [fasesDoSetor, setFasesDoSetor] = useState<FaseModelo[]>([])
+  const [loadingFases, setLoadingFases] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -66,14 +68,14 @@ export default function NovoOnboarding() {
     // Carregar setores ativos da coleção
     setorService
       .listAtivos()
-      .then((res) => {
+      .then((res: SetorModel[]) => {
         if (res.length > 0) {
           setSetoresList(res)
           const firstKey = res[0].chave || res[0].nome
           setSetor(firstKey)
         }
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         console.error(err)
       })
       .finally(() => {
@@ -81,21 +83,177 @@ export default function NovoOnboarding() {
       })
   }, [])
 
-  // Data de fim calculada = início + 15 dias
-  const dataFimCalculada = useMemo(() => {
-    if (!dataInicio) return ''
-    try {
-      const [ano, mes, dia] = dataInicio.split('-').map(Number)
-      const d = new Date(Date.UTC(ano, mes - 1, dia))
-      d.setUTCDate(d.getUTCDate() + 15)
-      const dd = String(d.getUTCDate()).padStart(2, '0')
-      const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
-      const yyyy = d.getUTCFullYear()
-      return `${dd}/${mm}/${yyyy}`
-    } catch {
-      return ''
+  // Carregar fases quando setor mudar
+  useEffect(() => {
+    if (!setor) return
+    const foundModel = setoresList.find(
+      (s) => s.chave === setor || s.nome === setor || s.id === setor,
+    )
+    setLoadingFases(true)
+    faseService
+      .listBySetor(setor, foundModel?.id)
+      .then((fases) => {
+        setFasesDoSetor(fases)
+      })
+      .catch((err) => {
+        console.error('Erro ao carregar fases do setor:', err)
+      })
+      .finally(() => {
+        setLoadingFases(false)
+      })
+  }, [setor, setoresList])
+
+  // Cálculo e validação dos 15 dias:
+  // Etapa 1 RH: 1 dia
+  // Fases da Etapa 2: soma de dias_previstos (ou fallback padrão)
+  // Etapa 3 Avaliação: 1 dia
+  const calculoDias = useMemo(() => {
+    const diasEtapa1 = 1
+    const diasEtapa3 = 1
+
+    // Fases da etapa 2 ordenadas
+    const fasesSorted = [...fasesDoSetor].sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+    // Se não houver fases cadastradas para o setor ainda, usamos a distribuição padrão de 13 dias
+    const diasFases =
+      fasesSorted.length > 0
+        ? fasesSorted.reduce(
+            (acc, f) => acc + (f.dias_previstos && f.dias_previstos > 0 ? f.dias_previstos : 2),
+            0,
+          )
+        : 13
+
+    const totalDias = diasEtapa1 + diasFases + diasEtapa3
+    const valido = totalDias <= 15
+    const excesso = totalDias > 15 ? totalDias - 15 : 0
+
+    // Construção do cronograma sequencial de datas reais
+    const cronograma: Array<{
+      fase_id: string
+      titulo: string
+      etapa: number
+      dias: number
+      data_inicio: string
+      data_limite: string
+      data_inicio_fmt: string
+      data_limite_fmt: string
+      ordem: number
+    }> = []
+
+    if (dataInicio) {
+      try {
+        const [ano, mes, dia] = dataInicio.split('-').map(Number)
+        let cursor = new Date(Date.UTC(ano, mes - 1, dia))
+
+        const formatarDDMM = (d: Date) => {
+          const dd = String(d.getUTCDate()).padStart(2, '0')
+          const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+          return `${dd}/${mm}`
+        }
+
+        const toIso = (d: Date) => d.toISOString().split('T')[0]
+
+        // 1. Etapa 1 (RH)
+        const inicioEtapa1 = new Date(cursor)
+        const fimEtapa1 = new Date(cursor)
+        fimEtapa1.setUTCDate(fimEtapa1.getUTCDate() + (diasEtapa1 - 1))
+        cronograma.push({
+          fase_id: 'etapa_1',
+          titulo: 'Etapa 1: Apresentação RH',
+          etapa: 1,
+          dias: diasEtapa1,
+          data_inicio: toIso(inicioEtapa1),
+          data_limite: toIso(fimEtapa1),
+          data_inicio_fmt: formatarDDMM(inicioEtapa1),
+          data_limite_fmt: formatarDDMM(fimEtapa1),
+          ordem: 0,
+        })
+        // Avança cursor para o próximo dia
+        cursor = new Date(fimEtapa1)
+        cursor.setUTCDate(cursor.getUTCDate() + 1)
+
+        // 2. Fases Etapa 2
+        if (fasesSorted.length > 0) {
+          fasesSorted.forEach((fase, idx) => {
+            const diasFase =
+              fase.dias_previstos && fase.dias_previstos > 0 ? fase.dias_previstos : 2
+            const inicioFase = new Date(cursor)
+            const fimFase = new Date(cursor)
+            fimFase.setUTCDate(fimFase.getUTCDate() + (diasFase - 1))
+            cronograma.push({
+              fase_id: fase.id,
+              titulo: `Fase ${idx + 1}: ${fase.titulo}`,
+              etapa: 2,
+              dias: diasFase,
+              data_inicio: toIso(inicioFase),
+              data_limite: toIso(fimFase),
+              data_inicio_fmt: formatarDDMM(inicioFase),
+              data_limite_fmt: formatarDDMM(fimFase),
+              ordem: idx + 1,
+            })
+            cursor = new Date(fimFase)
+            cursor.setUTCDate(cursor.getUTCDate() + 1)
+          })
+        } else {
+          // Fallback caso não haja fases
+          const inicioFase = new Date(cursor)
+          const fimFase = new Date(cursor)
+          fimFase.setUTCDate(fimFase.getUTCDate() + (diasFases - 1))
+          cronograma.push({
+            fase_id: 'etapa_2_geral',
+            titulo: 'Etapa 2: Vivência Técnica',
+            etapa: 2,
+            dias: diasFases,
+            data_inicio: toIso(inicioFase),
+            data_limite: toIso(fimFase),
+            data_inicio_fmt: formatarDDMM(inicioFase),
+            data_limite_fmt: formatarDDMM(fimFase),
+            ordem: 1,
+          })
+          cursor = new Date(fimFase)
+          cursor.setUTCDate(cursor.getUTCDate() + 1)
+        }
+
+        // 3. Etapa 3 (Avaliação Gestor)
+        const inicioEtapa3 = new Date(cursor)
+        const fimEtapa3 = new Date(cursor)
+        fimEtapa3.setUTCDate(fimEtapa3.getUTCDate() + (diasEtapa3 - 1))
+        cronograma.push({
+          fase_id: 'etapa_3',
+          titulo: 'Etapa 3: Avaliação Final pelo Gestor',
+          etapa: 3,
+          dias: diasEtapa3,
+          data_inicio: toIso(inicioEtapa3),
+          data_limite: toIso(fimEtapa3),
+          data_inicio_fmt: formatarDDMM(inicioEtapa3),
+          data_limite_fmt: formatarDDMM(fimEtapa3),
+          ordem: 99,
+        })
+      } catch (e) {
+        console.error('Erro ao calcular cronograma:', e)
+      }
     }
-  }, [dataInicio])
+
+    return {
+      diasEtapa1,
+      diasFases,
+      diasEtapa3,
+      totalDias,
+      valido,
+      excesso,
+      fasesSorted,
+      cronograma,
+    }
+  }, [dataInicio, fasesDoSetor])
+
+  // Data de fim calculada pelo cronograma
+  const dataFimCalculada = useMemo(() => {
+    if (calculoDias.cronograma.length > 0) {
+      const ultimo = calculoDias.cronograma[calculoDias.cronograma.length - 1]
+      const [ano, mes, dia] = ultimo.data_limite.split('-')
+      return `${dia}/${mes}/${ano}`
+    }
+    return ''
+  }, [calculoDias])
 
   const validate = () => {
     const errs: Record<string, string> = {}
@@ -122,6 +280,10 @@ export default function NovoOnboarding() {
       errs.dataInicio = 'Defina a data de início do treinamento.'
     }
 
+    if (!calculoDias.valido) {
+      errs.dias = `A soma das fases (${calculoDias.totalDias} dias) ultrapassa o limite máximo de 15 dias em ${calculoDias.excesso} dia(s). Ajuste as fases da área em Modelos antes de prosseguir.`
+    }
+
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -130,7 +292,13 @@ export default function NovoOnboarding() {
     e.preventDefault()
 
     if (!validate()) {
-      toast.error('Preencha todos os campos obrigatórios corretamente.')
+      if (!calculoDias.valido) {
+        toast.error(
+          `Criação bloqueada: cronograma soma ${calculoDias.totalDias} dias (limite: 15 dias). Estouro de ${calculoDias.excesso} dia(s).`,
+        )
+      } else {
+        toast.error('Preencha todos os campos obrigatórios corretamente.')
+      }
       return
     }
 
@@ -141,6 +309,16 @@ export default function NovoOnboarding() {
         (s) => s.chave === setor || s.nome === setor || s.id === setor,
       )
 
+      // Montar payload do cronograma simplificado para persistir
+      const cronogramaPayload: CronogramaFaseItem[] = calculoDias.cronograma.map((item) => ({
+        fase_id: item.fase_id,
+        titulo: item.titulo,
+        ordem: item.ordem,
+        dias: item.dias,
+        data_inicio: item.data_inicio,
+        data_limite: item.data_limite,
+      }))
+
       const novo = await onboardingService.create({
         colaborador_nome: nome,
         colaborador_email: email,
@@ -149,9 +327,10 @@ export default function NovoOnboarding() {
         setor_ref: foundModel?.id,
         gestor_id: gestorId,
         data_inicio: dataInicio,
+        cronograma_fases: cronogramaPayload,
       })
 
-      toast.success('Onboarding criado com sucesso!')
+      toast.success('Onboarding criado com sucesso com cronograma de 15 dias!')
       navigate(`/colaboradores/${novo.id}`)
     } catch (err: unknown) {
       console.error(err)
@@ -191,32 +370,120 @@ export default function NovoOnboarding() {
           </p>
         </div>
 
-        {/* Caixa Informativa sobre as 3 etapas sequenciais */}
-        <div className="mb-8 p-4 rounded-xl bg-brand-50/80 border border-brand-200/70 text-brand-950">
-          <div className="flex items-center gap-2 mb-2 font-bold text-xs uppercase tracking-wider text-brand-800">
-            <Sparkles className="w-4 h-4 text-brand-600" />
-            <span>Estrutura de 15 dias da Mundo Open</span>
+        {/* Caixa Informativa sobre as 3 etapas sequenciais com validação de 15 dias */}
+        <div
+          className={`mb-8 p-4 rounded-xl border ${
+            calculoDias.valido
+              ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+              : 'bg-red-50 border-red-300 text-red-950'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider">
+              {calculoDias.valido ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-red-600" />
+              )}
+              <span>Distribuição do Ciclo de 15 Dias (Mundo Open)</span>
+            </div>
+            <div
+              className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                calculoDias.valido
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-red-600 text-white animate-pulse'
+              }`}
+            >
+              Total: {calculoDias.totalDias} de 15 dias
+            </div>
           </div>
+
+          {!calculoDias.valido && (
+            <div className="mb-3 p-3 rounded-lg bg-red-100/90 border border-red-300 text-xs text-red-800">
+              <p className="font-bold flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                Criação bloqueada: o cronograma configurado excede os 15 dias permitidos!
+              </p>
+              <p className="mt-1">
+                A soma das etapas ({calculoDias.diasEtapa1}d Etapa 1 + {calculoDias.diasFases}d
+                Fases da Área + {calculoDias.diasEtapa3}d Avaliação) totaliza{' '}
+                <strong>{calculoDias.totalDias} dias</strong>, estourando{' '}
+                <strong>{calculoDias.excesso} dia(s)</strong> do limite oficial. Reduza os dias
+                previstos das fases no menu de Modelos.
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-            <div className="bg-white/90 p-2.5 rounded-lg border border-brand-200/60">
-              <span className="font-bold text-brand-700 block mb-1">1. Apresentação RH</span>
+            <div className="bg-white/95 p-3 rounded-lg border border-gray-200 shadow-2xs">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-emerald-700">1. Apresentação RH</span>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                  {calculoDias.diasEtapa1} dia
+                </span>
+              </div>
               <p className="text-gray-600 text-[11px] leading-relaxed">
-                Cultura da empresa, estrutura dos setores e boas práticas gerais de atendimento.
+                Mundo Open, regras de convivência, canais de atendimento e boas práticas.
               </p>
             </div>
-            <div className="bg-white/90 p-2.5 rounded-lg border border-brand-200/60">
-              <span className="font-bold text-brand-700 block mb-1">2. Vivência Técnica</span>
+
+            <div className="bg-white/95 p-3 rounded-lg border border-gray-200 shadow-2xs">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-brand-700">2. Vivência Técnica</span>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-brand-100 text-brand-800">
+                  {calculoDias.diasFases} dias ({calculoDias.fasesSorted.length || 6} fases)
+                </span>
+              </div>
               <p className="text-gray-600 text-[11px] leading-relaxed">
-                Movidesk (chamados), Passportal (documentação) e procedimentos específicos do setor.
+                Configuração, Mapeamento, Shadowing, Atendimento Invertido, Solo N1 e Consolidação.
               </p>
             </div>
-            <div className="bg-white/90 p-2.5 rounded-lg border border-brand-200/60">
-              <span className="font-bold text-brand-700 block mb-1">3. Avaliação Gestor</span>
+
+            <div className="bg-white/95 p-3 rounded-lg border border-gray-200 shadow-2xs">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-purple-700">3. Avaliação Gestor</span>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-purple-100 text-purple-800">
+                  {calculoDias.diasEtapa3} dia
+                </span>
+              </div>
               <p className="text-gray-600 text-[11px] leading-relaxed">
-                Gestor avalia após 15 dias e decide se o colaborador está apto para o suporte.
+                Reunião de alinhamento com o gestor técnico para parecer de aptidão.
               </p>
             </div>
           </div>
+
+          {/* Cronograma Sequencial Detalhado */}
+          {calculoDias.cronograma.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-emerald-200/60">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-gray-700 block mb-2">
+                Linha do Tempo Planejada (a partir de {dataInicio.split('-').reverse().join('/')}):
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                {calculoDias.cronograma.map((item) => (
+                  <div
+                    key={item.fase_id}
+                    className="p-2 rounded bg-white border border-gray-200 text-[11px] flex flex-col justify-between"
+                  >
+                    <span className="font-semibold text-gray-800 truncate" title={item.titulo}>
+                      {item.titulo}
+                    </span>
+                    <div className="flex items-center justify-between mt-1 text-gray-600 text-[10px]">
+                      <span>{item.dias}d</span>
+                      {item.fase_id === 'etapa_3' ? (
+                        <span className="font-bold text-purple-700">
+                          avaliar até {item.data_limite_fmt}
+                        </span>
+                      ) : (
+                        <span className="font-medium text-emerald-700">
+                          até {item.data_limite_fmt}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Nome */}
@@ -415,14 +682,20 @@ export default function NovoOnboarding() {
             </Button>
             <Button
               type="submit"
-              disabled={submitting}
-              className="h-11 px-6 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm"
+              disabled={submitting || !calculoDias.valido}
+              className={`h-11 px-6 font-semibold rounded-lg shadow-sm ${
+                calculoDias.valido
+                  ? 'bg-brand-600 hover:bg-brand-700 text-white'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
             >
               {submitting ? (
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   <span>Criando onboarding...</span>
                 </div>
+              ) : !calculoDias.valido ? (
+                `Bloqueado (${calculoDias.totalDias}d > 15d)`
               ) : (
                 'Criar Onboarding'
               )}

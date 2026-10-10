@@ -1,14 +1,21 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
-import { onboardingService, avaliacaoService, setorService } from '@/services/onboarding'
+import {
+  onboardingService,
+  avaliacaoService,
+  setorService,
+  faseService,
+  auditoriaService,
+} from '@/services/onboarding'
 import { useRealtime } from '@/hooks/use-realtime'
-import type { Onboarding, AvaliacaoDecisao, SetorModel } from '@/types/onboarding'
+import type { Onboarding, AvaliacaoDecisao, SetorModel, FaseModelo } from '@/types/onboarding'
 import { SETORES_INFO, getSetorVisual, setorToString } from '@/types/onboarding'
 import {
   ClipboardCheck,
   Flame,
   AlertTriangle,
+  AlertCircle,
   CheckCircle2,
   XCircle,
   Clock,
@@ -18,6 +25,7 @@ import {
   UserCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -42,6 +50,15 @@ export default function Avaliacoes() {
   const [decisao, setDecisao] = useState<AvaliacaoDecisao | null>(null)
   const [observacoes, setObservacoes] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  // Estado para fluxo Não Apto
+  const [fasesDoSetor, setFasesDoSetor] = useState<FaseModelo[]>([])
+  const [faseRetornoId, setFaseRetornoId] = useState<string>('')
+  const [prazoSuplementarDias, setPrazoSuplementarDias] = useState<number>(5)
+  const [naoAptoDefinitivo, setNaoAptoDefinitivo] = useState(false)
+  const [statusFiltro, setStatusFiltro] = useState<'pendentes' | 'em_acompanhamento' | 'todos'>(
+    'pendentes',
+  )
 
   const fetchData = async () => {
     try {
@@ -71,7 +88,12 @@ export default function Avaliacoes() {
 
     return onboardings
       .filter((o) => {
-        const matchStatus = o.status === 'avaliacao_pendente'
+        const matchStatus =
+          statusFiltro === 'pendentes'
+            ? o.status === 'avaliacao_pendente'
+            : statusFiltro === 'em_acompanhamento'
+              ? o.status === 'em_acompanhamento'
+              : o.status === 'avaliacao_pendente' || o.status === 'em_acompanhamento'
         const setorStr = setorToString(o.setor)
         const matchSetor =
           filtroSetor === 'todos' ||
@@ -99,7 +121,7 @@ export default function Avaliacoes() {
         }
       })
       .sort((a, b) => a.diasRestantes - b.diasRestantes)
-  }, [onboardings, filtroSetor])
+  }, [onboardings, filtroSetor, statusFiltro])
 
   // Colaboradores que excederam o prazo de 15 dias
   const atrasados = useMemo(() => {
@@ -117,13 +139,35 @@ export default function Avaliacoes() {
     setSelectedOnboarding(item)
     setDecisao(null)
     setObservacoes('')
+    setFaseRetornoId('')
+    setPrazoSuplementarDias(5)
+    setNaoAptoDefinitivo(false)
     setModalOpen(true)
+
+    // Carregar fases do setor do colaborador
+    faseService
+      .listBySetor(item.setor, typeof item.setor_ref === 'string' ? item.setor_ref : undefined)
+      .then((fases) => {
+        setFasesDoSetor(fases)
+        if (fases.length > 0) {
+          setFaseRetornoId(fases[0].id)
+        }
+      })
+      .catch((err) => console.error(err))
   }
 
   const handleSalvarAvaliacao = async () => {
     if (!selectedOnboarding || !user) return
     if (!decisao) {
       toast.error('A decisão (Apto ou Não Apto) é obrigatória.')
+      return
+    }
+
+    const reavaliacoesCount = selectedOnboarding.reavaliacoes_count || 0
+    const atingiuTeto = reavaliacoesCount >= 2
+
+    if (decisao === 'nao_apto' && !atingiuTeto && !naoAptoDefinitivo && !faseRetornoId) {
+      toast.error('Selecione a fase de retorno para o colaborador.')
       return
     }
 
@@ -134,13 +178,50 @@ export default function Avaliacoes() {
         avaliadorId: user.id,
         decisao,
         observacoes: observacoes.trim(),
+        faseRetornoId: decisao === 'nao_apto' ? faseRetornoId : undefined,
+        prazoSuplementarDias: decisao === 'nao_apto' ? prazoSuplementarDias : undefined,
+        definitivo: decisao === 'nao_apto' ? atingiuTeto || naoAptoDefinitivo : false,
       })
 
-      toast.success(
-        decisao === 'apto'
-          ? `Decisão registrada! ${selectedOnboarding.colaborador_nome} marcado como Apto. E-mail de notificação enviado para o RH e Administração.`
-          : `Decisão registrada! ${selectedOnboarding.colaborador_nome} marcado como Não Apto. E-mail de notificação enviado para o RH e Administração.`,
-      )
+      const faseRetornoObj = fasesDoSetor.find((f) => f.id === faseRetornoId)
+
+      // Registrar auditoria
+      await auditoriaService.registrar({
+        onboardingId: selectedOnboarding.id,
+        colaboradorNome: selectedOnboarding.colaborador_nome,
+        usuarioId: user.id,
+        usuarioNome: user.name || user.email,
+        usuarioRole: role || '',
+        gestorNome: selectedOnboarding.expand?.gestor_id?.name || '',
+        acao:
+          decisao === 'apto'
+            ? 'Avaliação: Aprovado (Apto)'
+            : atingiuTeto || naoAptoDefinitivo
+              ? 'Avaliação: Não Apto Definitivo'
+              : `Avaliação: Não Apto (Retorno à fase ${faseRetornoObj?.titulo || 'técnica'})`,
+        detalhes:
+          decisao === 'apto'
+            ? `Colaborador aprovado como APTO. Parecer: ${observacoes.trim() || 'Sem observações'}`
+            : atingiuTeto || naoAptoDefinitivo
+              ? `Reprovado em caráter definitivo após ${reavaliacoesCount + 1} ciclos. Parecer: ${observacoes.trim() || 'Sem observações'}`
+              : `Retorno para a fase "${faseRetornoObj?.titulo || 'selecionada'}" com +${prazoSuplementarDias} dias de prazo suplementar. Status: Em acompanhamento. Parecer: ${observacoes.trim() || 'Sem observações'}`,
+        foraPrazo: false,
+      })
+
+      if (decisao === 'apto') {
+        toast.success(
+          `Decisão registrada! ${selectedOnboarding.colaborador_nome} marcado como Apto. E-mail de notificação enviado para o RH e Administração.`,
+        )
+      } else if (atingiuTeto || naoAptoDefinitivo) {
+        toast.error(
+          `Decisão registrada! ${selectedOnboarding.colaborador_nome} reprovado em definitivo.`,
+        )
+      } else {
+        toast.info(
+          `Decisão registrada! ${selectedOnboarding.colaborador_nome} retornou para acompanhamento na fase "${faseRetornoObj?.titulo || 'selecionada'}" com +${prazoSuplementarDias} dias suplementares.`,
+        )
+      }
+
       setModalOpen(false)
       fetchData()
     } catch (err) {
@@ -200,8 +281,47 @@ export default function Avaliacoes() {
         </div>
       )}
 
+      {/* Filtro de Visão: Pendentes / Em Acompanhamento / Todos */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setStatusFiltro('pendentes')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+            statusFiltro === 'pendentes'
+              ? 'bg-brand-600 text-white shadow-xs'
+              : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+          }`}
+        >
+          Aguardando Avaliação Regular
+        </button>
+        <button
+          type="button"
+          onClick={() => setStatusFiltro('em_acompanhamento')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 ${
+            statusFiltro === 'em_acompanhamento'
+              ? 'bg-amber-600 text-white shadow-xs'
+              : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
+          }`}
+        >
+          <AlertCircle className="w-3.5 h-3.5" />
+          <span>Em Acompanhamento (Reavaliação)</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setStatusFiltro('todos')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+            statusFiltro === 'todos'
+              ? 'bg-gray-800 text-white shadow-xs'
+              : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+          }`}
+        >
+          Todos os Pendentes
+        </button>
+      </div>
+
       {/* Painel em Destaque */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {' '}
         {/* Total Pendente */}
         <div className="bg-white p-5 rounded-xl border border-gray-200/90 shadow-sm flex items-center justify-between">
           <div>
@@ -215,7 +335,6 @@ export default function Avaliacoes() {
             <ClipboardCheck className="w-6 h-6" />
           </div>
         </div>
-
         {/* Em Prazo */}
         <div className="bg-white p-5 rounded-xl border border-gray-200/90 shadow-sm flex items-center justify-between">
           <div>
@@ -231,7 +350,6 @@ export default function Avaliacoes() {
             <CheckCircle2 className="w-6 h-6" />
           </div>
         </div>
-
         {/* Excederam Prazo */}
         <div className="bg-white p-5 rounded-xl border border-gray-200/90 shadow-sm flex items-center justify-between">
           <div>
@@ -541,11 +659,92 @@ export default function Avaliacoes() {
                     />
                     <span>Não Apto</span>
                     <span className="text-[11px] font-normal text-gray-500">
-                      Não atingiu requisitos
+                      Retorna à fase ou reprovação
                     </span>
                   </button>
                 </div>
               </div>
+
+              {/* Se Não Apto: formulário de retorno e prazo suplementar */}
+              {decisao === 'nao_apto' && (
+                <div className="p-3.5 rounded-xl border border-red-200 bg-red-50/50 space-y-3 animate-fade-in text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-red-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <AlertCircle className="w-4 h-4 text-red-600" />
+                      Retorno para Acompanhamento
+                    </span>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-red-100 text-red-800 border border-red-200">
+                      Ciclos já realizados: {selectedOnboarding.reavaliacoes_count || 0}/2
+                    </span>
+                  </div>
+
+                  {(selectedOnboarding.reavaliacoes_count || 0) >= 2 ? (
+                    <div className="p-2.5 bg-red-100 border border-red-300 rounded text-red-900 text-xs">
+                      <strong>Teto de 2 reavaliações atingido:</strong> este colaborador será
+                      encerrado como <strong>Não Apto Definitivo</strong>.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                            Fase de Retorno *
+                          </label>
+                          <select
+                            value={faseRetornoId}
+                            onChange={(e) => setFaseRetornoId(e.target.value)}
+                            disabled={naoAptoDefinitivo}
+                            className="w-full text-xs border border-gray-300 rounded-md p-1.5 bg-white"
+                          >
+                            {fasesDoSetor.length > 0 ? (
+                              fasesDoSetor.map((f, idx) => (
+                                <option key={f.id} value={f.id}>
+                                  Fase {idx + 1}: {f.titulo} ({f.dias_previstos || 2}d)
+                                </option>
+                              ))
+                            ) : (
+                              <option value="">Nenhuma fase encontrada</option>
+                            )}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                            Prazo Suplementar (dias) *
+                          </label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={30}
+                            value={prazoSuplementarDias}
+                            onChange={(e) =>
+                              setPrazoSuplementarDias(Math.max(1, Number(e.target.value) || 1))
+                            }
+                            disabled={naoAptoDefinitivo}
+                            className="h-8 text-xs bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-red-200/60 flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="chkDefinitivoModal"
+                          checked={naoAptoDefinitivo}
+                          onChange={(e) => setNaoAptoDefinitivo(e.target.checked)}
+                          className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                        />
+                        <label
+                          htmlFor="chkDefinitivoModal"
+                          className="text-xs text-red-800 font-medium cursor-pointer"
+                        >
+                          Encerrar como Não Apto Definitivo (sem ciclo suplementar)
+                        </label>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1.5">

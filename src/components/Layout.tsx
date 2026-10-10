@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   UserCheck,
   Shield,
+  FileText,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -40,6 +41,7 @@ const navItems: NavItem[] = [
   { label: 'Colaboradores', path: '/colaboradores', icon: Users },
   { label: 'Modelos de Tarefas', path: '/modelos', icon: Layers, allowedRoles: ['admin', 'rh'] },
   { label: 'Avaliações', path: '/avaliacoes', icon: ClipboardCheck },
+  { label: 'Auditoria & Logs', path: '/logs', icon: FileText, allowedRoles: ['admin'] },
   { label: 'Usuários', path: '/usuarios', icon: Shield, allowedRoles: ['admin', 'rh'] },
 ]
 
@@ -64,6 +66,7 @@ export default function Layout() {
     if (p.startsWith('/colaboradores')) return 'Colaboradores em Onboarding'
     if (p.startsWith('/modelos')) return 'Modelos de Tarefas por Setor'
     if (p.startsWith('/avaliacoes')) return 'Avaliações Finais dos Gestores'
+    if (p.startsWith('/logs')) return 'Logs de Auditoria'
     if (p.startsWith('/usuarios')) return 'Gestão de Usuários'
     return 'Onboarding de Colaboradores'
   }

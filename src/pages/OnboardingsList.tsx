@@ -213,6 +213,7 @@ export default function OnboardingsList() {
             { id: 'todos', label: 'Todos' },
             { id: 'novo', label: 'Novo' },
             { id: 'em_andamento', label: 'Em andamento' },
+            { id: 'em_acompanhamento', label: 'Em acompanhamento' },
             { id: 'avaliacao_pendente', label: 'Aguardando avaliação' },
             { id: 'concluido', label: 'Concluído' },
             { id: 'nao_apto', label: 'Não apto' },

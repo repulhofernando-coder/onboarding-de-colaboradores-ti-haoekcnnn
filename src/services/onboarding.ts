@@ -13,6 +13,7 @@ import type {
   SetorModel,
   ConfirmacaoColaborador,
   FaseModelo,
+  LogAuditoria,
 } from '@/types/onboarding'
 
 function generateRandomToken(length = 32): string {
@@ -426,6 +427,7 @@ export const onboardingService = {
     setor_ref?: string
     gestor_id: string
     data_inicio: string
+    cronograma_fases?: import('@/types/onboarding').CronogramaFaseItem[]
   }): Promise<Onboarding> {
     // Calcula data_fim = data_inicio + 15 dias
     const [ano, mes, dia] = data.data_inicio.split('-').map(Number)
@@ -463,6 +465,12 @@ export const onboardingService = {
       etapa2_concluida: false,
       etapa3_concluida: false,
       token_acesso_colaborador: generateRandomToken(32),
+      fases_concluidas: [],
+      reavaliacoes_count: 0,
+      prazo_suplementar_dias: 0,
+    }
+    if (data.cronograma_fases && data.cronograma_fases.length > 0) {
+      recordPayload.cronograma_fases = data.cronograma_fases
     }
     if (setorRefId) {
       recordPayload.setor_ref = setorRefId
@@ -522,6 +530,91 @@ export const onboardingService = {
       etapa_atual: 2,
       status: 'em_andamento',
     })
+  },
+
+  async concluirFase(params: {
+    onboardingId: string
+    faseId: string
+    faseTitulo: string
+    usuarioId: string
+    usuarioNome: string
+    usuarioRole?: string
+    gestorNome?: string
+    colaboradorNome?: string
+    diasPlanejados?: number
+    dataPlanejadaLimite?: string
+  }): Promise<{
+    onboarding: Onboarding
+    faseInfo: import('@/types/onboarding').FaseConcluidaInfo
+  }> {
+    const onb = await pb.collection('onboardings').getOne<Onboarding>(params.onboardingId)
+    const hoje = new Date()
+    const hojeIso = hoje.toISOString()
+
+    // Cálculo se foi concluída fora do prazo
+    let foraPrazo = false
+    let destaquePrazo = 'Concluído no prazo planejado'
+    let diasGastos = params.diasPlanejados || 1
+
+    if (params.dataPlanejadaLimite) {
+      try {
+        const [ano, mes, dia] = params.dataPlanejadaLimite.split('-').map(Number)
+        const limite = new Date(ano, mes - 1, dia)
+        limite.setHours(23, 59, 59, 999)
+        const diffDias = Math.round((hoje.getTime() - limite.getTime()) / (1000 * 60 * 60 * 24))
+
+        if (diffDias > 0) {
+          foraPrazo = true
+          destaquePrazo = `Concluído ${diffDias} ${diffDias === 1 ? 'dia' : 'dias'} após o prazo`
+        } else if (diffDias < 0) {
+          const adiantado = Math.abs(diffDias)
+          destaquePrazo = `Concluído ${adiantado} ${adiantado === 1 ? 'dia' : 'dias'} antes do prazo planejado`
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const faseInfo: import('@/types/onboarding').FaseConcluidaInfo = {
+      fase_id: params.faseId,
+      titulo: params.faseTitulo,
+      concluida_em: hojeIso,
+      concluida_por: params.usuarioId,
+      concluida_por_nome: params.usuarioNome,
+      dias_planejados: params.diasPlanejados,
+      dias_gastos: diasGastos,
+      fora_prazo: foraPrazo,
+      destaque_prazo: destaquePrazo,
+    }
+
+    const fasesExistentes = Array.isArray(onb.fases_concluidas) ? [...onb.fases_concluidas] : []
+    const idx = fasesExistentes.findIndex((f) => f.fase_id === params.faseId)
+    if (idx >= 0) {
+      fasesExistentes[idx] = faseInfo
+    } else {
+      fasesExistentes.push(faseInfo)
+    }
+
+    // Registrar no log de auditoria
+    await auditoriaService.registrar({
+      onboardingId: params.onboardingId,
+      colaboradorNome: params.colaboradorNome || onb.colaborador_nome,
+      usuarioId: params.usuarioId,
+      usuarioNome: params.usuarioNome,
+      usuarioRole: params.usuarioRole || '',
+      gestorNome: params.gestorNome || '',
+      acao: `Fase Concluída: ${params.faseTitulo}`,
+      detalhes: destaquePrazo,
+      foraPrazo,
+      destaquePrazo,
+      metadata: { fase_id: params.faseId, dias_planejados: params.diasPlanejados },
+    })
+
+    const updated = await pb.collection('onboardings').update<Onboarding>(params.onboardingId, {
+      fases_concluidas: fasesExistentes,
+    })
+
+    return { onboarding: updated, faseInfo }
   },
 
   async concluirEtapa2(onboardingId: string, userId: string): Promise<Onboarding> {
@@ -804,6 +897,17 @@ export const auditoriaService = {
       return await pb.collection('logs_auditoria').getFullList<LogAuditoria>({
         filter: `onboarding_id = '${onboardingId}'`,
         sort: '-created',
+      })
+    } catch (_) {
+      return []
+    }
+  },
+
+  async list(options?: { limit?: number }): Promise<LogAuditoria[]> {
+    try {
+      return await pb.collection('logs_auditoria').getFullList<LogAuditoria>({
+        sort: '-created',
+        batch: options?.limit || 500,
       })
     } catch (_) {
       return []
