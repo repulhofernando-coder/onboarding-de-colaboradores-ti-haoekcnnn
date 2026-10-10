@@ -632,6 +632,55 @@ export const onboardingService = {
     return pb.collection('onboardings').update<Onboarding>(id, data)
   },
 
+  async atualizarClientesMapeamento(params: {
+    onboardingId: string
+    clientes: string[]
+    usuarioId: string
+    usuarioNome: string
+    usuarioRole?: string
+    gestorNome?: string
+    colaboradorNome?: string
+  }): Promise<Onboarding> {
+    // Limpar e filtrar até 3 clientes com strings válidas
+    const clientesLimpos = (params.clientes || [])
+      .map((c) => (typeof c === 'string' ? c.trim() : ''))
+      .filter((c) => c.length > 0)
+      .slice(0, 3)
+
+    const updated = await pb.collection('onboardings').update<Onboarding>(
+      params.onboardingId,
+      {
+        clientes_mapeamento: clientesLimpos,
+      },
+      {
+        expand: 'gestor_id,etapa1_concluida_por,etapa2_concluida_por,setor_ref',
+      },
+    )
+
+    // Formatar detalhes para o log de auditoria
+    const detalheClientes =
+      clientesLimpos.length > 0
+        ? `Clientes definidos (${clientesLimpos.length}/3): ${clientesLimpos.join(', ')}`
+        : 'Clientes de referência limpos/removidos'
+
+    await auditoriaService.registrar({
+      onboardingId: params.onboardingId,
+      colaboradorNome: params.colaboradorNome || updated.colaborador_nome,
+      usuarioId: params.usuarioId,
+      usuarioNome: params.usuarioNome,
+      usuarioRole: params.usuarioRole || '',
+      gestorNome: params.gestorNome || '',
+      acao: 'Definição de Clientes (Fase 2 - Mapeamento)',
+      detalhes: detalheClientes,
+      foraPrazo: false,
+      metadata: {
+        clientes: clientesLimpos,
+      },
+    })
+
+    return updated
+  },
+
   async delete(id: string): Promise<boolean> {
     return pb.collection('onboardings').delete(id)
   },

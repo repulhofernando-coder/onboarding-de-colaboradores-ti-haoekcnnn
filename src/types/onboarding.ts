@@ -195,6 +195,7 @@ export interface Onboarding extends RecordModel {
   reavaliacoes_count?: number
   prazo_suplementar_dias?: number
   cronograma_fases?: CronogramaFaseItem[]
+  clientes_mapeamento?: string[]
   expand?: {
     gestor_id?: User
     etapa1_concluida_por?: User

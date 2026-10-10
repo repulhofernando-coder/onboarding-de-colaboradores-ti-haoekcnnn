@@ -15,6 +15,7 @@ import {
   FileCheck2,
   Flame,
   Lock,
+  Building2,
 } from 'lucide-react'
 import MundoOpenLogo from '@/components/MundoOpenLogo'
 import { Button } from '@/components/ui/button'
@@ -732,6 +733,61 @@ export default function ColaboradorPublico() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Exibição dos Clientes Indicados para Estudo na Fase 2 (Mapeamento de Ambientes) */}
+                    {(index === 1 ||
+                      fase.ordem === 2 ||
+                      fase.titulo.toLowerCase().includes('mapeamento')) && (
+                      <div className="p-4 border-b bg-amber-50/40 border-amber-200/80 space-y-2.5">
+                        <div className="flex items-start gap-2.5">
+                          <div className="w-7 h-7 rounded-md bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 mt-0.5">
+                            <Building2 className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h5 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                              Clientes de Referência no Passportal para Estudo
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] bg-amber-100/60 border-amber-300 text-amber-900 font-medium"
+                              >
+                                Indicação da Gestão
+                              </Badge>
+                            </h5>
+                            <p className="text-[11px] text-slate-600 leading-relaxed">
+                              O Gestor indicou estes 3 clientes para você estudar a documentação
+                              técnica no Passportal (topologia, faixas de IP e particularidades):
+                            </p>
+                          </div>
+                        </div>
+
+                        {onboarding.clientes_mapeamento &&
+                        onboarding.clientes_mapeamento.filter(Boolean).length > 0 ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                            {onboarding.clientes_mapeamento.filter(Boolean).map((cliente, idx) => (
+                              <div
+                                key={idx}
+                                className="bg-white border border-amber-200/90 rounded-lg px-3 py-2 flex items-center gap-2 shadow-2xs"
+                              >
+                                <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                  {idx + 1}
+                                </span>
+                                <span
+                                  className="text-xs font-semibold text-slate-900 truncate"
+                                  title={cliente}
+                                >
+                                  {cliente}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="bg-white/80 border border-dashed border-amber-200 rounded-lg p-2.5 text-xs text-amber-800/90 italic">
+                            O Gestor Responsável ainda está selecionando os 3 clientes de
+                            referência. Em breve eles serão exibidos aqui.
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Conteúdo / Itens da Fase */}
                     {!estaDesbloqueada ? (

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-10T20:40:13.050Z",
+  "generatedAt": "2026-10-10T21:07:45.556Z",
   "collections": [
     {
       "name": "users",
@@ -389,6 +389,12 @@
         },
         {
           "name": "cronograma_fases",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "clientes_mapeamento",
           "type": "json",
           "required": false,
           "system": false

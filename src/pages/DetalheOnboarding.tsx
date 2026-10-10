@@ -51,6 +51,9 @@ import {
   Share2,
   Layers,
   Plus,
+  Building2,
+  Pencil,
+  Save,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -84,6 +87,13 @@ export default function DetalheOnboarding() {
   const [concluindoEtapa1, setConcluindoEtapa1] = useState(false)
   const [concluindoEtapa2, setConcluindoEtapa2] = useState(false)
   const [concluindoFaseId, setConcluindoFaseId] = useState<string | null>(null)
+
+  // Estado para edição dos 3 Clientes da Fase 2 (Mapeamento de Ambientes)
+  const [editandoClientes, setEditandoClientes] = useState(false)
+  const [cliente1, setCliente1] = useState('')
+  const [cliente2, setCliente2] = useState('')
+  const [cliente3, setCliente3] = useState('')
+  const [salvandoClientes, setSalvandoClientes] = useState(false)
 
   // Aba ativa: 'etapas' ou 'auditoria'
   const [abaAtiva, setAbaAtiva] = useState<'etapas' | 'auditoria'>('etapas')
@@ -135,6 +145,16 @@ export default function DetalheOnboarding() {
       setOnboarding(onb)
       setTarefas(tars)
       setAvaliacao(aval)
+
+      if (onb?.clientes_mapeamento && Array.isArray(onb.clientes_mapeamento)) {
+        setCliente1(onb.clientes_mapeamento[0] || '')
+        setCliente2(onb.clientes_mapeamento[1] || '')
+        setCliente3(onb.clientes_mapeamento[2] || '')
+      } else {
+        setCliente1('')
+        setCliente2('')
+        setCliente3('')
+      }
 
       if (onb?.setor) {
         faseService.listBySetor(onb.setor, onb.setor_ref).then(setFasesSetor).catch(console.error)
@@ -428,6 +448,40 @@ export default function DetalheOnboarding() {
       toast.error('Erro ao concluir Etapa 1.')
     } finally {
       setConcluindoEtapa1(false)
+    }
+  }
+
+  // Salvar Clientes de Referência para a Fase 2 (Mapeamento de Ambientes)
+  const handleSalvarClientesMapeamento = async () => {
+    if (!onboarding || !user) return
+    if (!podeGerenciarEtapa2e3) {
+      toast.error('Apenas o gestor responsável ou administrador podem indicar os clientes.')
+      return
+    }
+
+    try {
+      setSalvandoClientes(true)
+      const lista = [cliente1, cliente2, cliente3].map((c) => c.trim()).filter((c) => c.length > 0)
+
+      const updated = await onboardingService.atualizarClientesMapeamento({
+        onboardingId: onboarding.id,
+        clientes: lista,
+        usuarioId: user.id,
+        usuarioNome: user.name || user.email,
+        usuarioRole: role || '',
+        gestorNome: onboarding.expand?.gestor_id?.name || '',
+        colaboradorNome: onboarding.colaborador_nome,
+      })
+
+      setOnboarding(updated)
+      setEditandoClientes(false)
+      toast.success('Clientes de referência do Passportal atualizados com sucesso!')
+      fetchData()
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao salvar clientes de referência.')
+    } finally {
+      setSalvandoClientes(false)
     }
   }
 
@@ -1599,6 +1653,163 @@ export default function DetalheOnboarding() {
                                   </strong>{' '}
                                   em {formatDate(faseStatus.registroConclusao.concluida_em)}
                                 </span>
+                              </div>
+                            )}
+
+                            {/* Campo de Clientes de Referência exclusivo da Fase 2 (Mapeamento de Ambientes) */}
+                            {(index === 1 ||
+                              fase.ordem === 2 ||
+                              fase.titulo.toLowerCase().includes('mapeamento')) && (
+                              <div className="p-4 border-b bg-amber-50/40 border-amber-200/70 space-y-3">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 rounded-md bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                                      <Building2 className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                      <h5 className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                                        Clientes de Referência no Passportal (até 3)
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[10px] bg-amber-100/60 border-amber-300 text-amber-900 font-medium"
+                                        >
+                                          Estudo Técnico
+                                        </Badge>
+                                      </h5>
+                                      <p className="text-[11px] text-gray-600">
+                                        Clientes indicados pelo Gestor para o colaborador analisar
+                                        topologia de rede, IPs e particularidades.
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  {podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida && (
+                                    <div className="shrink-0">
+                                      {!editandoClientes ? (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => {
+                                            setCliente1(onboarding.clientes_mapeamento?.[0] || '')
+                                            setCliente2(onboarding.clientes_mapeamento?.[1] || '')
+                                            setCliente3(onboarding.clientes_mapeamento?.[2] || '')
+                                            setEditandoClientes(true)
+                                          }}
+                                          className="h-7 text-xs border-amber-300 text-amber-900 hover:bg-amber-100/60"
+                                        >
+                                          <Pencil className="w-3 h-3 mr-1" />
+                                          {onboarding.clientes_mapeamento &&
+                                          onboarding.clientes_mapeamento.length > 0
+                                            ? 'Editar Clientes'
+                                            : 'Indicar Clientes'}
+                                        </Button>
+                                      ) : (
+                                        <div className="flex items-center gap-1.5">
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            disabled={salvandoClientes}
+                                            onClick={() => setEditandoClientes(false)}
+                                            className="h-7 text-xs text-gray-600 hover:text-gray-900"
+                                          >
+                                            Cancelar
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            disabled={salvandoClientes}
+                                            onClick={handleSalvarClientesMapeamento}
+                                            className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                                          >
+                                            <Save className="w-3 h-3 mr-1" />
+                                            {salvandoClientes ? 'Salvando...' : 'Salvar'}
+                                          </Button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {editandoClientes ? (
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                                    <div className="space-y-1">
+                                      <label className="text-[11px] font-semibold text-gray-700 block">
+                                        Cliente 1
+                                      </label>
+                                      <Input
+                                        placeholder="Ex.: Hospital São Lucas"
+                                        value={cliente1}
+                                        onChange={(e) => setCliente1(e.target.value)}
+                                        className="h-8 text-xs bg-white border-amber-300 focus-visible:ring-amber-500"
+                                        disabled={salvandoClientes}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-[11px] font-semibold text-gray-700 block">
+                                        Cliente 2
+                                      </label>
+                                      <Input
+                                        placeholder="Ex.: Indústria Alfa Metal"
+                                        value={cliente2}
+                                        onChange={(e) => setCliente2(e.target.value)}
+                                        className="h-8 text-xs bg-white border-amber-300 focus-visible:ring-amber-500"
+                                        disabled={salvandoClientes}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-[11px] font-semibold text-gray-700 block">
+                                        Cliente 3
+                                      </label>
+                                      <Input
+                                        placeholder="Ex.: Distribuidora Central"
+                                        value={cliente3}
+                                        onChange={(e) => setCliente3(e.target.value)}
+                                        className="h-8 text-xs bg-white border-amber-300 focus-visible:ring-amber-500"
+                                        disabled={salvandoClientes}
+                                      />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    {onboarding.clientes_mapeamento &&
+                                    onboarding.clientes_mapeamento.filter(Boolean).length > 0 ? (
+                                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-0.5">
+                                        {onboarding.clientes_mapeamento
+                                          .filter(Boolean)
+                                          .map((cliente, idx) => (
+                                            <div
+                                              key={idx}
+                                              className="bg-white border border-amber-200/90 rounded-lg px-3 py-2 flex items-center gap-2 shadow-2xs"
+                                            >
+                                              <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                                {idx + 1}
+                                              </span>
+                                              <span
+                                                className="text-xs font-semibold text-gray-800 truncate"
+                                                title={cliente}
+                                              >
+                                                {cliente}
+                                              </span>
+                                            </div>
+                                          ))}
+                                      </div>
+                                    ) : (
+                                      <div className="bg-white/80 border border-dashed border-amber-200 rounded-lg p-2.5 text-xs text-amber-800/90 flex items-center justify-between">
+                                        <span className="italic">
+                                          Nenhum cliente indicado ainda pelo Gestor Responsável.
+                                        </span>
+                                        {podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setEditandoClientes(true)}
+                                            className="text-amber-800 font-semibold hover:underline text-xs shrink-0 ml-2"
+                                          >
+                                            Definir 3 clientes agora →
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             )}
 
