@@ -34,7 +34,12 @@ export function isNetworkError(error: unknown): boolean {
   }
   if (error instanceof Error) {
     const msg = error.message.toLowerCase()
-    return msg.includes('network') || msg.includes('failed to fetch') || msg.includes('connection')
+    return (
+      msg.includes('network') ||
+      msg.includes('failed to fetch') ||
+      msg.includes('connection') ||
+      msg.includes('timeout')
+    )
   }
   return false
 }

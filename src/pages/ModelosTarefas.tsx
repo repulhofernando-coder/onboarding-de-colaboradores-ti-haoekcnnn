@@ -623,6 +623,18 @@ export default function ModelosTarefas() {
     setModalOpen(true)
   }
 
+  const handleChangeModalTipo = (novoTipo: TarefaTipo) => {
+    if (novoTipo === modalTipo) return
+    setModalTipo(novoTipo)
+    // Se o material atualmente selecionado não corresponder ao novo tipo, limpa a seleção
+    if (selectedMaterialId) {
+      const mat = materiais.find((m) => m.id === selectedMaterialId)
+      if (!mat || mat.tipo !== novoTipo) {
+        setSelectedMaterialId('')
+      }
+    }
+  }
+
   const openEditModal = (item: ModeloTarefa) => {
     setEditingId(item.id)
     setModalTipo(item.tipo)
@@ -1772,11 +1784,22 @@ export default function ModelosTarefas() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => openNewModal('manual', fase.id)}
-                              className="h-7 text-xs border-brand-200 text-brand-700 hover:bg-brand-50"
+                              onClick={() => openNewModal('video', fase.id)}
+                              className="h-7 text-xs border-purple-200 text-purple-700 hover:bg-purple-50 hover:text-purple-800"
+                              title="Adicionar vídeo a esta fase"
                             >
-                              <Plus className="w-3 h-3 mr-1" />
-                              Item
+                              <Video className="w-3 h-3 mr-1" />
+                              Vídeo
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openNewModal('manual', fase.id)}
+                              className="h-7 text-xs border-brand-200 text-brand-700 hover:bg-brand-50 hover:text-brand-800"
+                              title="Adicionar manual a esta fase"
+                            >
+                              <FileText className="w-3 h-3 mr-1" />
+                              Manual
                             </Button>
                           </div>
                         </div>
@@ -1784,15 +1807,27 @@ export default function ModelosTarefas() {
                         {/* Itens vinculados à Fase */}
                         <div className="divide-y divide-gray-100 bg-white">
                           {itensDaFase.length === 0 ? (
-                            <div className="p-4 text-center text-xs text-gray-400">
-                              Nenhum item adicionado a esta fase ainda.{' '}
-                              <button
-                                type="button"
-                                onClick={() => openNewModal('manual', fase.id)}
-                                className="text-brand-600 font-semibold hover:underline ml-1"
-                              >
-                                Adicionar primeiro item
-                              </button>
+                            <div className="p-4 text-center text-xs text-gray-400 space-y-1.5">
+                              <p>Nenhum item adicionado a esta fase ainda.</p>
+                              <div className="flex items-center justify-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => openNewModal('video', fase.id)}
+                                  className="text-purple-600 font-semibold hover:underline inline-flex items-center gap-1"
+                                >
+                                  <Video className="w-3 h-3" />
+                                  Adicionar Vídeo
+                                </button>
+                                <span className="text-gray-300">|</span>
+                                <button
+                                  type="button"
+                                  onClick={() => openNewModal('manual', fase.id)}
+                                  className="text-brand-600 font-semibold hover:underline inline-flex items-center gap-1"
+                                >
+                                  <FileText className="w-3 h-3" />
+                                  Adicionar Manual
+                                </button>
+                              </div>
                             </div>
                           ) : (
                             itensDaFase.map((item) => (
@@ -1902,21 +1937,51 @@ export default function ModelosTarefas() {
                               : 'Esta área não utiliza fases. Todos os itens ficam reunidos aqui.'}
                           </p>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openNewModal('manual')}
-                          className="h-7 text-xs border-gray-300 hover:bg-white"
-                        >
-                          <Plus className="w-3 h-3 mr-1" />
-                          Adicionar Item
-                        </Button>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openNewModal('video')}
+                            className="h-7 text-xs border-purple-200 text-purple-700 hover:bg-purple-50 hover:text-purple-800"
+                          >
+                            <Video className="w-3 h-3 mr-1" />
+                            Vídeo
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openNewModal('manual')}
+                            className="h-7 text-xs border-brand-200 text-brand-700 hover:bg-brand-50 hover:text-brand-800"
+                          >
+                            <FileText className="w-3 h-3 mr-1" />
+                            Manual
+                          </Button>
+                        </div>
                       </div>
 
                       <div className="divide-y divide-gray-100 bg-white">
                         {modelosSemFase.length === 0 ? (
-                          <div className="p-4 text-center text-xs text-gray-400">
-                            Nenhum item avulso neste grupo.
+                          <div className="p-4 text-center text-xs text-gray-400 space-y-1.5">
+                            <p>Nenhum item avulso neste grupo.</p>
+                            <div className="flex items-center justify-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() => openNewModal('video')}
+                                className="text-purple-600 font-semibold hover:underline inline-flex items-center gap-1"
+                              >
+                                <Video className="w-3 h-3" />
+                                Adicionar Vídeo
+                              </button>
+                              <span className="text-gray-300">|</span>
+                              <button
+                                type="button"
+                                onClick={() => openNewModal('manual')}
+                                className="text-brand-600 font-semibold hover:underline inline-flex items-center gap-1"
+                              >
+                                <FileText className="w-3 h-3" />
+                                Adicionar Manual
+                              </button>
+                            </div>
                           </div>
                         ) : (
                           modelosSemFase.map((item) => (
@@ -2231,8 +2296,8 @@ export default function ModelosTarefas() {
             <DialogTitle className="text-base font-bold text-gray-900">
               {editingId
                 ? 'Editar Item do Modelo'
-                : `Adicionar ${modalTipo === 'video' ? 'Vídeo' : 'Manual'} (${
-                    isEtapa1 ? 'Etapa 1 — RH' : currentSetorInfo?.nome
+                : `Adicionar Item (${
+                    isEtapa1 ? 'Etapa 1 — RH' : currentSetorInfo?.nome || 'Área'
                   })`}
             </DialogTitle>
           </DialogHeader>
@@ -2245,10 +2310,53 @@ export default function ModelosTarefas() {
               </div>
             )}
 
+            {/* Seletor de Tipo (Vídeo / Manual) */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Tipo de Conteúdo *
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={modalTipo === 'video' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handleChangeModalTipo('video')}
+                  disabled={submitting}
+                  className={`text-xs h-9 font-semibold ${
+                    modalTipo === 'video'
+                      ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                      : 'hover:bg-purple-50 text-gray-700 border-gray-300'
+                  }`}
+                >
+                  <Video className="w-4 h-4 mr-1.5" />
+                  Vídeo (MP4)
+                </Button>
+                <Button
+                  type="button"
+                  variant={modalTipo === 'manual' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handleChangeModalTipo('manual')}
+                  disabled={submitting}
+                  className={`text-xs h-9 font-semibold ${
+                    modalTipo === 'manual'
+                      ? 'bg-brand-600 hover:bg-brand-700 text-white'
+                      : 'hover:bg-brand-50 text-gray-700 border-gray-300'
+                  }`}
+                >
+                  <FileText className="w-4 h-4 mr-1.5" />
+                  Manual / Documento (PDF/DOCX)
+                </Button>
+              </div>
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">Título *</label>
               <Input
-                placeholder="Ex.: Manual de Procedimentos e Atendimento Movidesk"
+                placeholder={
+                  modalTipo === 'video'
+                    ? 'Ex.: Treinamento Sistema de Chamados'
+                    : 'Ex.: Manual de Procedimentos e Atendimento Movidesk'
+                }
                 value={formTitulo}
                 onChange={(e) => setFormTitulo(e.target.value)}
                 className="h-10 text-xs"
