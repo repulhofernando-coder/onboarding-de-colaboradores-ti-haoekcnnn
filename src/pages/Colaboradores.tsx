@@ -4,6 +4,7 @@ import { onboardingService } from '@/services/onboarding'
 import { useRealtime } from '@/hooks/use-realtime'
 import type { Onboarding } from '@/types/onboarding'
 import { SETORES_INFO, STATUS_INFO, getSetorVisual, setorToString } from '@/types/onboarding'
+import { formatShortDate } from '@/lib/dateUtils'
 import {
   Users,
   Search,
@@ -93,12 +94,6 @@ export default function Colaboradores() {
       )
     })
   }, [colaboradoresAgregados, search])
-
-  const formatShortDate = (ymd?: string) => {
-    if (!ymd) return '-'
-    const [ano, mes, dia] = ymd.split('-')
-    return `${dia}/${mes}/${ano}`
-  }
 
   return (
     <div className="space-y-6">

@@ -11,6 +11,7 @@ import {
 import { useRealtime } from '@/hooks/use-realtime'
 import type { Onboarding, AvaliacaoDecisao, SetorModel, FaseModelo } from '@/types/onboarding'
 import { SETORES_INFO, getSetorVisual, setorToString } from '@/types/onboarding'
+import { calcularDiasRestantes, formatShortDate, formatDateTime } from '@/lib/dateUtils'
 import {
   ClipboardCheck,
   Flame,
@@ -106,18 +107,13 @@ export default function Avaliacoes() {
         return matchStatus && matchSetor
       })
       .map((o) => {
-        const [ano, mes, dia] = o.data_fim.split('-').map(Number)
-        const dataFim = new Date(ano, mes - 1, dia)
-        dataFim.setHours(0, 0, 0, 0)
-
-        const diffTime = dataFim.getTime() - hoje.getTime()
-        const diasRestantes = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-        const isAtrasado = diasRestantes < 0
+        const prazo = calcularDiasRestantes(o.data_fim)
 
         return {
           ...o,
-          diasRestantes,
-          isAtrasado,
+          diasRestantes: prazo.diasRestantes ?? 0,
+          prazoInfo: prazo,
+          isAtrasado: prazo.isVencido,
         }
       })
       .sort((a, b) => a.diasRestantes - b.diasRestantes)
@@ -232,24 +228,8 @@ export default function Avaliacoes() {
     }
   }
 
-  const formatShortDate = (ymd?: string) => {
-    if (!ymd) return '-'
-    const [ano, mes, dia] = ymd.split('-')
-    return `${dia}/${mes}/${ano}`
-  }
-
   const formatDate = (iso?: string) => {
-    if (!iso) return '-'
-    try {
-      const d = new Date(iso)
-      return d.toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-      })
-    } catch {
-      return iso
-    }
+    return formatShortDate(iso)
   }
 
   // Somente Admin ou o Gestor Responsável atribuído ao onboarding podem avaliar
@@ -484,14 +464,19 @@ export default function Avaliacoes() {
                       </td>
 
                       <td className="py-3.5 px-4">
-                        {item.isAtrasado ? (
+                        {item.prazoInfo.isVencido ? (
                           <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200 text-xs font-bold flex items-center gap-1 w-fit">
                             <Flame className="w-3 h-3 text-red-600" />
-                            Atrasado ({Math.abs(item.diasRestantes)}d)
+                            Vencido ({Math.abs(item.prazoInfo.diasRestantes ?? 0)}d)
+                          </Badge>
+                        ) : item.prazoInfo.isHoje ? (
+                          <Badge className="bg-amber-100 text-amber-900 hover:bg-amber-100 border-amber-300 text-xs font-bold flex items-center gap-1 w-fit">
+                            <AlertCircle className="w-3 h-3 text-amber-600" />
+                            Hoje
                           </Badge>
                         ) : (
                           <Badge className="bg-amber-50 text-amber-700 hover:bg-amber-50 border-amber-200 text-xs font-medium w-fit">
-                            {item.diasRestantes} dias restantes
+                            {item.prazoInfo.labelBadge} restantes
                           </Badge>
                         )}
                       </td>

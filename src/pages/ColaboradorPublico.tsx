@@ -47,6 +47,7 @@ import type {
   FaseModelo,
 } from '@/types/onboarding'
 import { getSetorVisual } from '@/types/onboarding'
+import { calcularDiasRestantes, formatShortDate, formatDateTime } from '@/lib/dateUtils'
 import { Layers } from 'lucide-react'
 
 export default function ColaboradorPublico() {
@@ -199,17 +200,21 @@ export default function ColaboradorPublico() {
 
   // Cálculo de prazo
   const prazoInfo = useMemo(() => {
-    if (!onboarding?.data_fim) return { diasRestantes: 0, isAtrasado: false }
-    const hoje = new Date()
-    hoje.setHours(0, 0, 0, 0)
-    const [ano, mes, dia] = onboarding.data_fim.split('-').map(Number)
-    const fim = new Date(ano, mes - 1, dia)
-    fim.setHours(0, 0, 0, 0)
-    const diffMs = fim.getTime() - hoje.getTime()
-    const dias = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+    if (!onboarding?.data_fim)
+      return {
+        diasRestantes: 0,
+        isAtrasado: false,
+        isHoje: false,
+        isVencido: false,
+        labelBadge: '—',
+      }
+    const prazo = calcularDiasRestantes(onboarding.data_fim)
     return {
-      diasRestantes: dias,
-      isAtrasado: dias < 0,
+      diasRestantes: prazo.diasRestantes ?? 0,
+      isAtrasado: prazo.isVencido,
+      isVencido: prazo.isVencido,
+      isHoje: prazo.isHoje,
+      labelBadge: prazo.labelBadge,
     }
   }, [onboarding?.data_fim])
 
@@ -263,20 +268,8 @@ export default function ColaboradorPublico() {
     setPreviewModalOpen(true)
   }
 
-  const formatDateTime = (iso?: string) => {
-    if (!iso) return '-'
-    try {
-      const d = new Date(iso)
-      return d.toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    } catch {
-      return iso
-    }
+  const formatDateTimeLocal = (iso?: string) => {
+    return formatDateTime(iso)
   }
 
   // Formato compacto para sinalização: dd/mm hh:mm
@@ -326,16 +319,6 @@ export default function ColaboradorPublico() {
     } finally {
       setSinalizandoFaseId(null)
     }
-  }
-
-  const formatShortDate = (ymd?: string) => {
-    if (!ymd) return '-'
-    const parts = ymd.split('T')[0].split('-')
-    if (parts.length === 3) {
-      const [ano, mes, dia] = parts
-      return `${dia}/${mes}/${ano}`
-    }
-    return ymd
   }
 
   // Estado de Carregamento
@@ -424,10 +407,15 @@ export default function ColaboradorPublico() {
                     <Flame className="w-3.5 h-3.5" />
                     Prazo excedido
                   </Badge>
+                ) : prazoInfo.isHoje ? (
+                  <Badge className="bg-amber-100 text-amber-900 hover:bg-amber-100 border-amber-300 text-xs font-semibold flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    Vence hoje
+                  </Badge>
                 ) : (
                   <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border-emerald-200 text-xs font-semibold flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5" />
-                    {prazoInfo.diasRestantes} dia(s) restante(s)
+                    {prazoInfo.labelBadge} restante(s)
                   </Badge>
                 )}
               </div>
@@ -582,7 +570,9 @@ export default function ColaboradorPublico() {
                           {item.entregue ? (
                             <p className="text-[10px] text-emerald-700 font-medium mt-0.5">
                               Entregue
-                              {item.entregue_em ? ` em ${formatDateTime(item.entregue_em)}` : ''}
+                              {item.entregue_em
+                                ? ` em ${formatDateTimeLocal(item.entregue_em)}`
+                                : ''}
                               {item.entregue_por_nome ? ` por ${item.entregue_por_nome}` : ''}
                             </p>
                           ) : (
@@ -674,7 +664,8 @@ export default function ColaboradorPublico() {
                               {conf ? (
                                 <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
                                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                  Confirmado em {formatDateTime(conf.confirmado_em || conf.created)}
+                                  Confirmado em{' '}
+                                  {formatDateTimeLocal(conf.confirmado_em || conf.created)}
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 font-medium">

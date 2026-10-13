@@ -5,6 +5,7 @@ import { onboardingService, setorService } from '@/services/onboarding'
 import { useRealtime } from '@/hooks/use-realtime'
 import type { Onboarding, SetorModel } from '@/types/onboarding'
 import { SETORES_INFO, getSetorVisual, setorToString } from '@/types/onboarding'
+import { calcularDiasRestantes, formatShortDate, formatDateTime } from '@/lib/dateUtils'
 import {
   Clock,
   CheckCircle2,
@@ -121,18 +122,10 @@ export default function Index() {
 
   // Próximos vencimentos (< 3 dias do prazo de 15 dias e não finalizados)
   const proximosVencimentos = useMemo(() => {
-    const hoje = new Date()
-    hoje.setHours(0, 0, 0, 0)
-
     return onboardings
       .filter((o) => o.status !== 'concluido' && o.status !== 'nao_apto')
       .map((o) => {
-        const [ano, mes, dia] = o.data_fim.split('-').map(Number)
-        const dataFim = new Date(ano, mes - 1, dia)
-        dataFim.setHours(0, 0, 0, 0)
-
-        const diffTime = dataFim.getTime() - hoje.getTime()
-        const diasRestantes = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+        const prazo = calcularDiasRestantes(o.data_fim)
 
         // Progresso estimado por etapa concluída (1 = 33%, 2 = 66%, 3 = 100%)
         let progresso = 0
@@ -142,10 +135,11 @@ export default function Index() {
 
         return {
           ...o,
-          diasRestantes,
+          diasRestantes: prazo.diasRestantes ?? 0,
+          prazoInfo: prazo,
           progresso,
-          isAtrasado: diasRestantes < 0,
-          isCritico: diasRestantes <= 3,
+          isAtrasado: prazo.isVencido,
+          isCritico: prazo.isCritico,
         }
       })
       .sort((a, b) => a.diasRestantes - b.diasRestantes)
@@ -220,24 +214,7 @@ export default function Index() {
   }, [onboardings])
 
   const formatDate = (iso: string) => {
-    if (!iso) return '-'
-    try {
-      const d = new Date(iso)
-      return d.toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    } catch {
-      return iso
-    }
-  }
-
-  const formatShortDate = (ymd: string) => {
-    if (!ymd) return '-'
-    const [ano, mes, dia] = ymd.split('-')
-    return `${dia}/${mes}/${ano}`
+    return formatDateTime(iso)
   }
 
   return (
@@ -522,19 +499,24 @@ export default function Index() {
                     <div className="flex items-center gap-4 sm:w-48 shrink-0 justify-between sm:justify-end">
                       {/* Dias restantes */}
                       <div>
-                        {item.isAtrasado ? (
+                        {item.prazoInfo.isVencido ? (
                           <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200 text-xs font-bold flex items-center gap-1">
                             <Flame className="w-3 h-3 text-red-600" />
-                            Atrasado ({Math.abs(item.diasRestantes)}d)
+                            Vencido
                           </Badge>
-                        ) : item.isCritico ? (
+                        ) : item.prazoInfo.isHoje ? (
+                          <Badge className="bg-amber-100 text-amber-900 hover:bg-amber-100 border-amber-300 text-xs font-bold flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 text-amber-600" />
+                            Hoje
+                          </Badge>
+                        ) : item.prazoInfo.isCritico ? (
                           <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 border-amber-200 text-xs font-bold flex items-center gap-1">
                             <AlertCircle className="w-3 h-3 text-amber-600" />
-                            {item.diasRestantes}d restantes
+                            {item.prazoInfo.labelBadge}
                           </Badge>
                         ) : (
                           <Badge className="bg-brand-50 text-brand-700 hover:bg-brand-50 border-brand-200 text-xs font-medium">
-                            {item.diasRestantes} dias
+                            {item.prazoInfo.labelBadge}
                           </Badge>
                         )}
                       </div>

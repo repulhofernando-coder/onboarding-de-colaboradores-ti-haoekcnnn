@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { onboardingService, userService, setorService, faseService } from '@/services/onboarding'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
 import type { Setor, User, SetorModel, FaseModelo, CronogramaFaseItem } from '@/types/onboarding'
+import { formatShortDate } from '@/lib/dateUtils'
 import { SETORES_INFO, getSetorVisual } from '@/types/onboarding'
 import {
   ArrowLeft,
@@ -249,8 +250,7 @@ export default function NovoOnboarding() {
   const dataFimCalculada = useMemo(() => {
     if (calculoDias.cronograma.length > 0) {
       const ultimo = calculoDias.cronograma[calculoDias.cronograma.length - 1]
-      const [ano, mes, dia] = ultimo.data_limite.split('-')
-      return `${dia}/${mes}/${ano}`
+      return formatShortDate(ultimo.data_limite)
     }
     return ''
   }, [calculoDias])

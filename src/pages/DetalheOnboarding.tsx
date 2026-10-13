@@ -26,6 +26,7 @@ import type {
 } from '@/types/onboarding'
 import { itemIntegracaoModeloService } from '@/services/onboarding'
 import { SETORES_INFO, STATUS_INFO, getSetorVisual } from '@/types/onboarding'
+import { calcularDiasRestantes, formatShortDate, formatDateTime } from '@/lib/dateUtils'
 import {
   ArrowLeft,
   Calendar,
@@ -244,22 +245,29 @@ export default function DetalheOnboarding() {
 
   // Cálculos de prazo e progresso
   const prazoInfo = useMemo(() => {
-    if (!onboarding) return { diasRestantes: 0, isAtrasado: false, isCritico: false }
+    if (!onboarding)
+      return {
+        diasRestantes: 0,
+        isAtrasado: false,
+        isCritico: false,
+        isHoje: false,
+        isVencido: false,
+        labelBadge: '—',
+      }
 
-    const hoje = new Date()
-    hoje.setHours(0, 0, 0, 0)
-
-    const [ano, mes, dia] = onboarding.data_fim.split('-').map(Number)
-    const dataFim = new Date(ano, mes - 1, dia)
-    dataFim.setHours(0, 0, 0, 0)
-
-    const diffTime = dataFim.getTime() - hoje.getTime()
-    const diasRestantes = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    const prazo = calcularDiasRestantes(onboarding.data_fim)
     const isFinalizado = onboarding.status === 'concluido' || onboarding.status === 'nao_apto'
-    const isAtrasado = !isFinalizado && diasRestantes < 0
-    const isCritico = !isFinalizado && diasRestantes <= 3
+    const isAtrasado = !isFinalizado && prazo.isVencido
+    const isCritico = !isFinalizado && prazo.isCritico
 
-    return { diasRestantes, isAtrasado, isCritico }
+    return {
+      diasRestantes: prazo.diasRestantes ?? 0,
+      isAtrasado,
+      isCritico,
+      isHoje: prazo.isHoje,
+      isVencido: prazo.isVencido,
+      labelBadge: prazo.labelBadge,
+    }
   }, [onboarding])
 
   const progressoPercent = useMemo(() => {
@@ -959,25 +967,7 @@ export default function DetalheOnboarding() {
   }
 
   const formatDate = (iso?: string) => {
-    if (!iso) return '-'
-    try {
-      const d = new Date(iso)
-      return d.toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    } catch {
-      return iso
-    }
-  }
-
-  const formatShortDate = (ymd?: string) => {
-    if (!ymd) return '-'
-    const [ano, mes, dia] = ymd.split('-')
-    return `${dia}/${mes}/${ano}`
+    return formatDateTime(iso)
   }
 
   if (loading || !onboarding) {

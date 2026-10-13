@@ -4,6 +4,7 @@ import { onboardingService, setorService } from '@/services/onboarding'
 import { useRealtime } from '@/hooks/use-realtime'
 import type { Onboarding, SetorModel, OnboardingStatus } from '@/types/onboarding'
 import { SETORES_INFO, STATUS_INFO, getSetorVisual, setorToString } from '@/types/onboarding'
+import { calcularDiasRestantes, formatShortDate } from '@/lib/dateUtils'
 import {
   Search,
   Plus,
@@ -74,16 +75,8 @@ export default function OnboardingsList() {
   }
 
   const processedData = useMemo(() => {
-    const hoje = new Date()
-    hoje.setHours(0, 0, 0, 0)
-
     return onboardings.map((o) => {
-      const [ano, mes, dia] = o.data_fim.split('-').map(Number)
-      const dataFim = new Date(ano, mes - 1, dia)
-      dataFim.setHours(0, 0, 0, 0)
-
-      const diffTime = dataFim.getTime() - hoje.getTime()
-      const diasRestantes = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+      const prazo = calcularDiasRestantes(o.data_fim)
 
       let progresso = 0
       if (o.etapa1_concluida) progresso += 33
@@ -91,12 +84,13 @@ export default function OnboardingsList() {
       if (o.etapa3_concluida) progresso += 34
 
       const isConcluidoOuApto = o.status === 'concluido' || o.status === 'nao_apto'
-      const isAtrasado = !isConcluidoOuApto && diasRestantes < 0
+      const isAtrasado = !isConcluidoOuApto && prazo.isVencido
 
       return {
         ...o,
         progresso,
-        diasRestantes,
+        diasRestantes: prazo.diasRestantes ?? 0,
+        prazoInfo: prazo,
         isAtrasado,
       }
     })
@@ -155,12 +149,6 @@ export default function OnboardingsList() {
       setSortField(field)
       setSortAsc(true)
     }
-  }
-
-  const formatShortDate = (ymd: string) => {
-    if (!ymd) return '-'
-    const [ano, mes, dia] = ymd.split('-')
-    return `${dia}/${mes}/${ano}`
   }
 
   return (
@@ -394,11 +382,13 @@ export default function OnboardingsList() {
                         {item.isAtrasado ? (
                           <div className="inline-flex items-center gap-1 text-[11px] font-bold text-red-600">
                             <Flame className="w-3 h-3" />
-                            <span>Atrasado</span>
+                            <span>Vencido</span>
                           </div>
+                        ) : item.prazoInfo.isHoje ? (
+                          <div className="text-[11px] font-bold text-amber-700">Vence hoje</div>
                         ) : (
                           <div className="text-[11px] text-gray-400">
-                            {item.diasRestantes} dias restantes
+                            {item.prazoInfo.labelBadge} restantes
                           </div>
                         )}
                       </td>

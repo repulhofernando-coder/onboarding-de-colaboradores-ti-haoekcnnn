@@ -475,8 +475,21 @@ export const onboardingService = {
     cronograma_fases?: import('@/types/onboarding').CronogramaFaseItem[]
   }): Promise<Onboarding> {
     // Calcula data_fim = data_inicio + 15 dias
-    const [ano, mes, dia] = data.data_inicio.split('-').map(Number)
-    const dateObj = new Date(Date.UTC(ano, mes - 1, dia))
+    const ymdMatch = data.data_inicio.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)
+    let ano = 0,
+      mes = 0,
+      dia = 0
+    if (ymdMatch) {
+      ano = parseInt(ymdMatch[1], 10)
+      mes = parseInt(ymdMatch[2], 10) - 1
+      dia = parseInt(ymdMatch[3], 10)
+    } else {
+      const d = new Date(data.data_inicio)
+      ano = d.getUTCFullYear()
+      mes = d.getUTCMonth()
+      dia = d.getUTCDate()
+    }
+    const dateObj = new Date(Date.UTC(ano, mes, dia))
     dateObj.setUTCDate(dateObj.getUTCDate() + 15)
     const data_fim = dateObj.toISOString().split('T')[0]
 
