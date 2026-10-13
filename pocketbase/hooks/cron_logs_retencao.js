@@ -4,7 +4,7 @@
 // Registros são mantidos por 6 meses conforme política oficial de auditoria.
 cronAdd('limpar_logs_auditoria_6meses', '0 3 * * *', (e) => {
   try {
-    const pbApp = (e && e.app) || $app
+    const pbApp = (e && e.app) || (typeof $app !== 'undefined' ? $app : null) || app
     const dataLimite = new Date()
     dataLimite.setDate(dataLimite.getDate() - 180)
     const dataIso = dataLimite.toISOString().replace('T', ' ').slice(0, 19)
