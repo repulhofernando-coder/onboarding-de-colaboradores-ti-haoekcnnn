@@ -1293,6 +1293,24 @@ export default function DetalheOnboarding() {
                       >
                         {confirmacoesEtapa1} de {tarefasEtapa1.length} confirmados pelo colaborador
                       </Badge>
+
+                      {/* Badge de Sinalização pelo Colaborador (Etapa 1) */}
+                      {(() => {
+                        const sinalizacaoEtapa1 = onboarding.fases_sinalizadas?.find(
+                          (s) => s.fase_id === 'etapa1' || (s.etapa === 1 && !s.fase_id),
+                        )
+                        if (!sinalizacaoEtapa1) return null
+                        return (
+                          <span
+                            className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 shadow-2xs"
+                            title={`O colaborador sinalizou que finalizou os materiais da Etapa 1 em ${formatDate(sinalizacaoEtapa1.sinalizado_em)}`}
+                          >
+                            <CheckCircle2 className="w-3 h-3 text-amber-700" />
+                            Sinalizado pelo colaborador em{' '}
+                            {formatDate(sinalizacaoEtapa1.sinalizado_em)}
+                          </span>
+                        )
+                      })()}
                     </div>
                     <p className="text-xs text-gray-500 mt-0.5">
                       Conduzida e validada pelo setor de RH • Integração institucional
@@ -2094,6 +2112,24 @@ export default function DetalheOnboarding() {
                                         Em Andamento ({concluidos}/{totalItens} validados)
                                       </span>
                                     )}
+
+                                    {/* Badge de Sinalização pelo Colaborador (Etapa 2) */}
+                                    {(() => {
+                                      const sinalizacao = onboarding.fases_sinalizadas?.find(
+                                        (s) => s.fase_id === fase.id,
+                                      )
+                                      if (!sinalizacao) return null
+                                      return (
+                                        <span
+                                          className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 shadow-2xs"
+                                          title={`O colaborador sinalizou que finalizou suas atividades nesta fase em ${formatDate(sinalizacao.sinalizado_em)}`}
+                                        >
+                                          <CheckCircle2 className="w-3 h-3 text-amber-700" />
+                                          Sinalizado pelo colaborador em{' '}
+                                          {formatDate(sinalizacao.sinalizado_em)}
+                                        </span>
+                                      )
+                                    })()}
                                   </div>
                                   {fase.descricao && (
                                     <p className="text-xs text-gray-600 mt-1 leading-relaxed">

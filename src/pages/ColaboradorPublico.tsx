@@ -57,6 +57,7 @@ export default function ColaboradorPublico() {
   const [fasesSetor, setFasesSetor] = useState<FaseModelo[]>([])
   const [confirmacoes, setConfirmacoes] = useState<Record<string, ConfirmacaoColaborador>>({})
   const [confirmandoId, setConfirmandoId] = useState<string | null>(null)
+  const [sinalizandoFaseId, setSinalizandoFaseId] = useState<string | null>(null)
 
   // Modal de preview/player
   const [previewModalOpen, setPreviewModalOpen] = useState(false)
@@ -277,6 +278,54 @@ export default function ColaboradorPublico() {
     }
   }
 
+  // Formato compacto para sinalização: dd/mm hh:mm
+  const formatSinalizacaoDate = (iso?: string) => {
+    if (!iso) return '-'
+    try {
+      const d = new Date(iso)
+      const dia = String(d.getDate()).padStart(2, '0')
+      const mes = String(d.getMonth() + 1).padStart(2, '0')
+      const horas = String(d.getHours()).padStart(2, '0')
+      const minutos = String(d.getMinutes()).padStart(2, '0')
+      return `${dia}/${mes} ${horas}:${minutos}`
+    } catch {
+      return iso
+    }
+  }
+
+  // Sinalizar conclusão das atividades da fase pelo colaborador
+  const handleSinalizarFase = async (params: {
+    faseId: string
+    faseTitulo: string
+    etapa: number
+  }) => {
+    if (!onboarding) return
+
+    try {
+      setSinalizandoFaseId(params.faseId)
+      const { onboarding: updated } = await onboardingService.sinalizarConclusaoFase({
+        onboardingId: onboarding.id,
+        faseId: params.faseId,
+        faseTitulo: params.faseTitulo,
+        etapa: params.etapa,
+        colaboradorNome: onboarding.colaborador_nome,
+        colaboradorEmail: onboarding.colaborador_email,
+      })
+
+      setOnboarding(updated)
+      const avisoResponsavel =
+        params.etapa === 1
+          ? 'Responsável notificado. Aguarde a validação da fase pela equipe de RH.'
+          : 'Responsável notificado. Aguarde a conclusão da fase pelo seu gestor.'
+      toast.success(avisoResponsavel)
+    } catch (err) {
+      console.error('Erro ao sinalizar conclusão da fase:', err)
+      toast.error('Erro ao sinalizar conclusão da fase. Tente novamente.')
+    } finally {
+      setSinalizandoFaseId(null)
+    }
+  }
+
   const formatShortDate = (ymd?: string) => {
     if (!ymd) return '-'
     const parts = ymd.split('T')[0].split('-')
@@ -476,116 +525,205 @@ export default function ColaboradorPublico() {
                 Nenhum documento ou vídeo cadastrado nesta etapa.
               </div>
             ) : (
-              tarefasEtapa1.map((item) => {
-                const conf = confirmacoes[item.id]
-                const fileUrl = tarefaService.getFileUrl(item)
-                const isConfirmando = confirmandoId === item.id
+              <>
+                {tarefasEtapa1.map((item) => {
+                  const conf = confirmacoes[item.id]
+                  const fileUrl = tarefaService.getFileUrl(item)
+                  const isConfirmando = confirmandoId === item.id
 
-                return (
-                  <div
-                    key={item.id}
-                    className={`rounded-xl border p-4 transition-all ${
-                      conf
-                        ? 'bg-emerald-50/20 border-emerald-200'
-                        : 'bg-white border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      {/* Título & Descrição */}
-                      <div className="flex items-start gap-3 flex-1">
-                        <div
-                          className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                            item.tipo === 'video'
-                              ? 'bg-purple-50 text-purple-600'
-                              : 'bg-brand-50 text-brand-600'
-                          }`}
-                        >
-                          {item.tipo === 'video' ? (
-                            <Video className="w-5 h-5" />
-                          ) : (
-                            <FileText className="w-5 h-5" />
-                          )}
-                        </div>
-
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-bold text-slate-900">{item.titulo}</span>
-                            <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                              {item.tipo === 'video' ? 'Vídeo Aula' : 'Manual / Documento'}
-                            </span>
-                          </div>
-
-                          {item.descricao && (
-                            <p className="text-xs text-slate-600 leading-relaxed max-w-xl">
-                              {item.descricao}
-                            </p>
-                          )}
-
-                          {/* Estado de Confirmação do Colaborador */}
-                          <div className="pt-1 flex items-center gap-2">
-                            {conf ? (
-                              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                Confirmado em {formatDateTime(conf.confirmado_em || conf.created)}
-                              </span>
+                  return (
+                    <div
+                      key={item.id}
+                      className={`rounded-xl border p-4 transition-all ${
+                        conf
+                          ? 'bg-emerald-50/20 border-emerald-200'
+                          : 'bg-white border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        {/* Título & Descrição */}
+                        <div className="flex items-start gap-3 flex-1">
+                          <div
+                            className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                              item.tipo === 'video'
+                                ? 'bg-purple-50 text-purple-600'
+                                : 'bg-brand-50 text-brand-600'
+                            }`}
+                          >
+                            {item.tipo === 'video' ? (
+                              <Video className="w-5 h-5" />
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 font-medium">
-                                <Clock className="w-3.5 h-3.5" />
-                                Aguardando sua visualização e confirmação
-                              </span>
+                              <FileText className="w-5 h-5" />
                             )}
                           </div>
+
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-bold text-slate-900">
+                                {item.titulo}
+                              </span>
+                              <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                                {item.tipo === 'video' ? 'Vídeo Aula' : 'Manual / Documento'}
+                              </span>
+                            </div>
+
+                            {item.descricao && (
+                              <p className="text-xs text-slate-600 leading-relaxed max-w-xl">
+                                {item.descricao}
+                              </p>
+                            )}
+
+                            {/* Estado de Confirmação do Colaborador */}
+                            <div className="pt-1 flex items-center gap-2">
+                              {conf ? (
+                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                  Confirmado em {formatDateTime(conf.confirmado_em || conf.created)}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 font-medium">
+                                  <Clock className="w-3.5 h-3.5" />
+                                  Aguardando sua visualização e confirmação
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
 
-                      {/* Botões de Ação */}
-                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            openPreview({
-                              titulo: item.titulo,
-                              tipo: item.tipo,
-                              url: fileUrl,
-                              descricao: item.descricao,
-                              tarefaId: item.id,
-                            })
-                          }
-                          className="h-9 text-xs text-brand-700 border-brand-200 hover:bg-brand-50"
-                        >
-                          {item.tipo === 'video' ? 'Assistir' : 'Abrir/Ler'}
-                        </Button>
-
-                        {!conf ? (
+                        {/* Botões de Ação */}
+                        <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
                           <Button
                             type="button"
+                            variant="outline"
                             size="sm"
-                            disabled={isConfirmando}
-                            onClick={() => handleConfirmar(item.id)}
-                            className="h-9 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                            onClick={() =>
+                              openPreview({
+                                titulo: item.titulo,
+                                tipo: item.tipo,
+                                url: fileUrl,
+                                descricao: item.descricao,
+                                tarefaId: item.id,
+                              })
+                            }
+                            className="h-9 text-xs text-brand-700 border-brand-200 hover:bg-brand-50"
                           >
-                            <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                            {isConfirmando ? 'Registrando...' : 'Confirmo que assisti/li'}
+                            {item.tipo === 'video' ? 'Assistir' : 'Abrir/Ler'}
                           </Button>
+
+                          {!conf ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={isConfirmando}
+                              onClick={() => handleConfirmar(item.id)}
+                              className="h-9 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                              {isConfirmando ? 'Registrando...' : 'Confirmo que assisti/li'}
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled
+                              className="h-9 text-xs text-emerald-700 font-semibold bg-emerald-50 cursor-default"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                              Já Confirmado
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {/* Botão de Sinalização de Conclusão da Etapa 1 */}
+                {(() => {
+                  const totalItensEtapa1 = tarefasEtapa1.length
+                  const totalConfirmadosEtapa1 = tarefasEtapa1.filter((t) =>
+                    Boolean(confirmacoes[t.id]),
+                  ).length
+                  const todosItensConfirmadosEtapa1 =
+                    totalItensEtapa1 > 0 && totalConfirmadosEtapa1 === totalItensEtapa1
+                  const sinalizacaoEtapa1 = onboarding.fases_sinalizadas?.find(
+                    (s) => s.fase_id === 'etapa1' || (s.etapa === 1 && !s.fase_id),
+                  )
+                  const isSinalizando = sinalizandoFaseId === 'etapa1'
+
+                  if (!todosItensConfirmadosEtapa1) return null
+
+                  return (
+                    <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-brand-50/40 p-4 rounded-xl border border-brand-100">
+                      <div className="text-xs text-slate-600">
+                        <p className="font-semibold text-slate-800">
+                          Você confirmou todos os {totalItensEtapa1} materiais da Etapa 1!
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          {sinalizacaoEtapa1
+                            ? 'Sinalização enviada. O RH foi notificado para validar e concluir a etapa.'
+                            : 'Sinalize que finalizou suas atividades para que a equipe de RH valide sua integração.'}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {sinalizacaoEtapa1 ? (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled
+                              className="h-9 text-xs font-semibold bg-emerald-50 text-emerald-800 border-emerald-300 cursor-default"
+                            >
+                              <CheckCircle2 className="w-4 h-4 mr-1.5 text-emerald-600" />
+                              Atividades sinalizadas em{' '}
+                              {formatSinalizacaoDate(sinalizacaoEtapa1.sinalizado_em)}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={isSinalizando}
+                              onClick={() =>
+                                handleSinalizarFase({
+                                  faseId: 'etapa1',
+                                  faseTitulo: 'Apresentação da Empresa',
+                                  etapa: 1,
+                                })
+                              }
+                              className="h-9 text-xs text-brand-700 hover:text-brand-900 hover:bg-brand-100/50"
+                              title="Atualizar registro de sinalização e reenviar aviso ao RH"
+                            >
+                              {isSinalizando ? 'Atualizando...' : 'Atualizar sinal'}
+                            </Button>
+                          </div>
                         ) : (
                           <Button
                             type="button"
-                            variant="ghost"
                             size="sm"
-                            disabled
-                            className="h-9 text-xs text-emerald-700 font-semibold bg-emerald-50 cursor-default"
+                            disabled={isSinalizando}
+                            onClick={() =>
+                              handleSinalizarFase({
+                                faseId: 'etapa1',
+                                faseTitulo: 'Apresentação da Empresa',
+                                etapa: 1,
+                              })
+                            }
+                            className="h-9 text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white shadow-sm"
                           >
-                            <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                            Já Confirmado
+                            <CheckCircle2 className="w-4 h-4 mr-1.5" />
+                            {isSinalizando
+                              ? 'Sinalizando...'
+                              : 'Finalizei minhas atividades desta fase'}
                           </Button>
                         )}
                       </div>
                     </div>
-                  </div>
-                )
-              })
+                  )
+                })()}
+              </>
             )}
           </div>
         </section>
@@ -964,6 +1102,89 @@ export default function ColaboradorPublico() {
                         )}
                       </div>
                     )}
+
+                    {/* Botão de Sinalização de Conclusão da Fase (Etapa 2) */}
+                    {(() => {
+                      // Regra: visível SOMENTE quando a fase possui itens e TODOS foram confirmados pelo colaborador.
+                      // Em fases SEM itens o botão NÃO aparece.
+                      if (!estaDesbloqueada || totalItens === 0 || !estaCompleta) {
+                        return null
+                      }
+
+                      const sinalizacaoFase = onboarding.fases_sinalizadas?.find(
+                        (s) => s.fase_id === fase.id,
+                      )
+                      const isSinalizando = sinalizandoFaseId === fase.id
+
+                      return (
+                        <div className="p-3.5 border-t border-slate-100 bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="text-xs text-slate-600">
+                            <span className="font-semibold text-slate-800 block">
+                              Você confirmou todos os {totalItens} itens desta fase!
+                            </span>
+                            <span className="text-[11px] text-slate-500">
+                              {sinalizacaoFase
+                                ? 'Responsável notificado. Aguarde a conclusão da fase pelo seu gestor.'
+                                : 'Sinalize que finalizou as atividades para avisar seu gestor de que a fase está pronta para ser concluída.'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            {sinalizacaoFase ? (
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  disabled
+                                  className="h-9 text-xs font-semibold bg-emerald-50 text-emerald-800 border-emerald-300 cursor-default"
+                                >
+                                  <CheckCircle2 className="w-4 h-4 mr-1.5 text-emerald-600" />
+                                  Atividades sinalizadas em{' '}
+                                  {formatSinalizacaoDate(sinalizacaoFase.sinalizado_em)}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={isSinalizando}
+                                  onClick={() =>
+                                    handleSinalizarFase({
+                                      faseId: fase.id,
+                                      faseTitulo: fase.titulo,
+                                      etapa: 2,
+                                    })
+                                  }
+                                  className="h-9 text-xs text-brand-700 hover:text-brand-900 hover:bg-brand-100/50"
+                                  title="Atualizar registro de sinalização e reenviar aviso ao gestor"
+                                >
+                                  {isSinalizando ? 'Atualizando...' : 'Atualizar sinal'}
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={isSinalizando}
+                                onClick={() =>
+                                  handleSinalizarFase({
+                                    faseId: fase.id,
+                                    faseTitulo: fase.titulo,
+                                    etapa: 2,
+                                  })
+                                }
+                                className="h-9 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                              >
+                                <CheckCircle2 className="w-4 h-4 mr-1.5" />
+                                {isSinalizando
+                                  ? 'Sinalizando...'
+                                  : 'Finalizei minhas atividades desta fase'}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </div>
                 )
               })}

@@ -494,3 +494,237 @@ onRecordCreate((e) => {
     console.error('[Email Hook] Erro no processamento do hook de avaliação:', errGlobal)
   }
 }, 'avaliacoes')
+
+// -------------------------------------------------------------
+// 3. Hook ao atualizar onboarding: Sinalização de conclusão pelo colaborador
+// -------------------------------------------------------------
+onRecordUpdate((e) => {
+  e.next()
+
+  try {
+    const app = e.app
+    const updatedRecord = e.record
+    const originalRecord = e.original
+    const appUrl = 'https://onboarding-de-colaboradores-ti-8af12.goskip.app'
+
+    function getSender(pbApp) {
+      try {
+        const s = pbApp.settings()
+        const addr = (s && s.meta && s.meta.senderAddress) || 'no-reply@onboarding-ti.goskip.app'
+        const name = (s && s.meta && s.meta.senderName) || 'Onboarding TI'
+        return { address: addr, name: name }
+      } catch (_) {
+        return { address: 'no-reply@onboarding-ti.goskip.app', name: 'Onboarding TI' }
+      }
+    }
+
+    function sendMail(pbApp, toEmail, toName, subject, htmlBody) {
+      if (!toEmail || typeof toEmail !== 'string' || toEmail.trim() === '') {
+        console.warn('[Email Hook] Destinatário vazio. Disparo abortado.')
+        return false
+      }
+      try {
+        const sender = getSender(pbApp)
+        const msg = new MailerMessage({
+          from: { address: sender.address, name: sender.name },
+          to: [{ address: toEmail.trim(), name: toName || '' }],
+          subject: subject,
+          html: htmlBody,
+        })
+        pbApp.newMailClient().send(msg)
+        console.log(
+          '[Email Hook] E-mail de sinalização enviado para:',
+          toEmail,
+          '| Assunto:',
+          subject,
+        )
+        return true
+      } catch (err) {
+        console.error(
+          '[Email Hook] Falha ao enviar e-mail de sinalização para:',
+          toEmail,
+          '| Erro:',
+          err,
+        )
+        return false
+      }
+    }
+
+    function wrapHtml(title, subtitle, contentHtml, ctaText, ctaUrl) {
+      return (
+        '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>' +
+        title +
+        '</title></head><body style="margin: 0; padding: 0; background-color: #f4f6f8; font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Helvetica, Arial, sans-serif; color: #1f2937;">' +
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f6f8; padding: 30px 15px;"><tr><td align="center">' +
+        '<table role="presentation" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">' +
+        '<tr><td style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); padding: 24px 30px; text-align: left;">' +
+        '<span style="display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #bae6fd; margin-bottom: 4px;">Sistema de Onboarding de TI</span>' +
+        '<h1 style="margin: 0; font-size: 20px; font-weight: 700; color: #ffffff; line-height: 1.3;">' +
+        title +
+        '</h1>' +
+        (subtitle
+          ? '<p style="margin: 6px 0 0; font-size: 13px; color: #e0f2fe;">' + subtitle + '</p>'
+          : '') +
+        '</td></tr>' +
+        '<tr><td style="padding: 28px 30px 20px 30px; line-height: 1.6; font-size: 14px; color: #374151;">' +
+        contentHtml +
+        (ctaUrl
+          ? '<div style="margin: 28px 0 10px; text-align: center;"><a href="' +
+            ctaUrl +
+            '" style="display: inline-block; background-color: #0284c7; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; padding: 12px 28px; border-radius: 6px;">' +
+            (ctaText || 'Acessar no Sistema') +
+            '</a></div><p style="margin: 16px 0 0; font-size: 11px; text-align: center; color: #9ca3af;">Link direto: <a href="' +
+            ctaUrl +
+            '" style="color: #0284c7;">' +
+            ctaUrl +
+            '</a></p>'
+          : '') +
+        '</td></tr>' +
+        '<tr><td style="background-color: #f8fafc; padding: 16px 30px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 11px; color: #64748b;">' +
+        'Notificação automática gerada pelo sistema de Gestão de Onboarding TI.<br>Por favor, não responda diretamente a este e-mail.' +
+        '</td></tr></table></td></tr></table></body></html>'
+      )
+    }
+
+    const updatedSinalizadas = updatedRecord.get('fases_sinalizadas') || []
+    const originalSinalizadas = originalRecord ? originalRecord.get('fases_sinalizadas') || [] : []
+
+    const parsedUpdated = Array.isArray(updatedSinalizadas)
+      ? updatedSinalizadas
+      : typeof updatedSinalizadas === 'string' && updatedSinalizadas.trim()
+        ? JSON.parse(updatedSinalizadas)
+        : []
+
+    const parsedOriginal = Array.isArray(originalSinalizadas)
+      ? originalSinalizadas
+      : typeof originalSinalizadas === 'string' && originalSinalizadas.trim()
+        ? JSON.parse(originalSinalizadas)
+        : []
+
+    if (!parsedUpdated || parsedUpdated.length === 0) return
+
+    // Encontrar sinalização nova ou com timestamp atualizado (re-clique tolerado)
+    const novaSinalizacao = parsedUpdated.find((up) => {
+      const orig = parsedOriginal.find((o) => o.fase_id === up.fase_id)
+      if (!orig) return true
+      return up.sinalizado_em !== orig.sinalizado_em
+    })
+
+    if (!novaSinalizacao) return
+
+    const colaboradorNome = updatedRecord.getString('colaborador_nome') || 'Colaborador'
+    const faseTitulo = novaSinalizacao.fase_titulo || 'Fase'
+    const etapa = Number(novaSinalizacao.etapa) || (novaSinalizacao.fase_id === 'etapa1' ? 1 : 2)
+    const sinalizadoEm = novaSinalizacao.sinalizado_em
+      ? new Date(novaSinalizacao.sinalizado_em).toLocaleString('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
+        })
+      : new Date().toLocaleString('pt-BR')
+
+    const onboardingUrl = `${appUrl}/colaboradores/${updatedRecord.id}`
+    const subject = `Onboarding ${colaboradorNome} — sinalizou conclusão da fase ${faseTitulo}`
+
+    if (etapa === 1) {
+      // Notificar RH e Admins
+      let destinatarios = []
+      try {
+        destinatarios = app.findRecordsByFilter(
+          'users',
+          "(role = 'rh' || role = 'admin' || (role = null && setor = 'RH')) && ativo != false",
+          'name',
+          50,
+          0,
+        )
+      } catch (errUsers) {
+        console.warn('[Email Hook] Erro ao buscar usuários RH/Admin para sinalização:', errUsers)
+      }
+
+      if (destinatarios && destinatarios.length > 0) {
+        const content = `
+          <p style="margin: 0 0 16px;">Prezada equipe de <strong>Recursos Humanos</strong>,</p>
+          <p style="margin: 0 0 16px;">
+            O colaborador <strong>${colaboradorNome}</strong> sinalizou no Portal Público que finalizou todas as atividades e leituras da <strong>Etapa 1 — ${faseTitulo}</strong>.
+          </p>
+
+          <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; border-radius: 4px; padding: 14px 18px; margin: 18px 0;">
+            <p style="margin: 0 0 6px;"><strong>Colaborador:</strong> ${colaboradorNome}</p>
+            <p style="margin: 0 0 6px;"><strong>Etapa:</strong> Etapa 1 — ${faseTitulo}</p>
+            <p style="margin: 0 0 6px;"><strong>Data/Hora do sinal:</strong> ${sinalizadoEm}</p>
+            <p style="margin: 0;"><strong>Status:</strong> Aguardando validação institucional do RH</p>
+          </div>
+
+          <p style="margin: 16px 0 8px; font-size: 13px; color: #475569;">
+            <em>Lembre-se:</em> O colaborador apenas <strong>sinalizou</strong> o cumprimento das atividades. Cabe ao RH conferir os itens, o checklist de integração e efetuar a <strong>conclusão formal da etapa</strong> no sistema para liberar a Etapa 2 ao Gestor.
+          </p>
+        `
+
+        const html = wrapHtml(
+          `Sinalização de Conclusão: Etapa 1`,
+          `Colaborador: ${colaboradorNome} | ${faseTitulo}`,
+          content,
+          'Acessar e Concluir Etapa 1',
+          onboardingUrl,
+        )
+
+        const sent = {}
+        for (const u of destinatarios) {
+          const email = u.getString('email')
+          const nome = u.getString('name')
+          if (email && !sent[email.toLowerCase()]) {
+            sent[email.toLowerCase()] = true
+            sendMail(app, email, nome, subject, html)
+          }
+        }
+      }
+    } else {
+      // Etapa 2 — Notificar Gestor Responsável
+      const gestorId = updatedRecord.getString('gestor_id')
+      if (gestorId) {
+        try {
+          const gestor = app.findRecordById('users', gestorId)
+          if (gestor) {
+            const gestorEmail = gestor.getString('email')
+            const gestorNome = gestor.getString('name') || 'Gestor Responsável'
+
+            if (gestorEmail) {
+              const content = `
+                <p style="margin: 0 0 16px;">Olá, <strong>${gestorNome}</strong>,</p>
+                <p style="margin: 0 0 16px;">
+                  O colaborador <strong>${colaboradorNome}</strong> sinalizou no Portal Público que finalizou todas as atividades da fase <strong>${faseTitulo}</strong> (Etapa 2 — Vivência Técnica).
+                </p>
+
+                <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; border-radius: 4px; padding: 14px 18px; margin: 18px 0;">
+                  <p style="margin: 0 0 6px;"><strong>Colaborador:</strong> ${colaboradorNome}</p>
+                  <p style="margin: 0 0 6px;"><strong>Fase:</strong> ${faseTitulo}</p>
+                  <p style="margin: 0 0 6px;"><strong>Data/Hora do sinal:</strong> ${sinalizadoEm}</p>
+                  <p style="margin: 0;"><strong>Ação requerida:</strong> Validação prática e conclusão da fase pelo gestor</p>
+                </div>
+
+                <p style="margin: 16px 0 8px; font-size: 13px; color: #475569;">
+                  <em>Importante:</em> O botão clicado pelo colaborador <strong>sinaliza, mas não conclui</strong> a fase. Como Gestor Responsável, acesse o sistema para validar o aprendizado prático e clique em <strong>&quot;Concluir Fase&quot;</strong> para desbloquear a fase seguinte.
+                </p>
+              `
+
+              const html = wrapHtml(
+                `Sinalização de Conclusão: ${faseTitulo}`,
+                `Colaborador: ${colaboradorNome} | Gestor: ${gestorNome}`,
+                content,
+                'Acessar Onboarding e Concluir Fase',
+                onboardingUrl,
+              )
+
+              sendMail(app, gestorEmail, gestorNome, subject, html)
+            }
+          }
+        } catch (errGestor) {
+          console.warn('[Email Hook] Gestor não encontrado para sinalização:', gestorId, errGestor)
+        }
+      }
+    }
+  } catch (errSinalizacao) {
+    console.error(
+      '[Email Hook] Erro ao processar sinalização de fase no hook de onboarding:',
+      errSinalizacao,
+    )
+  }
+}, 'onboardings')
