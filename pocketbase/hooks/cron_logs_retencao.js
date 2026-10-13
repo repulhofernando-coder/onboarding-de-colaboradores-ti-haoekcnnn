@@ -8,6 +8,7 @@ cronAdd('limpar_logs_auditoria_6meses', '0 3 * * *', (e) => {
       (typeof $app !== 'undefined' && $app) ||
       (e && e.app) ||
       (typeof app !== 'undefined' && app) ||
+      (typeof core !== 'undefined' && core.app) ||
       null
 
     if (!pbApp) {
