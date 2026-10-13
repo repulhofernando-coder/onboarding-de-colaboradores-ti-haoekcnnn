@@ -1329,169 +1329,8 @@ export default function DetalheOnboarding() {
                 )}
               </div>
 
-              {/* Ações de topo da Etapa 1: Adicionar item de upload */}
-              {!onboarding.etapa1_concluida && (
-                <div className="flex justify-between items-center mb-3 pt-1">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Materiais & Validações do RH
-                  </span>
-                  {podeGerenciarEtapa1 ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => openAddItemModal(1)}
-                      className="h-8 text-xs text-brand-700 border-brand-200 hover:bg-brand-50"
-                    >
-                      <Upload className="w-3.5 h-3.5 mr-1" />
-                      Adicionar item (upload)
-                    </Button>
-                  ) : (
-                    <span className="text-[11px] text-gray-400 italic">
-                      (Modo visualização — condução do RH)
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* Lista de itens da Etapa 1 */}
-              <div className="divide-y divide-gray-100 mb-5">
-                {tarefasEtapa1.length === 0 ? (
-                  <div className="py-6 text-center text-gray-400 text-xs">
-                    Nenhum item configurado para a Etapa 1.
-                  </div>
-                ) : (
-                  tarefasEtapa1.map((item) => {
-                    const fileUrl = tarefaService.getFileUrl(item)
-                    const checked = onboarding.etapa1_concluida || item.concluida
-
-                    return (
-                      <div
-                        key={item.id}
-                        className="py-3 flex items-start justify-between gap-3 group"
-                      >
-                        <div className="flex items-start gap-3 flex-1">
-                          <button
-                            type="button"
-                            disabled={onboarding.etapa1_concluida || !podeGerenciarEtapa1}
-                            onClick={() => handleToggleTarefa(item)}
-                            className={`mt-0.5 text-gray-400 transition-transform ${
-                              podeGerenciarEtapa1 && !onboarding.etapa1_concluida
-                                ? 'hover:text-brand-600 active:scale-95'
-                                : 'cursor-default opacity-80'
-                            }`}
-                            aria-label="Marcar item"
-                            title={
-                              !podeGerenciarEtapa1
-                                ? 'Apenas RH ou Administrador podem marcar itens da Etapa 1'
-                                : undefined
-                            }
-                          >
-                            {checked ? (
-                              <CheckCircle2 className="w-5 h-5 text-emerald-600 animate-fade-in" />
-                            ) : (
-                              <Square className="w-5 h-5 text-gray-300" />
-                            )}
-                          </button>
-
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {item.tipo === 'video' ? (
-                                <Video className="w-4 h-4 text-purple-600 shrink-0" />
-                              ) : (
-                                <FileText className="w-4 h-4 text-brand-600 shrink-0" />
-                              )}
-                              <span
-                                className={`text-sm font-semibold ${
-                                  checked ? 'text-gray-500 line-through' : 'text-gray-800'
-                                }`}
-                              >
-                                {item.titulo}
-                              </span>
-                              {item.conteudo_url ? (
-                                <span className="text-[10px] bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded font-medium">
-                                  Arquivo próprio
-                                </span>
-                              ) : item.material ? (
-                                <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-medium">
-                                  Material biblioteca
-                                </span>
-                              ) : (
-                                <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-medium">
-                                  Sem arquivo
-                                </span>
-                              )}
-                            </div>
-                            {item.descricao && (
-                              <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
-                                {item.descricao}
-                              </p>
-                            )}
-                            {/* Estado de Confirmação do Colaborador vs. Marcação do RH */}
-                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                              {confirmacoes[item.id] ? (
-                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                  Confirmado pelo colaborador em{' '}
-                                  {formatDate(
-                                    confirmacoes[item.id].confirmado_em ||
-                                      confirmacoes[item.id].created,
-                                  )}
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-medium">
-                                  <Clock className="w-3 h-3" />
-                                  Aguardando confirmação do colaborador
-                                </span>
-                              )}
-
-                              {item.concluida_em && (
-                                <span className="text-[11px] text-gray-500">
-                                  • Validado RH em {formatDate(item.concluida_em)}
-                                </span>
-                              )}
-                            </div>{' '}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              openPreview({
-                                titulo: item.titulo,
-                                tipo: item.tipo,
-                                url: fileUrl,
-                              })
-                            }
-                            className="h-8 text-xs text-brand-600 hover:text-brand-700 shrink-0"
-                          >
-                            <Eye className="w-3.5 h-3.5 mr-1" />
-                            Visualizar
-                          </Button>
-
-                          {!item.criado_automaticamente &&
-                            !onboarding.etapa1_concluida &&
-                            podeGerenciarEtapa1 && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDeleteTarefa(item.id, 1)}
-                                className="h-8 w-8 text-gray-400 hover:text-red-600"
-                                aria-label="Excluir item"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            )}
-                        </div>
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-
               {/* Checklist de Integração da Etapa 1 (Entrega de Equipamentos & Apresentações) */}
-              <div className="mt-6 pt-5 border-t border-gray-200">
+              <div className="mb-6 pb-5 border-b border-gray-200">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
@@ -1690,6 +1529,167 @@ export default function DetalheOnboarding() {
                       )
                     })}
                   </div>
+                )}
+              </div>
+
+              {/* Ações de topo dos Materiais da Etapa 1: Adicionar item de upload */}
+              {!onboarding.etapa1_concluida && (
+                <div className="flex justify-between items-center mb-3 pt-1">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Materiais & Validações do RH
+                  </span>
+                  {podeGerenciarEtapa1 ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openAddItemModal(1)}
+                      className="h-8 text-xs text-brand-700 border-brand-200 hover:bg-brand-50"
+                    >
+                      <Upload className="w-3.5 h-3.5 mr-1" />
+                      Adicionar item (upload)
+                    </Button>
+                  ) : (
+                    <span className="text-[11px] text-gray-400 italic">
+                      (Modo visualização — condução do RH)
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Lista de itens da Etapa 1 */}
+              <div className="divide-y divide-gray-100 mb-5">
+                {tarefasEtapa1.length === 0 ? (
+                  <div className="py-6 text-center text-gray-400 text-xs">
+                    Nenhum item configurado para a Etapa 1.
+                  </div>
+                ) : (
+                  tarefasEtapa1.map((item) => {
+                    const fileUrl = tarefaService.getFileUrl(item)
+                    const checked = onboarding.etapa1_concluida || item.concluida
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="py-3 flex items-start justify-between gap-3 group"
+                      >
+                        <div className="flex items-start gap-3 flex-1">
+                          <button
+                            type="button"
+                            disabled={onboarding.etapa1_concluida || !podeGerenciarEtapa1}
+                            onClick={() => handleToggleTarefa(item)}
+                            className={`mt-0.5 text-gray-400 transition-transform ${
+                              podeGerenciarEtapa1 && !onboarding.etapa1_concluida
+                                ? 'hover:text-brand-600 active:scale-95'
+                                : 'cursor-default opacity-80'
+                            }`}
+                            aria-label="Marcar item"
+                            title={
+                              !podeGerenciarEtapa1
+                                ? 'Apenas RH ou Administrador podem marcar itens da Etapa 1'
+                                : undefined
+                            }
+                          >
+                            {checked ? (
+                              <CheckCircle2 className="w-5 h-5 text-emerald-600 animate-fade-in" />
+                            ) : (
+                              <Square className="w-5 h-5 text-gray-300" />
+                            )}
+                          </button>
+
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {item.tipo === 'video' ? (
+                                <Video className="w-4 h-4 text-purple-600 shrink-0" />
+                              ) : (
+                                <FileText className="w-4 h-4 text-brand-600 shrink-0" />
+                              )}
+                              <span
+                                className={`text-sm font-semibold ${
+                                  checked ? 'text-gray-500 line-through' : 'text-gray-800'
+                                }`}
+                              >
+                                {item.titulo}
+                              </span>
+                              {item.conteudo_url ? (
+                                <span className="text-[10px] bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded font-medium">
+                                  Arquivo próprio
+                                </span>
+                              ) : item.material ? (
+                                <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-medium">
+                                  Material biblioteca
+                                </span>
+                              ) : (
+                                <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-medium">
+                                  Sem arquivo
+                                </span>
+                              )}
+                            </div>
+                            {item.descricao && (
+                              <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                                {item.descricao}
+                              </p>
+                            )}
+                            {/* Estado de Confirmação do Colaborador vs. Marcação do RH */}
+                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                              {confirmacoes[item.id] ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  Confirmado pelo colaborador em{' '}
+                                  {formatDate(
+                                    confirmacoes[item.id].confirmado_em ||
+                                      confirmacoes[item.id].created,
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-medium">
+                                  <Clock className="w-3 h-3" />
+                                  Aguardando confirmação do colaborador
+                                </span>
+                              )}
+
+                              {item.concluida_em && (
+                                <span className="text-[11px] text-gray-500">
+                                  • Validado RH em {formatDate(item.concluida_em)}
+                                </span>
+                              )}
+                            </div>{' '}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              openPreview({
+                                titulo: item.titulo,
+                                tipo: item.tipo,
+                                url: fileUrl,
+                              })
+                            }
+                            className="h-8 text-xs text-brand-600 hover:text-brand-700 shrink-0"
+                          >
+                            <Eye className="w-3.5 h-3.5 mr-1" />
+                            Visualizar
+                          </Button>
+
+                          {!item.criado_automaticamente &&
+                            !onboarding.etapa1_concluida &&
+                            podeGerenciarEtapa1 && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeleteTarefa(item.id, 1)}
+                                className="h-8 w-8 text-gray-400 hover:text-red-600"
+                                aria-label="Excluir item"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                        </div>
+                      </div>
+                    )
+                  })
                 )}
               </div>
 
