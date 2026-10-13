@@ -1,11 +1,12 @@
 import React, { useState } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
-import { Lock, Mail, AlertCircle } from 'lucide-react'
+import { Lock, Mail, AlertCircle, WifiOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import MundoOpenLogo from '@/components/MundoOpenLogo'
+import { isNetworkError } from '@/lib/pocketbase/errors'
 
 export default function Login() {
   const { login } = useAuth()
@@ -34,13 +35,17 @@ export default function Login() {
       toast.success('Login realizado com sucesso!')
       navigate(from, { replace: true })
     } catch (err: unknown) {
-      console.error(err)
+      console.error('Erro ao realizar login:', err)
       if (
         (err instanceof Error && err.name === 'AccountDisabledError') ||
         (err instanceof Error && err.message.includes('desativada'))
       ) {
         setErrorMsg('Sua conta está desativada. Fale com o RH.')
         toast.error('Sua conta está desativada. Fale com o RH.')
+      } else if (isNetworkError(err)) {
+        const netMsg = 'Falha de conexão com o servidor. Tente novamente em instantes.'
+        setErrorMsg(netMsg)
+        toast.error(netMsg)
       } else {
         setErrorMsg('E-mail ou senha incorretos. Verifique suas credenciais.')
         toast.error('Não foi possível entrar. Verifique os dados informados.')
@@ -79,7 +84,11 @@ export default function Login() {
 
           {errorMsg && (
             <div className="mb-5 flex items-start gap-2.5 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs leading-relaxed animate-fade-in">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+              {errorMsg.includes('Falha de conexão') ? (
+                <WifiOff className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+              ) : (
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+              )}
               <span>{errorMsg}</span>
             </div>
           )}
