@@ -2,6 +2,55 @@
 
 // Job cron diário para limpeza de logs de auditoria com retenção de 6 meses (180 dias)
 // Registros são mantidos por 6 meses conforme política oficial de auditoria.
+// Garantir idempotência e integridade do schema: campos 'setor' e 'setor_origem' devem ser text
+// em modelo_tarefas, onboardings, materiais e fases_modelo
+cronAdd('assegurar_schema_setor_text', '0 4 * * *', (e) => {
+  try {
+    const pbApp =
+      (typeof $app !== 'undefined' && $app) ||
+      (e && e.app) ||
+      (typeof app !== 'undefined' && app) ||
+      (typeof core !== 'undefined' && core.app) ||
+      null
+
+    if (!pbApp) return
+
+    const colModelo = pbApp.findCollectionByNameOrId('modelo_tarefas')
+    const fModelo = colModelo.fields.getByName('setor')
+    if (fModelo && fModelo.type !== 'text') {
+      colModelo.fields.removeByName('setor')
+      colModelo.fields.add(new TextField({ name: 'setor', required: false }))
+      pbApp.save(colModelo)
+    }
+
+    const colOnb = pbApp.findCollectionByNameOrId('onboardings')
+    const fOnb = colOnb.fields.getByName('setor')
+    if (fOnb && fOnb.type !== 'text') {
+      colOnb.fields.removeByName('setor')
+      colOnb.fields.add(new TextField({ name: 'setor', required: false }))
+      pbApp.save(colOnb)
+    }
+
+    const colMat = pbApp.findCollectionByNameOrId('materiais')
+    const fMat = colMat.fields.getByName('setor_origem')
+    if (fMat && fMat.type !== 'text') {
+      colMat.fields.removeByName('setor_origem')
+      colMat.fields.add(new TextField({ name: 'setor_origem', required: false }))
+      pbApp.save(colMat)
+    }
+
+    const colFase = pbApp.findCollectionByNameOrId('fases_modelo')
+    const fFase = colFase.fields.getByName('setor')
+    if (fFase && fFase.type !== 'text') {
+      colFase.fields.removeByName('setor')
+      colFase.fields.add(new TextField({ name: 'setor', required: false }))
+      pbApp.save(colFase)
+    }
+  } catch (err) {
+    console.error('[Cron Assegurar Schema Error]', err)
+  }
+})
+
 cronAdd('limpar_logs_auditoria_6meses', '0 3 * * *', (e) => {
   try {
     const pbApp =

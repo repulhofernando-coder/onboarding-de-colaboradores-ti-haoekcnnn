@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-13T20:17:47.381Z",
+  "generatedAt": "2026-10-13T20:26:26.290Z",
   "collections": [
     {
       "name": "users",
@@ -77,22 +77,6 @@
         "delete": "@request.auth.id != ''"
       },
       "fields": [
-        {
-          "name": "setor",
-          "type": "select",
-          "required": false,
-          "system": false,
-          "selectValues": [
-            "windows",
-            "linux_rede",
-            "datacenter",
-            "campo",
-            "infraestrutura",
-            "rh",
-            "comercial",
-            "laboratorio"
-          ]
-        },
         {
           "name": "titulo",
           "type": "text",
@@ -176,6 +160,12 @@
           "required": false,
           "system": false,
           "collectionRef": "fases_modelo"
+        },
+        {
+          "name": "setor",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -212,22 +202,6 @@
           "type": "text",
           "required": false,
           "system": false
-        },
-        {
-          "name": "setor",
-          "type": "select",
-          "required": false,
-          "system": false,
-          "selectValues": [
-            "windows",
-            "linux_rede",
-            "datacenter",
-            "campo",
-            "infraestrutura",
-            "rh",
-            "comercial",
-            "laboratorio"
-          ]
         },
         {
           "name": "gestor_id",
@@ -420,6 +394,12 @@
         {
           "name": "fases_sinalizadas",
           "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "setor",
+          "type": "text",
           "required": false,
           "system": false
         }
@@ -662,22 +642,6 @@
           "system": false
         },
         {
-          "name": "setor_origem",
-          "type": "select",
-          "required": false,
-          "system": false,
-          "selectValues": [
-            "windows",
-            "linux_rede",
-            "datacenter",
-            "campo",
-            "infraestrutura",
-            "rh",
-            "comercial",
-            "laboratorio"
-          ]
-        },
-        {
           "name": "criado_por",
           "type": "relation",
           "required": false,
@@ -704,6 +668,12 @@
           "required": false,
           "system": false,
           "collectionRef": "setores"
+        },
+        {
+          "name": "setor_origem",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -881,12 +851,6 @@
           "collectionRef": "setores"
         },
         {
-          "name": "setor",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
           "name": "etapa",
           "type": "number",
           "required": false,
@@ -909,6 +873,12 @@
         {
           "name": "dias_previstos",
           "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "setor",
+          "type": "text",
           "required": false,
           "system": false
         }
