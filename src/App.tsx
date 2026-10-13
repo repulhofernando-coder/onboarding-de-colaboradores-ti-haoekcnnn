@@ -22,6 +22,7 @@ import Usuarios from './pages/Usuarios'
 import Logs from './pages/Logs'
 import Manual from './pages/Manual'
 import ColaboradorPublico from './pages/ColaboradorPublico'
+import LimpezaAmbiente from './pages/LimpezaAmbiente'
 import NotFound from './pages/NotFound'
 
 const App = () => (
@@ -74,6 +75,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['admin', 'rh']}>
                   <Usuarios />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/limpeza"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <LimpezaAmbiente />
                 </ProtectedRoute>
               }
             />

@@ -18,6 +18,7 @@ import {
   Shield,
   FileText,
   BookOpen,
+  Trash2,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -45,6 +46,7 @@ const navItems: NavItem[] = [
   { label: 'Manual', path: '/manual', icon: BookOpen },
   { label: 'Auditoria & Logs', path: '/logs', icon: FileText, allowedRoles: ['admin'] },
   { label: 'Usuários', path: '/usuarios', icon: Shield, allowedRoles: ['admin', 'rh'] },
+  { label: 'Limpeza de Ambiente', path: '/limpeza', icon: Trash2, allowedRoles: ['admin'] },
 ]
 
 export default function Layout() {
@@ -71,6 +73,7 @@ export default function Layout() {
     if (p.startsWith('/manual')) return 'Manual do Sistema'
     if (p.startsWith('/logs')) return 'Logs de Auditoria'
     if (p.startsWith('/usuarios')) return 'Gestão de Usuários'
+    if (p.startsWith('/limpeza')) return 'Limpeza de Ambiente (Transição para Produção)'
     return 'Onboarding de Colaboradores'
   }
 
