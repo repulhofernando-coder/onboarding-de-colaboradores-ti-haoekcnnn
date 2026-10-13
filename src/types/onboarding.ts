@@ -167,6 +167,22 @@ export interface ConfirmacaoColaborador extends RecordModel {
   }
 }
 
+export interface ItemIntegracaoModelo extends RecordModel {
+  titulo: string
+  ordem?: number
+  ativo?: boolean
+}
+
+export interface ItemChecklistIntegracao {
+  id: string
+  titulo: string
+  entregue: boolean
+  entregue_em?: string
+  entregue_por?: string
+  entregue_por_nome?: string
+  observacao?: string
+}
+
 export interface Onboarding extends RecordModel {
   colaborador_nome: string
   colaborador_email: string
@@ -196,6 +212,9 @@ export interface Onboarding extends RecordModel {
   prazo_suplementar_dias?: number
   cronograma_fases?: CronogramaFaseItem[]
   clientes_mapeamento?: string[]
+  tecnico_responsavel_nome?: string
+  tecnico_responsavel_email?: string
+  checklist_integracao?: ItemChecklistIntegracao[]
   expand?: {
     gestor_id?: User
     etapa1_concluida_por?: User

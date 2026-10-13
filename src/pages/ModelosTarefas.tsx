@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { modeloService, materialService, setorService, faseService } from '@/services/onboarding'
+import {
+  modeloService,
+  materialService,
+  setorService,
+  faseService,
+  itemIntegracaoModeloService,
+} from '@/services/onboarding'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
 import type {
   ModeloTarefa,
@@ -7,6 +13,7 @@ import type {
   Setor,
   TarefaTipo,
   SetorModel,
+  ItemIntegracaoModelo,
   SetorVisualInfo,
   FaseModelo,
 } from '@/types/onboarding'
@@ -33,6 +40,7 @@ import {
   ArrowUp,
   ArrowDown,
   Lock,
+  CheckSquare,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -156,6 +164,27 @@ export default function ModelosTarefas() {
     }
   }
 
+  // Itens de checklist de integração do modelo (Etapa 1)
+  const [itensIntegracao, setItensIntegracao] = useState<ItemIntegracaoModelo[]>([])
+  const [loadingItensIntegracao, setLoadingItensIntegracao] = useState(false)
+  const [novoItemIntegracaoTitulo, setNovoItemIntegracaoTitulo] = useState('')
+  const [salvandoItemIntegracao, setSalvandoItemIntegracao] = useState(false)
+  const [itemIntegracaoEditandoId, setItemIntegracaoEditandoId] = useState<string | null>(null)
+  const [itemIntegracaoEditandoTitulo, setItemIntegracaoEditandoTitulo] = useState('')
+
+  const fetchItensIntegracao = async () => {
+    try {
+      setLoadingItensIntegracao(true)
+      const data = await itemIntegracaoModeloService.listAll()
+      setItensIntegracao(data)
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao carregar checklist de integração do modelo.')
+    } finally {
+      setLoadingItensIntegracao(false)
+    }
+  }
+
   // Carregar dados de materiais
   const fetchMateriais = async () => {
     try {
@@ -230,6 +259,7 @@ export default function ModelosTarefas() {
   useEffect(() => {
     fetchSetores()
     fetchMateriais()
+    fetchItensIntegracao()
   }, [])
 
   useEffect(() => {
@@ -383,6 +413,76 @@ export default function ModelosTarefas() {
       url,
     })
     setPreviewOpen(true)
+  }
+
+  // ==================== AÇÕES DO CHECKLIST DE INTEGRAÇÃO (ETAPA 1) ====================
+  const handleAdicionarItemIntegracao = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!novoItemIntegracaoTitulo.trim()) return
+    if (!isAdmin && !isRH) {
+      toast.error('Apenas Administradores e RH podem editar o checklist do modelo.')
+      return
+    }
+
+    try {
+      setSalvandoItemIntegracao(true)
+      await itemIntegracaoModeloService.create({
+        titulo: novoItemIntegracaoTitulo.trim(),
+        ordem: itensIntegracao.length + 1,
+        ativo: true,
+      })
+      setNovoItemIntegracaoTitulo('')
+      toast.success('Item de integração adicionado ao modelo!')
+      await fetchItensIntegracao()
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao adicionar item de integração.')
+    } finally {
+      setSalvandoItemIntegracao(false)
+    }
+  }
+
+  const handleSalvarEdicaoItemIntegracao = async (id: string) => {
+    if (!itemIntegracaoEditandoTitulo.trim()) return
+    if (!isAdmin && !isRH) {
+      toast.error('Apenas Administradores e RH podem editar o checklist do modelo.')
+      return
+    }
+
+    try {
+      setSalvandoItemIntegracao(true)
+      await itemIntegracaoModeloService.update(id, {
+        titulo: itemIntegracaoEditandoTitulo.trim(),
+      })
+      setItemIntegracaoEditandoId(null)
+      setItemIntegracaoEditandoTitulo('')
+      toast.success('Item atualizado!')
+      await fetchItensIntegracao()
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao atualizar item de integração.')
+    } finally {
+      setSalvandoItemIntegracao(false)
+    }
+  }
+
+  const handleExcluirItemIntegracao = async (item: ItemIntegracaoModelo) => {
+    if (!isAdmin && !isRH) {
+      toast.error('Apenas Administradores e RH podem excluir itens do modelo.')
+      return
+    }
+    if (!confirm(`Remover "${item.titulo}" do checklist de integração do modelo?`)) {
+      return
+    }
+
+    try {
+      await itemIntegracaoModeloService.delete(item.id)
+      toast.success('Item removido do modelo.')
+      await fetchItensIntegracao()
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao excluir item de integração.')
+    }
   }
 
   // ==================== AÇÕES DE FASES DO MODELO ====================
@@ -1229,9 +1329,140 @@ export default function ModelosTarefas() {
             </span>
           </div>
 
-          {/* SE ETAPA 1: MANTER FLAT (VÍDEOS E MANUAIS SEM FASES) */}
+          {/* SE ETAPA 1: CHECKLIST DE INTEGRAÇÃO + VÍDEOS E MANUAIS */}
           {isEtapa1 ? (
             <>
+              {/* Checklist de Integração (Entrega de Material e Apresentações pelo RH) */}
+              <div className="space-y-3 bg-emerald-50/40 p-4 rounded-xl border border-emerald-200/70">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <CheckSquare className="w-5 h-5 text-emerald-600" />
+                    <div>
+                      <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                        Checklist de Integração e Entrega de Material
+                        <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                          Etapa 1 — RH
+                        </span>
+                      </h4>
+                      <p className="text-xs text-gray-500">
+                        Itens entregues/apresentados pelo RH no primeiro dia. Novos onboardings
+                        herdam esta lista como snapshot inicial.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Formulário para Adicionar Item (Admin ou RH) */}
+                {(isAdmin || isRH) && (
+                  <form onSubmit={handleAdicionarItemIntegracao} className="flex gap-2 pt-1">
+                    <Input
+                      type="text"
+                      placeholder="Novo item do checklist (ex.: Crachá físico, Fone USB, etc.)"
+                      value={novoItemIntegracaoTitulo}
+                      onChange={(e) => setNovoItemIntegracaoTitulo(e.target.value)}
+                      className="text-xs h-9 bg-white"
+                      disabled={salvandoItemIntegracao}
+                    />
+                    <Button
+                      type="submit"
+                      disabled={salvandoItemIntegracao || !novoItemIntegracaoTitulo.trim()}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 px-3 shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1" />
+                      Adicionar Item
+                    </Button>
+                  </form>
+                )}
+
+                {/* Lista de Itens do Modelo */}
+                <div className="divide-y divide-emerald-100 border border-emerald-100 rounded-lg overflow-hidden bg-white">
+                  {loadingItensIntegracao ? (
+                    <div className="p-4 text-center text-xs text-gray-400">
+                      Carregando checklist de integração...
+                    </div>
+                  ) : itensIntegracao.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-gray-400">
+                      Nenhum item configurado no checklist de integração.
+                    </div>
+                  ) : (
+                    itensIntegracao.map((item, idx) => (
+                      <div
+                        key={item.id}
+                        className="p-3 flex items-center justify-between gap-3 hover:bg-emerald-50/20 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold text-xs flex items-center justify-center shrink-0">
+                            {idx + 1}
+                          </span>
+                          {itemIntegracaoEditandoId === item.id ? (
+                            <div className="flex items-center gap-2 flex-1">
+                              <Input
+                                type="text"
+                                value={itemIntegracaoEditandoTitulo}
+                                onChange={(e) => setItemIntegracaoEditandoTitulo(e.target.value)}
+                                className="text-xs h-8 bg-white flex-1"
+                                autoFocus
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => handleSalvarEdicaoItemIntegracao(item.id)}
+                                disabled={salvandoItemIntegracao}
+                                className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                              >
+                                Salvar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setItemIntegracaoEditandoId(null)
+                                  setItemIntegracaoEditandoTitulo('')
+                                }}
+                                className="h-8 text-xs"
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="min-w-0 flex-1">
+                              <span className="text-xs font-semibold text-gray-900 block truncate">
+                                {item.titulo}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {itemIntegracaoEditandoId !== item.id && (isAdmin || isRH) && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setItemIntegracaoEditandoId(item.id)
+                                setItemIntegracaoEditandoTitulo(item.titulo)
+                              }}
+                              className="h-7 w-7 text-gray-500 hover:text-gray-800"
+                              title="Renomear item"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleExcluirItemIntegracao(item)}
+                              className="h-7 w-7 text-gray-400 hover:text-red-600"
+                              title="Excluir item"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
               {/* 1. Vídeos Obrigatórios Etapa 1 */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">

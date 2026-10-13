@@ -22,7 +22,9 @@ import type {
   FaseModelo,
   LogAuditoria,
   FaseConcluidaInfo,
+  ItemChecklistIntegracao,
 } from '@/types/onboarding'
+import { itemIntegracaoModeloService } from '@/services/onboarding'
 import { SETORES_INFO, STATUS_INFO, getSetorVisual } from '@/types/onboarding'
 import {
   ArrowLeft,
@@ -54,6 +56,8 @@ import {
   Building2,
   Pencil,
   Save,
+  UserCheck2,
+  MessageSquare,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -94,6 +98,18 @@ export default function DetalheOnboarding() {
   const [cliente2, setCliente2] = useState('')
   const [cliente3, setCliente3] = useState('')
   const [salvandoClientes, setSalvandoClientes] = useState(false)
+
+  // MELHORIA 1 — Técnico Responsável pelo Acompanhamento (topo Etapa 2)
+  const [editandoTecnico, setEditandoTecnico] = useState(false)
+  const [tecnicoNome, setTecnicoNome] = useState('')
+  const [tecnicoEmail, setTecnicoEmail] = useState('')
+  const [salvandoTecnico, setSalvandoTecnico] = useState(false)
+
+  // MELHORIA 3 & 4 — Checklist de Integração da Etapa 1
+  const [marcandoItemChecklistId, setMarcandoItemChecklistId] = useState<string | null>(null)
+  const [editandoObsItemId, setEditandoObsItemId] = useState<string | null>(null)
+  const [obsTemp, setObsTemp] = useState('')
+  const [salvandoObs, setSalvandoObs] = useState(false)
 
   // Aba ativa: 'etapas' ou 'auditoria'
   const [abaAtiva, setAbaAtiva] = useState<'etapas' | 'auditoria'>('etapas')
@@ -155,6 +171,9 @@ export default function DetalheOnboarding() {
         setCliente2('')
         setCliente3('')
       }
+
+      setTecnicoNome(onb?.tecnico_responsavel_nome || '')
+      setTecnicoEmail(onb?.tecnico_responsavel_email || '')
 
       if (onb?.setor) {
         faseService.listBySetor(onb.setor, onb.setor_ref).then(setFasesSetor).catch(console.error)
@@ -412,12 +431,144 @@ export default function DetalheOnboarding() {
     }
   }
 
+  // MELHORIA 1 — Salvar Técnico Responsável
+  const handleSalvarTecnicoResponsavel = async () => {
+    if (!onboarding || !user) return
+    if (!podeGerenciarEtapa2e3) {
+      toast.error('Apenas o gestor responsável ou administrador podem definir o técnico.')
+      return
+    }
+    if (!tecnicoNome.trim()) {
+      toast.error('O nome do técnico responsável é obrigatório.')
+      return
+    }
+
+    try {
+      setSalvandoTecnico(true)
+      const updated = await onboardingService.atualizarTecnicoResponsavel({
+        onboardingId: onboarding.id,
+        nome: tecnicoNome.trim(),
+        email: tecnicoEmail.trim(),
+        usuarioId: user.id,
+        usuarioNome: user.name || user.email,
+        usuarioRole: role || '',
+        gestorNome: onboarding.expand?.gestor_id?.name || '',
+        colaboradorNome: onboarding.colaborador_nome,
+      })
+
+      setOnboarding(updated)
+      setEditandoTecnico(false)
+      toast.success('Técnico responsável pelo acompanhamento atualizado com sucesso!')
+      fetchData()
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao salvar técnico responsável.')
+    } finally {
+      setSalvandoTecnico(false)
+    }
+  }
+
+  // MELHORIA 3 — Alternar Item do Checklist de Integração
+  const handleToggleItemChecklistIntegracao = async (item: ItemChecklistIntegracao) => {
+    if (!onboarding || !user) return
+    if (onboarding.etapa1_concluida) {
+      toast.error('A Etapa 1 já está concluída. Checklist bloqueado.')
+      return
+    }
+    if (!podeGerenciarEtapa1) {
+      toast.error('Apenas o RH ou Administrador podem marcar itens do checklist de integração.')
+      return
+    }
+
+    try {
+      setMarcandoItemChecklistId(item.id)
+      const updated = await onboardingService.atualizarItemChecklistIntegracao({
+        onboardingId: onboarding.id,
+        itemId: item.id,
+        entregue: !item.entregue,
+        usuarioId: user.id,
+        usuarioNome: user.name || user.email,
+        usuarioRole: role || '',
+        gestorNome: onboarding.expand?.gestor_id?.name || '',
+        colaboradorNome: onboarding.colaborador_nome,
+      })
+      setOnboarding(updated)
+      toast.success(
+        `Item "${item.titulo}" ${!item.entregue ? 'marcado como entregue' : 'desmarcado'}!`,
+      )
+      fetchData()
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao atualizar item do checklist de integração.')
+    } finally {
+      setMarcandoItemChecklistId(null)
+    }
+  }
+
+  // MELHORIA 4 — Salvar Observação de um Item do Checklist de Integração
+  const handleSalvarObservacaoItemChecklist = async (itemId: string) => {
+    if (!onboarding || !user) return
+    if (onboarding.etapa1_concluida) {
+      toast.error('A Etapa 1 já está concluída. Observações travadas.')
+      return
+    }
+    if (!podeGerenciarEtapa1) {
+      toast.error('Apenas o RH ou Administrador podem editar observações do checklist.')
+      return
+    }
+
+    try {
+      setSalvandoObs(true)
+      const updated = await onboardingService.atualizarObservacaoItemChecklist({
+        onboardingId: onboarding.id,
+        itemId,
+        observacao: obsTemp,
+        usuarioId: user.id,
+        usuarioNome: user.name || user.email,
+        usuarioRole: role || '',
+        gestorNome: onboarding.expand?.gestor_id?.name || '',
+        colaboradorNome: onboarding.colaborador_nome,
+      })
+      setOnboarding(updated)
+      setEditandoObsItemId(null)
+      setObsTemp('')
+      toast.success('Observação salva com sucesso!')
+      fetchData()
+    } catch (err) {
+      console.error(err)
+      toast.error('Erro ao salvar observação.')
+    } finally {
+      setSalvandoObs(false)
+    }
+  }
+
+  // Verificar se checklist de integração está 100% entregue
+  const checklistIntegracao = useMemo<ItemChecklistIntegracao[]>(() => {
+    if (Array.isArray(onboarding?.checklist_integracao)) {
+      return onboarding.checklist_integracao
+    }
+    return []
+  }, [onboarding?.checklist_integracao])
+
+  const totalItensChecklist = checklistIntegracao.length
+  const entreguesChecklist = checklistIntegracao.filter((i) => i.entregue).length
+  const allChecklistEntregue =
+    totalItensChecklist === 0 || entreguesChecklist === totalItensChecklist
+
   // Concluir Etapa 1
   const handleConcluirEtapa1 = async () => {
     if (!onboarding || !user) return
     if (!podeGerenciarEtapa1) {
       toast.error(
         'Você não tem permissão para esta ação. Apenas RH ou Administrador concluem a Etapa 1.',
+      )
+      return
+    }
+
+    // MELHORIA 3: Exigir todos os itens do checklist marcados como entregues
+    if (!allChecklistEntregue) {
+      toast.error(
+        `Pendência no Checklist de Integração: ${totalItensChecklist - entreguesChecklist} item(ns) pendente(s) de entrega. Marque todos os itens para concluir a Etapa 1.`,
       )
       return
     }

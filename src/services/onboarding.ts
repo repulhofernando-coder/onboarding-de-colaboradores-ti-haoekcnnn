@@ -306,6 +306,43 @@ export const faseService = {
   },
 }
 
+export const itemIntegracaoModeloService = {
+  async listAll(): Promise<import('@/types/onboarding').ItemIntegracaoModelo[]> {
+    return pb
+      .collection('itens_integracao_modelo')
+      .getFullList<import('@/types/onboarding').ItemIntegracaoModelo>({
+        sort: 'ordem,created',
+      })
+  },
+
+  async create(data: {
+    titulo: string
+    ordem?: number
+    ativo?: boolean
+  }): Promise<import('@/types/onboarding').ItemIntegracaoModelo> {
+    return pb
+      .collection('itens_integracao_modelo')
+      .create<import('@/types/onboarding').ItemIntegracaoModelo>({
+        titulo: data.titulo.trim(),
+        ordem: data.ordem || 1,
+        ativo: data.ativo !== false,
+      })
+  },
+
+  async update(
+    id: string,
+    data: Partial<import('@/types/onboarding').ItemIntegracaoModelo>,
+  ): Promise<import('@/types/onboarding').ItemIntegracaoModelo> {
+    return pb
+      .collection('itens_integracao_modelo')
+      .update<import('@/types/onboarding').ItemIntegracaoModelo>(id, data)
+  },
+
+  async delete(id: string): Promise<boolean> {
+    return pb.collection('itens_integracao_modelo').delete(id)
+  },
+}
+
 export const modeloService = {
   async listBySetor(setor: Setor, setorId?: string): Promise<ModeloTarefa[]> {
     // Busca por relation setor_ref ou por setor chave/string para total retrocompatibilidade
@@ -450,6 +487,21 @@ export const onboardingService = {
       }
     }
 
+    // Carrega snapshot dos itens de integracao do modelo (Etapa 1)
+    let checklistSnapshot: import('@/types/onboarding').ItemChecklistIntegracao[] = []
+    try {
+      const itensModelo = await itemIntegracaoModeloService.listAll()
+      checklistSnapshot = itensModelo
+        .filter((item) => item.ativo !== false)
+        .map((item) => ({
+          id: item.id,
+          titulo: item.titulo,
+          entregue: false,
+        }))
+    } catch (err) {
+      console.warn('Aviso ao carregar itens de integracao do modelo para novo onboarding:', err)
+    }
+
     // Cria o registro do onboarding
     const recordPayload: Record<string, unknown> = {
       colaborador_nome: data.colaborador_nome.trim(),
@@ -468,6 +520,7 @@ export const onboardingService = {
       fases_concluidas: [],
       reavaliacoes_count: 0,
       prazo_suplementar_dias: 0,
+      checklist_integracao: checklistSnapshot,
     }
     if (data.cronograma_fases && data.cronograma_fases.length > 0) {
       recordPayload.cronograma_fases = data.cronograma_fases
@@ -630,6 +683,188 @@ export const onboardingService = {
 
   async update(id: string, data: Partial<Onboarding>): Promise<Onboarding> {
     return pb.collection('onboardings').update<Onboarding>(id, data)
+  },
+
+  async atualizarTecnicoResponsavel(params: {
+    onboardingId: string
+    nome: string
+    email?: string
+    usuarioId: string
+    usuarioNome: string
+    usuarioRole?: string
+    gestorNome?: string
+    colaboradorNome?: string
+  }): Promise<Onboarding> {
+    const nomeLimpo = (params.nome || '').trim()
+    const emailLimpo = (params.email || '').trim()
+
+    const updated = await pb.collection('onboardings').update<Onboarding>(
+      params.onboardingId,
+      {
+        tecnico_responsavel_nome: nomeLimpo,
+        tecnico_responsavel_email: emailLimpo,
+      },
+      {
+        expand: 'gestor_id,etapa1_concluida_por,etapa2_concluida_por,setor_ref',
+      },
+    )
+
+    const detalheTecnico = emailLimpo
+      ? `Técnico responsável definido: ${nomeLimpo} (${emailLimpo})`
+      : `Técnico responsável definido: ${nomeLimpo}`
+
+    await auditoriaService.registrar({
+      onboardingId: params.onboardingId,
+      colaboradorNome: params.colaboradorNome || updated.colaborador_nome,
+      usuarioId: params.usuarioId,
+      usuarioNome: params.usuarioNome,
+      usuarioRole: params.usuarioRole || '',
+      gestorNome: params.gestorNome || '',
+      acao: 'Definição de Técnico Responsável',
+      detalhes: detalheTecnico,
+      foraPrazo: false,
+      metadata: {
+        tecnico_responsavel_nome: nomeLimpo,
+        tecnico_responsavel_email: emailLimpo,
+      },
+    })
+
+    return updated
+  },
+
+  async atualizarItemChecklistIntegracao(params: {
+    onboardingId: string
+    itemId: string
+    entregue: boolean
+    observacao?: string
+    usuarioId: string
+    usuarioNome: string
+    usuarioRole?: string
+    gestorNome?: string
+    colaboradorNome?: string
+  }): Promise<Onboarding> {
+    const onb = await pb.collection('onboardings').getOne<Onboarding>(params.onboardingId)
+    const checklistAtual: import('@/types/onboarding').ItemChecklistIntegracao[] = Array.isArray(
+      onb.checklist_integracao,
+    )
+      ? [...onb.checklist_integracao]
+      : []
+
+    const idx = checklistAtual.findIndex((item) => item.id === params.itemId)
+    if (idx === -1) {
+      throw new Error('Item do checklist não encontrado no onboarding')
+    }
+
+    const itemAnterior = checklistAtual[idx]
+    const agora = new Date().toISOString()
+
+    const itemAtualizado: import('@/types/onboarding').ItemChecklistIntegracao = {
+      ...itemAnterior,
+      entregue: params.entregue,
+      entregue_em: params.entregue ? agora : undefined,
+      entregue_por: params.entregue ? params.usuarioId : undefined,
+      entregue_por_nome: params.entregue ? params.usuarioNome : undefined,
+      observacao:
+        params.observacao !== undefined ? params.observacao.trim() : itemAnterior.observacao,
+    }
+
+    checklistAtual[idx] = itemAtualizado
+
+    const updated = await pb.collection('onboardings').update<Onboarding>(
+      params.onboardingId,
+      {
+        checklist_integracao: checklistAtual,
+      },
+      {
+        expand: 'gestor_id,etapa1_concluida_por,etapa2_concluida_por,setor_ref',
+      },
+    )
+
+    // Auditoria da entrega ou observação
+    const statusTxt = params.entregue ? 'marcado como entregue' : 'desmarcado'
+    let detalhes = `Item "${itemAnterior.titulo}" ${statusTxt} por ${params.usuarioNome}`
+    if (itemAtualizado.observacao) {
+      detalhes += ` (Obs: "${itemAtualizado.observacao}")`
+    }
+
+    await auditoriaService.registrar({
+      onboardingId: params.onboardingId,
+      colaboradorNome: params.colaboradorNome || updated.colaborador_nome,
+      usuarioId: params.usuarioId,
+      usuarioNome: params.usuarioNome,
+      usuarioRole: params.usuarioRole || '',
+      gestorNome: params.gestorNome || '',
+      acao: 'Checklist de Integração (Etapa 1)',
+      detalhes,
+      foraPrazo: false,
+      metadata: {
+        item_id: params.itemId,
+        item_titulo: itemAnterior.titulo,
+        entregue: params.entregue,
+        observacao: itemAtualizado.observacao || '',
+      },
+    })
+
+    return updated
+  },
+
+  async atualizarObservacaoItemChecklist(params: {
+    onboardingId: string
+    itemId: string
+    observacao: string
+    usuarioId: string
+    usuarioNome: string
+    usuarioRole?: string
+    gestorNome?: string
+    colaboradorNome?: string
+  }): Promise<Onboarding> {
+    const onb = await pb.collection('onboardings').getOne<Onboarding>(params.onboardingId)
+    const checklistAtual: import('@/types/onboarding').ItemChecklistIntegracao[] = Array.isArray(
+      onb.checklist_integracao,
+    )
+      ? [...onb.checklist_integracao]
+      : []
+
+    const idx = checklistAtual.findIndex((item) => item.id === params.itemId)
+    if (idx === -1) {
+      throw new Error('Item do checklist não encontrado')
+    }
+
+    const itemAnterior = checklistAtual[idx]
+    const obsLimpa = (params.observacao || '').trim()
+    checklistAtual[idx] = {
+      ...itemAnterior,
+      observacao: obsLimpa,
+    }
+
+    const updated = await pb.collection('onboardings').update<Onboarding>(
+      params.onboardingId,
+      {
+        checklist_integracao: checklistAtual,
+      },
+      {
+        expand: 'gestor_id,etapa1_concluida_por,etapa2_concluida_por,setor_ref',
+      },
+    )
+
+    await auditoriaService.registrar({
+      onboardingId: params.onboardingId,
+      colaboradorNome: params.colaboradorNome || updated.colaborador_nome,
+      usuarioId: params.usuarioId,
+      usuarioNome: params.usuarioNome,
+      usuarioRole: params.usuarioRole || '',
+      gestorNome: params.gestorNome || '',
+      acao: 'Observação no Checklist de Integração',
+      detalhes: `Observação atualizada no item "${itemAnterior.titulo}": ${obsLimpa || '(limpa)'}`,
+      foraPrazo: false,
+      metadata: {
+        item_id: params.itemId,
+        item_titulo: itemAnterior.titulo,
+        observacao: obsLimpa,
+      },
+    })
+
+    return updated
   },
 
   async atualizarClientesMapeamento(params: {
