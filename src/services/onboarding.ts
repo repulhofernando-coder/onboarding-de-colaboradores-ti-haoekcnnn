@@ -270,8 +270,12 @@ export const faseService = {
     const setorVal = typeof setor === 'string' ? setor : String(setor || '')
     const setorLower = setorVal.toLowerCase()
     let filter = `(setor = '${setorLower}' || setor = '${setorVal}' || setor ~ '${setorVal}'`
-    if (setorId) {
-      filter += ` || setor_ref = '${setorId}'`
+    if (setorId && setorId.trim()) {
+      filter += ` || setor_ref = '${setorId.trim()}'`
+    }
+    // Caso setor passado seja o próprio id do setor
+    if (setorVal.length === 15) {
+      filter += ` || setor_ref = '${setorVal}'`
     }
     filter += `)`
 
@@ -349,8 +353,12 @@ export const modeloService = {
     const setorVal = typeof setor === 'string' ? setor : String(setor || '')
     const setorLower = setorVal.toLowerCase()
     let filter = `(setor = '${setorLower}' || setor = '${setorVal}' || setor ~ '${setorVal}'`
-    if (setorId) {
-      filter += ` || setor_ref = '${setorId}'`
+    if (setorId && setorId.trim()) {
+      filter += ` || setor_ref = '${setorId.trim()}'`
+    }
+    // Caso setor passado seja o próprio id do setor
+    if (setorVal.length === 15) {
+      filter += ` || setor_ref = '${setorVal}'`
     }
     filter += `) && (etapa = 2 || etapa = null || etapa = 0)`
 
@@ -476,10 +484,11 @@ export const onboardingService = {
     let setorRefId = data.setor_ref
     if (!setorRefId) {
       try {
+        const setorValLower = String(data.setor || '').toLowerCase()
         const found = await pb
           .collection('setores')
           .getFirstListItem<SetorModel>(
-            `chave = '${data.setor}' || nome = '${data.setor}' || id = '${data.setor}'`,
+            `chave = '${data.setor}' || chave = '${setorValLower}' || nome = '${data.setor}' || id = '${data.setor}'`,
           )
         setorRefId = found.id
       } catch {

@@ -218,7 +218,7 @@ export default function ModelosTarefas() {
     }
     try {
       const setorId = activeSetorModel?.id
-      const setorChave = activeSetorModel?.chave || selectedTab
+      const setorChave = activeSetorModel?.chave || activeSetorModel?.id || selectedTab
       const list = await faseService.listBySetor(setorChave, setorId)
       setFases(list)
     } catch (err) {
@@ -240,7 +240,7 @@ export default function ModelosTarefas() {
         setFases([])
       } else {
         const setorId = activeSetorModel?.id
-        const setorChave = activeSetorModel?.chave || selectedTab
+        const setorChave = activeSetorModel?.chave || activeSetorModel?.id || selectedTab
         const [listMod, listFas] = await Promise.all([
           modeloService.listBySetor(setorChave, setorId),
           faseService.listBySetor(setorChave, setorId),

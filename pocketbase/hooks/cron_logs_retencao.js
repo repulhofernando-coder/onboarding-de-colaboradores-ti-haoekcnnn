@@ -4,7 +4,17 @@
 // Registros são mantidos por 6 meses conforme política oficial de auditoria.
 cronAdd('limpar_logs_auditoria_6meses', '0 3 * * *', (e) => {
   try {
-    const pbApp = (e && e.app) || (typeof $app !== 'undefined' ? $app : null) || app
+    const pbApp =
+      (typeof $app !== 'undefined' && $app) ||
+      (e && e.app) ||
+      (typeof app !== 'undefined' && app) ||
+      null
+
+    if (!pbApp) {
+      console.error('[Cron Auditoria] pbApp não disponível no contexto do cron.')
+      return
+    }
+
     const dataLimite = new Date()
     dataLimite.setDate(dataLimite.getDate() - 180)
     const dataIso = dataLimite.toISOString().replace('T', ' ').slice(0, 19)
@@ -15,6 +25,7 @@ cronAdd('limpar_logs_auditoria_6meses', '0 3 * * *', (e) => {
       `created < '${dataIso}'`,
       'created',
       500,
+      0,
     )
 
     let totalApagados = 0
