@@ -516,20 +516,67 @@ export default function Manual() {
                 4
               </div>
               <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
-                SEÇÃO 4 — Link público do colaborador
+                SEÇÃO 4 — Link público do colaborador e Mecanismo &quot;Sinalizar, não
+                concluir&quot;
               </h2>
             </div>
-            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
-              Cada onboarding tem um link exclusivo (sem senha), disponível no card &quot;Link
-              Público do Colaborador&quot;; o colaborador vê seu nome, área, contagem dos 15 dias,
-              progresso (&quot;X de Y materiais confirmados&quot;), o{' '}
-              <strong>Técnico Responsável pelo Acompanhamento em destaque na Etapa 2</strong> e as
-              fases liberadas sequencialmente; a Etapa 2 só é destravada no portal após a conclusão
-              da Etapa 1 pelo RH; as confirmações são irreversíveis e registradas com data e hora —
-              servem como comprovação formal de capacitação. As observações internas do checklist de
-              integração são mantidas estritamente confidenciais e nunca são exibidas ao
-              colaborador.
-            </p>
+            <div className="space-y-3 text-xs sm:text-sm text-gray-700 leading-relaxed">
+              <p>
+                Cada onboarding tem um link exclusivo (sem senha), disponível no card &quot;Link
+                Público do Colaborador&quot;; o colaborador vê seu nome, área, contagem dos 15 dias,
+                progresso (&quot;X de Y materiais confirmados&quot;), o{' '}
+                <strong>Técnico Responsável pelo Acompanhamento em destaque na Etapa 2</strong> e as
+                fases liberadas sequencialmente; a Etapa 2 só é destravada no portal após a
+                conclusão da Etapa 1 pelo RH; as confirmações de itens individuais são irreversíveis
+                e registradas com data e hora — servem como comprovação formal de capacitação. As
+                observações internas do checklist de integração são mantidas estritamente
+                confidenciais e nunca são exibidas ao colaborador.
+              </p>
+              <div className="p-3.5 bg-brand-50/70 border border-brand-200 rounded-xl space-y-2">
+                <strong className="block text-brand-950 font-bold text-xs uppercase tracking-wide">
+                  Mecanismo &quot;Sinalizar, não concluir&quot; (Regra Fundamental):
+                </strong>
+                <p>
+                  Quando o colaborador confirma todos os vídeos e manuais de uma fase, surge o botão{' '}
+                  <strong className="text-brand-900">
+                    &quot;Finalizei minhas atividades desta fase&quot;
+                  </strong>
+                  . Ao clicar:
+                </p>
+                <ul className="list-disc list-inside space-y-1.5 pl-1 text-xs">
+                  <li>
+                    <strong>Sinalização segura com privilégio de sistema:</strong> a requisição é
+                    processada pelo endpoint seguro do servidor (validando o token exclusivo do
+                    onboarding), gravando a data e hora no histórico do onboarding mesmo em acesso
+                    anônimo.
+                  </li>
+                  <li>
+                    <strong>Registro formal na Auditoria:</strong> gera automaticamente um log na
+                    trilha de auditoria (&quot;Sinalização de conclusão pelo colaborador&quot;) com
+                    nome, data/hora e identificação da fase.
+                  </li>
+                  <li>
+                    <strong>E-mail automático ao responsável:</strong> o sistema notifica
+                    imediatamente a equipe de RH (se Etapa 1) ou o Gestor Responsável (se Etapa 2),
+                    informando que o colaborador completou suas leituras.
+                  </li>
+                  <li>
+                    <strong>Badge visual na tela interna:</strong> RH e Gestores visualizam a badge{' '}
+                    <span className="font-semibold text-amber-900 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded text-[11px]">
+                      &quot;Sinalizado pelo colaborador em dd/mm às hh:mm&quot;
+                    </span>{' '}
+                    no cabeçalho da etapa/fase correspondente.
+                  </li>
+                  <li>
+                    <strong className="text-red-700">Conclusão é ato exclusivo da gestão:</strong> o
+                    botão do colaborador <em>apenas sinaliza</em>; ele <strong>NÃO conclui</strong>{' '}
+                    a fase nem avança o status do onboarding. A conclusão formal de etapas e fases
+                    continua sendo ato indelegável do RH (Etapa 1) e do Gestor/Admin (Etapa 2), após
+                    validação prática e conferência presencial.
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
 
           {/* SEÇÃO 5 */}
@@ -539,16 +586,17 @@ export default function Manual() {
                 5
               </div>
               <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
-                SEÇÃO 5 — Auditoria e Logs
+                SEÇÃO 5 — Auditoria, Logs e Política de Retenção
               </h2>
             </div>
             <div className="space-y-2.5 text-xs sm:text-sm text-gray-700 leading-relaxed">
               <p>
                 Aba <strong>&quot;Histórico & Auditoria&quot;</strong> (na página de cada
                 onboarding) registra toda a trilha — conclusões de etapas e fases, confirmações do
-                colaborador, definição de clientes e decisões avaliativas — com quem fez, quando, e
-                destaque explícito para prazos (ex.: &quot;Concluído 2 dias antes do prazo
-                planejado&quot; / &quot;Concluído 1 dia após o prazo&quot;).
+                colaborador, sinalizações de término de fase, definição de clientes e decisões
+                avaliativas — com quem fez, quando, e destaque explícito para prazos (ex.:
+                &quot;Concluído 2 dias antes do prazo planejado&quot; / &quot;Concluído 1 dia após o
+                prazo&quot;).
               </p>
               <p>
                 Tela <strong>&quot;Logs&quot;</strong> (menu lateral, exclusiva do Admin): todos os
@@ -558,10 +606,19 @@ export default function Manual() {
               <p>
                 <strong>Exportação:</strong> botões para baixar os logs filtrados em CSV ou TXT.
               </p>
-              <p>
-                <strong>Retenção:</strong> os registros são mantidos por 6 meses, com limpeza
-                automática diária (aviso na tela).
-              </p>
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
+                <p>
+                  <strong>Política de Retenção de 6 meses (180 dias):</strong> todos os registros de
+                  auditoria são conservados integralmente pelo período regulamentar de 6 meses para
+                  fins de compliance e histórico trabalhista.
+                </p>
+                <p className="text-xs text-slate-500">
+                  Um <strong>job cron diário automatizado</strong> executa pontualmente às{' '}
+                  <strong>03:00 UTC</strong> (limpar_logs_auditoria_6meses) para expurgar registros
+                  que ultrapassem a janela de 180 dias, garantindo integridade e conformidade de
+                  armazenamento sem intervenção manual.
+                </p>
+              </div>
             </div>
           </div>
         </section>
@@ -684,6 +741,8 @@ export default function Manual() {
               'Conferir painel "Clientes de Referência" exibido em modo aguardando desde a Etapa 1;',
               'Gestor define Técnico Responsável no topo da Etapa 2 → conferir destaque no portal público;',
               'Gestor indica os 3 clientes na Fase 2 → conferir no portal do colaborador;',
+              'Colaborador confirma todos os itens da fase no portal público e clica em "Finalizei minhas atividades desta fase" → verificar badge na tela interna, registro na auditoria e e-mail ao responsável;',
+              'Confirmar que a sinalização do colaborador NÃO conclui a fase (conclusão permanece botão exclusivo do gestor/RH);',
               'Concluir uma fase fora do prazo de propósito → ver o destaque nos Logs;',
               'Registrar "Não apto" → escolher fase de retorno e conferir o status "Em acompanhamento";',
               'Exportar logs em CSV;',

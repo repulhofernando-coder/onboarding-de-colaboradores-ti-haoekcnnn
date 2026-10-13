@@ -305,6 +305,7 @@ export default function ColaboradorPublico() {
       setSinalizandoFaseId(params.faseId)
       const { onboarding: updated } = await onboardingService.sinalizarConclusaoFase({
         onboardingId: onboarding.id,
+        token: onboarding.token_acesso_colaborador || token || '',
         faseId: params.faseId,
         faseTitulo: params.faseTitulo,
         etapa: params.etapa,

@@ -586,20 +586,38 @@ onRecordUpdate((e) => {
       )
     }
 
-    const updatedSinalizadas = updatedRecord.get('fases_sinalizadas') || []
-    const originalSinalizadas = originalRecord ? originalRecord.get('fases_sinalizadas') || [] : []
+    let parsedUpdated = []
+    let parsedOriginal = []
 
-    const parsedUpdated = Array.isArray(updatedSinalizadas)
-      ? updatedSinalizadas
-      : typeof updatedSinalizadas === 'string' && updatedSinalizadas.trim()
-        ? JSON.parse(updatedSinalizadas)
-        : []
+    try {
+      const rawUp = updatedRecord.getString('fases_sinalizadas')
+      if (rawUp && rawUp.trim()) {
+        parsedUpdated = JSON.parse(rawUp)
+      } else {
+        const rawGet = updatedRecord.get('fases_sinalizadas')
+        if (Array.isArray(rawGet)) parsedUpdated = rawGet
+      }
+    } catch (_) {
+      const rawGet = updatedRecord.get('fases_sinalizadas')
+      if (Array.isArray(rawGet)) parsedUpdated = rawGet
+    }
 
-    const parsedOriginal = Array.isArray(originalSinalizadas)
-      ? originalSinalizadas
-      : typeof originalSinalizadas === 'string' && originalSinalizadas.trim()
-        ? JSON.parse(originalSinalizadas)
-        : []
+    try {
+      if (originalRecord) {
+        const rawOrig = originalRecord.getString('fases_sinalizadas')
+        if (rawOrig && rawOrig.trim()) {
+          parsedOriginal = JSON.parse(rawOrig)
+        } else {
+          const rawGet = originalRecord.get('fases_sinalizadas')
+          if (Array.isArray(rawGet)) parsedOriginal = rawGet
+        }
+      }
+    } catch (_) {
+      if (originalRecord) {
+        const rawGet = originalRecord.get('fases_sinalizadas')
+        if (Array.isArray(rawGet)) parsedOriginal = rawGet
+      }
+    }
 
     if (!parsedUpdated || parsedUpdated.length === 0) return
 

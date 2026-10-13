@@ -689,76 +689,63 @@ export const onboardingService = {
   /**
    * Mecanismo "Sinalizar, não concluir":
    * O colaborador sinaliza que finalizou os materiais/atividades da fase.
-   * Não altera o status do onboarding ou da fase.
-   * Apenas registra a data/hora do sinal, grava log de auditoria e aciona notificação.
+   * Não altera o status do onboarding ou da fase (conclusão formal é ato exclusivo do gestor/RH).
+   * Executa via endpoint de sistema no servidor (/backend/v1/sinalizar-fase):
+   * 1. Valida o token exclusivo ou onboardingId
+   * 2. Salva fases_sinalizadas com privilégio de sistema
+   * 3. Registra log de auditoria na coleção logs_auditoria
+   * 4. Dispara e-mail de notificação ao responsável
    */
   async sinalizarConclusaoFase(params: {
     onboardingId: string
+    token?: string
     faseId: string
     faseTitulo: string
     etapa: number
-    colaboradorNome: string
+    colaboradorNome?: string
     colaboradorEmail?: string
   }): Promise<{
     onboarding: Onboarding
     sinalInfo: import('@/types/onboarding').FaseSinalizadaInfo
   }> {
-    const onb = await pb.collection('onboardings').getOne<Onboarding>(params.onboardingId, {
-      expand: 'gestor_id,setor_ref',
-    })
-    const agoraIso = new Date().toISOString()
-
-    const sinalInfo: import('@/types/onboarding').FaseSinalizadaInfo = {
-      fase_id: params.faseId,
-      titulo: params.faseTitulo,
-      etapa: params.etapa,
-      sinalizado_em: agoraIso,
-      colaborador_nome: params.colaboradorNome || onb.colaborador_nome,
-      colaborador_email: params.colaboradorEmail || onb.colaborador_email,
-    }
-
-    const sinalizadasExistentes = Array.isArray(onb.fases_sinalizadas)
-      ? [...onb.fases_sinalizadas]
-      : []
-
-    const idx = sinalizadasExistentes.findIndex((s) => s.fase_id === params.faseId)
-    if (idx >= 0) {
-      sinalizadasExistentes[idx] = sinalInfo
-    } else {
-      sinalizadasExistentes.push(sinalInfo)
-    }
-
-    // Gravar no log de auditoria
-    const rotuloEtapa = params.etapa === 1 ? 'Etapa 1' : `Etapa 2 — ${params.faseTitulo}`
-    await auditoriaService.registrar({
-      onboardingId: params.onboardingId,
-      colaboradorNome: params.colaboradorNome || onb.colaborador_nome,
-      usuarioId: undefined,
-      usuarioNome: params.colaboradorNome || onb.colaborador_nome,
-      usuarioRole: 'colaborador',
-      gestorNome: onb.expand?.gestor_id?.name || '',
-      acao: 'Sinalização de conclusão pelo colaborador',
-      detalhes: `Colaborador sinalizou conclusão das atividades de "${params.faseTitulo}" (${rotuloEtapa}). Aguardando validação do responsável.`,
-      foraPrazo: false,
-      metadata: {
-        fase_id: params.faseId,
-        fase_titulo: params.faseTitulo,
+    const res = await pb.send<{
+      success: boolean
+      onboarding: Onboarding
+      sinalInfo: import('@/types/onboarding').FaseSinalizadaInfo
+      fases_sinalizadas: import('@/types/onboarding').FaseSinalizadaInfo[]
+    }>('/backend/v1/sinalizar-fase', {
+      method: 'POST',
+      body: {
+        token: params.token || '',
+        onboardingId: params.onboardingId,
+        faseId: params.faseId,
+        faseTitulo: params.faseTitulo,
         etapa: params.etapa,
-        sinalizado_em: agoraIso,
+        colaboradorNome: params.colaboradorNome || '',
+        colaboradorEmail: params.colaboradorEmail || '',
       },
     })
 
-    const updated = await pb.collection('onboardings').update<Onboarding>(
-      params.onboardingId,
-      {
-        fases_sinalizadas: sinalizadasExistentes,
-      },
-      {
-        expand: 'gestor_id,setor_ref',
-      },
-    )
+    // Garantir busca com expands para o frontend atualizar estado completo
+    let onbCompleto: Onboarding = res.onboarding
+    try {
+      onbCompleto = await pb.collection('onboardings').getOne<Onboarding>(res.onboarding.id, {
+        expand: 'gestor_id,setor_ref,etapa1_concluida_por,etapa2_concluida_por',
+      })
+    } catch (_) {
+      // Se a chamada de leitura pública falhar por algum motivo de rede, utiliza o retorno do endpoint
+      if (res.fases_sinalizadas && Array.isArray(res.fases_sinalizadas)) {
+        onbCompleto = {
+          ...onbCompleto,
+          fases_sinalizadas: res.fases_sinalizadas,
+        }
+      }
+    }
 
-    return { onboarding: updated, sinalInfo }
+    return {
+      onboarding: onbCompleto,
+      sinalInfo: res.sinalInfo,
+    }
   },
 
   async atualizarTecnicoResponsavel(params: {
