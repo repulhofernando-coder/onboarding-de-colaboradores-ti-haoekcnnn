@@ -1,0 +1,691 @@
+import { useState } from 'react'
+import MundoOpenLogo from '@/components/MundoOpenLogo'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import {
+  Printer,
+  Download,
+  BookOpen,
+  Calendar,
+  Layers,
+  Users,
+  ShieldCheck,
+  CheckSquare,
+  Mail,
+  FolderOpen,
+  FileText,
+  Clock,
+  ArrowRight,
+  Info,
+} from 'lucide-react'
+
+export default function Manual() {
+  const [checklistState, setChecklistState] = useState<Record<number, boolean>>({})
+
+  const handlePrint = () => {
+    window.print()
+  }
+
+  const toggleCheck = (idx: number) => {
+    setChecklistState((prev) => ({
+      ...prev,
+      [idx]: !prev[idx],
+    }))
+  }
+
+  return (
+    <div className="space-y-6 pb-12 print:p-0 print:space-y-4">
+      {/* Barra de Ações Superior (Oculta na impressão) */}
+      <div className="no-print bg-white border border-gray-200/90 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-brand-700 bg-brand-50 px-2.5 py-1 rounded-full border border-brand-200">
+            <BookOpen className="w-3.5 h-3.5" />
+            Documentação & Guia Operacional
+          </div>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
+            Manual do Sistema de Onboarding
+          </h1>
+          <p className="text-xs sm:text-sm text-gray-500">
+            Guia completo de procedimentos para Gestores, RH e Administradores. Gere o arquivo PDF
+            oficial pelo botão ao lado.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
+          <Button
+            onClick={handlePrint}
+            className="w-full sm:w-auto bg-brand-600 hover:bg-brand-700 text-white font-semibold shadow-sm gap-2"
+          >
+            <Download className="w-4 h-4" />
+            <span>Baixar PDF / Imprimir</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* DOCUMENTO OFICIAL DO MANUAL */}
+      <article className="manual-document bg-white border border-gray-200 rounded-2xl p-6 sm:p-10 lg:p-12 shadow-xs print:border-none print:shadow-none print:p-0 text-slate-800">
+        {/* Cabeçalho do Documento */}
+        <header className="border-b-2 border-brand-600 pb-6 mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <MundoOpenLogo variant="full" size="lg" />
+          </div>
+          <div className="sm:text-right space-y-1">
+            <Badge className="bg-brand-50 text-brand-700 border-brand-200 font-semibold text-xs">
+              Documento Interno Oficial
+            </Badge>
+            <div className="text-xs text-gray-500">Janela Oficial: 15 Dias Corridos</div>
+            <div className="text-xs text-gray-400">Público: RH, Gestores e Admin</div>
+          </div>
+        </header>
+
+        {/* Título Principal */}
+        <div className="mb-8">
+          <h1 className="text-2xl sm:text-3xl font-black text-gray-950 tracking-tight leading-snug">
+            Manual do Sistema de Onboarding — Mundo Open — Onboarding de Colaboradores de TI — Guia
+            para Gestores e RH
+          </h1>
+          <p className="text-sm text-gray-600 mt-2 font-medium">
+            Diretrizes operacionais, fluxo detalhado em 3 etapas, cronograma de 15 dias, matriz de
+            papéis e homologação do sistema.
+          </p>
+        </div>
+
+        {/* ========================================================= */}
+        {/* SEÇÃO 1 — Visão geral */}
+        {/* ========================================================= */}
+        <section className="mb-10 avoid-break">
+          <div className="flex items-center gap-2.5 mb-4 border-b border-gray-200 pb-2">
+            <div className="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+              1
+            </div>
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+              SEÇÃO 1 — Visão geral
+            </h2>
+          </div>
+
+          <p className="text-sm sm:text-base text-gray-700 leading-relaxed mb-4">
+            O sistema acompanha a integração de novos colaboradores em{' '}
+            <strong>3 etapas sequenciais</strong>, dentro de uma janela oficial de{' '}
+            <strong>15 dias</strong>.
+          </p>
+
+          {/* Tabela de Etapas */}
+          <div className="overflow-x-auto rounded-xl border border-gray-200 mb-5">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-100 text-slate-900 font-bold border-b border-gray-200">
+                <tr>
+                  <th className="py-2.5 px-3.5">Etapa</th>
+                  <th className="py-2.5 px-3.5">Responsável</th>
+                  <th className="py-2.5 px-3.5">Descrição Operacional</th>
+                  <th className="py-2.5 px-3.5 text-center">Duração</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                <tr className="hover:bg-slate-50/70">
+                  <td className="py-2.5 px-3.5 font-bold text-gray-900">Etapa 1 — Integração</td>
+                  <td className="py-2.5 px-3.5">
+                    <span className="inline-flex items-center gap-1 font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded text-xs border border-brand-200">
+                      RH
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3.5 text-gray-700">
+                    Apresentação da empresa, integração e entrega do notebook.
+                  </td>
+                  <td className="py-2.5 px-3.5 font-bold text-center text-gray-900">1 dia</td>
+                </tr>
+                <tr className="hover:bg-slate-50/70">
+                  <td className="py-2.5 px-3.5 font-bold text-gray-900">
+                    Etapa 2 — Vivência Técnica
+                  </td>
+                  <td className="py-2.5 px-3.5">
+                    <span className="inline-flex items-center gap-1 font-semibold text-teal-800 bg-teal-50 px-2 py-0.5 rounded text-xs border border-teal-200">
+                      Gestor responsável
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3.5 text-gray-700">
+                    Trilha de 6 fases práticas, progressivas.
+                  </td>
+                  <td className="py-2.5 px-3.5 font-bold text-center text-gray-900">13 dias</td>
+                </tr>
+                <tr className="hover:bg-slate-50/70">
+                  <td className="py-2.5 px-3.5 font-bold text-gray-900">
+                    Etapa 3 — Avaliação Final
+                  </td>
+                  <td className="py-2.5 px-3.5">
+                    <span className="inline-flex items-center gap-1 font-semibold text-teal-800 bg-teal-50 px-2 py-0.5 rounded text-xs border border-teal-200">
+                      Gestor responsável
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3.5 text-gray-700">Decisão Apto / Não apto.</td>
+                  <td className="py-2.5 px-3.5 font-bold text-center text-gray-900">1 dia</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Notas de Acesso */}
+          <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3.5 sm:p-4 mb-4 text-xs sm:text-sm text-amber-900 flex items-start gap-3">
+            <Info className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+            <div>
+              <strong>Notas de acesso:</strong> apenas RH, Gestão e Admin entram no sistema; o
+              colaborador novo <strong>NÃO tem login</strong> — acompanha e confirma os conteúdos
+              por um link público exclusivo do seu onboarding.
+            </div>
+          </div>
+
+          {/* Os 3 papéis */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 mb-4">
+            <div className="border border-purple-200 bg-purple-50/40 rounded-xl p-3.5">
+              <div className="flex items-center gap-1.5 font-bold text-purple-900 text-sm mb-1.5">
+                <ShieldCheck className="w-4 h-4 text-purple-700" />
+                Admin
+              </div>
+              <p className="text-xs text-purple-950 leading-relaxed">
+                Acesso total (todas as telas, usuários, modelos de tarefas, logs e configurações).
+              </p>
+            </div>
+
+            <div className="border border-cyan-200 bg-cyan-50/40 rounded-xl p-3.5">
+              <div className="flex items-center gap-1.5 font-bold text-cyan-900 text-sm mb-1.5">
+                <Users className="w-4 h-4 text-cyan-700" />
+                RH
+              </div>
+              <p className="text-xs text-cyan-950 leading-relaxed">
+                Conduz a Etapa 1 por completo, cria onboardings e também pode criar usuários,
+                acompanha as demais etapas em modo leitura e recebe o resultado da avaliação final.
+              </p>
+            </div>
+
+            <div className="border border-teal-200 bg-teal-50/40 rounded-xl p-3.5">
+              <div className="flex items-center gap-1.5 font-bold text-teal-900 text-sm mb-1.5">
+                <Layers className="w-4 h-4 text-teal-700" />
+                Gestão
+              </div>
+              <p className="text-xs text-teal-950 leading-relaxed">
+                Acompanha desde a Etapa 1 (somente leitura), mas assume o controle a partir da Etapa
+                2: conclui fases, define clientes de referência e faz a avaliação final; não acessa
+                as telas de Usuários nem Modelos de Tarefas.
+              </p>
+            </div>
+          </div>
+
+          {/* Visibilidade */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-700">
+            <strong>Visibilidade:</strong> gestores visualizam onboardings de todas as áreas, mas só
+            podem agir naqueles em que são o gestor responsável (ou Admin).
+          </div>
+        </section>
+
+        {/* ========================================================= */}
+        {/* SEÇÃO 2 — Cronograma oficial — 15 dias exatos */}
+        {/* ========================================================= */}
+        <section className="mb-10 avoid-break page-break-before">
+          <div className="flex items-center gap-2.5 mb-4 border-b border-gray-200 pb-2">
+            <div className="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+              2
+            </div>
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+              SEÇÃO 2 — Cronograma oficial — 15 dias exatos
+            </h2>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-gray-200 mb-4">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-100 text-slate-900 font-bold border-b border-gray-200">
+                <tr>
+                  <th className="py-2.5 px-3.5">Fase / Macro-etapa</th>
+                  <th className="py-2.5 px-3.5">Atividades Chave</th>
+                  <th className="py-2.5 px-3.5">Responsável</th>
+                  <th className="py-2.5 px-3.5 text-center">Duração</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                <tr>
+                  <td className="py-2 px-3.5 font-bold text-gray-900">Etapa 1</td>
+                  <td className="py-2 px-3.5 text-gray-700">Integração e entrega do notebook</td>
+                  <td className="py-2 px-3.5 text-brand-700 font-semibold text-xs">RH</td>
+                  <td className="py-2 px-3.5 font-bold text-center text-gray-900">1d</td>
+                </tr>
+                <tr>
+                  <td className="py-2 px-3.5 font-bold text-gray-900">Fase 1</td>
+                  <td className="py-2 px-3.5 text-gray-700">
+                    Configuração e Acessos (MFA, Movidesk, Passportal, TeamViewer, vídeos)
+                  </td>
+                  <td className="py-2 px-3.5 text-teal-700 font-semibold text-xs">Gestor</td>
+                  <td className="py-2 px-3.5 font-bold text-center text-gray-900">1d</td>
+                </tr>
+                <tr>
+                  <td className="py-2 px-3.5 font-bold text-gray-900">Fase 2</td>
+                  <td className="py-2 px-3.5 text-gray-700">Mapeamento de Ambientes</td>
+                  <td className="py-2 px-3.5 text-teal-700 font-semibold text-xs">Gestor</td>
+                  <td className="py-2 px-3.5 font-bold text-center text-gray-900">2d</td>
+                </tr>
+                <tr>
+                  <td className="py-2 px-3.5 font-bold text-gray-900">Fase 3</td>
+                  <td className="py-2 px-3.5 text-gray-700">Shadowing Ativo</td>
+                  <td className="py-2 px-3.5 text-teal-700 font-semibold text-xs">Gestor</td>
+                  <td className="py-2 px-3.5 font-bold text-center text-gray-900">2d</td>
+                </tr>
+                <tr>
+                  <td className="py-2 px-3.5 font-bold text-gray-900">Fase 4</td>
+                  <td className="py-2 px-3.5 text-gray-700">Atendimento Invertido</td>
+                  <td className="py-2 px-3.5 text-teal-700 font-semibold text-xs">Gestor</td>
+                  <td className="py-2 px-3.5 font-bold text-center text-gray-900">3d</td>
+                </tr>
+                <tr>
+                  <td className="py-2 px-3.5 font-bold text-gray-900">Fase 5</td>
+                  <td className="py-2 px-3.5 text-gray-700">Atendimento Solo N1</td>
+                  <td className="py-2 px-3.5 text-teal-700 font-semibold text-xs">Gestor</td>
+                  <td className="py-2 px-3.5 font-bold text-center text-gray-900">3d</td>
+                </tr>
+                <tr>
+                  <td className="py-2 px-3.5 font-bold text-gray-900">Fase 6</td>
+                  <td className="py-2 px-3.5 text-gray-700">Consolidação Prática</td>
+                  <td className="py-2 px-3.5 text-teal-700 font-semibold text-xs">Gestor</td>
+                  <td className="py-2 px-3.5 font-bold text-center text-gray-900">2d</td>
+                </tr>
+                <tr>
+                  <td className="py-2 px-3.5 font-bold text-gray-900">Etapa 3</td>
+                  <td className="py-2 px-3.5 text-gray-700">Avaliação Final</td>
+                  <td className="py-2 px-3.5 text-teal-700 font-semibold text-xs">Gestor</td>
+                  <td className="py-2 px-3.5 font-bold text-center text-gray-900">1d</td>
+                </tr>
+                <tr className="bg-brand-50/70 border-t-2 border-brand-300">
+                  <td
+                    colSpan={3}
+                    className="py-2.5 px-3.5 font-black text-brand-900 text-right uppercase tracking-wider text-xs"
+                  >
+                    Total
+                  </td>
+                  <td className="py-2.5 px-3.5 font-black text-center text-brand-900 text-base">
+                    15 exatos
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="space-y-2 text-xs sm:text-sm text-gray-700 bg-gray-50 p-4 rounded-xl border border-gray-200">
+            <p>
+              <strong>Avisos:</strong> ao criar um onboarding o sistema soma automaticamente os dias
+              e bloqueia a criação se passar de 15 dias, mostrando o estouro; cada fase recebe uma
+              data limite real (&quot;até dd/mm&quot;) e a avaliação final já tem a data reservada
+              visível desde o início.
+            </p>
+            <p>
+              <strong>O prazo é um teto, não uma espera:</strong> se uma fase terminar antes, a
+              próxima abre na sequência — os 15 dias são a janela oficial do onboarding.
+            </p>
+          </div>
+        </section>
+
+        {/* ========================================================= */}
+        {/* SEÇÃO 3 — Passo a passo do fluxo */}
+        {/* ========================================================= */}
+        <section className="mb-10 avoid-break page-break-before">
+          <div className="flex items-center gap-2.5 mb-4 border-b border-gray-200 pb-2">
+            <div className="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+              3
+            </div>
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+              SEÇÃO 3 — Passo a passo do fluxo
+            </h2>
+          </div>
+
+          {/* 3.1 Criação do onboarding */}
+          <div className="mb-6 border-l-4 border-brand-600 pl-4 py-1">
+            <h3 className="text-base font-bold text-gray-900 mb-2">
+              3.1 Criação do onboarding (RH):
+            </h3>
+            <ol className="list-decimal list-inside space-y-1.5 text-xs sm:text-sm text-gray-700 leading-relaxed">
+              <li>Menu Onboardings → botão &quot;Novo onboarding&quot;.</li>
+              <li>Preencher nome do colaborador, cargo, área e gestor responsável.</li>
+              <li>O sistema valida a soma dos dias (≤15) e gera o cronograma com datas reais.</li>
+              <li>
+                Enviar ao colaborador o Link Público (card no topo da tela de detalhe — botão
+                &quot;Copiar link&quot;), pode ser mandado por WhatsApp ou e-mail.
+              </li>
+            </ol>
+          </div>
+
+          {/* 3.2 Etapa 1 — Integração */}
+          <div className="mb-6 border-l-4 border-cyan-600 pl-4 py-1">
+            <h3 className="text-base font-bold text-gray-900 mb-2">
+              3.2 Etapa 1 — Integração (RH):
+            </h3>
+            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
+              O RH conduz os itens da etapa; o colaborador, pelo link público, confirma cada item
+              clicando em &quot;Confirmo que assisti/li&quot; — registrado com data e hora; com
+              todos os itens confirmados o RH clica em &quot;Concluir Etapa 1&quot; → o sistema
+              trava a etapa, libera a Etapa 2 e envia e-mail automático ao gestor responsável (com o
+              link do colaborador em destaque).
+            </p>
+          </div>
+
+          {/* 3.3 Etapa 2 — Vivência Técnica */}
+          <div className="mb-6 border-l-4 border-teal-600 pl-4 py-1">
+            <h3 className="text-base font-bold text-gray-900 mb-2">
+              3.3 Etapa 2 — Vivência Técnica (Gestor):
+            </h3>
+            <div className="space-y-2 text-xs sm:text-sm text-gray-700 leading-relaxed">
+              <p>Trilha em fases ordenadas — uma fase só libera quando a anterior é concluída.</p>
+              <ul className="list-disc list-inside space-y-1 pl-1">
+                <li>
+                  <strong>Fase com itens:</strong> o colaborador confirma item a item pelo link
+                  público; o gestor acompanha pelas badges (verde &quot;Confirmado pelo colaborador
+                  em dd/mm às hh:mm&quot; / âmbar &quot;Aguardando confirmação&quot;).
+                </li>
+                <li>
+                  <strong>Fase sem itens (prática):</strong> aparece o botão &quot;Concluir
+                  fase&quot; direto, registrando data e responsável.
+                </li>
+                <li>
+                  <strong>Fase mista:</strong> o gestor espera a confirmação do documento e conclui
+                  a fase.
+                </li>
+              </ul>
+              <div className="p-2.5 bg-red-50 text-red-900 border border-red-200 rounded-lg text-xs font-medium">
+                <strong>Restrição:</strong> somente o gestor responsável (ou Admin) conclui fases da
+                Etapa 2 — o RH visualiza com o aviso &quot;Conclusão restrita ao gestor&quot;.
+              </div>
+              <p>
+                <strong>Destaque Fase 2 (Mapeamento de Ambientes):</strong> painel &quot;Clientes de
+                Referência&quot;, onde o gestor digita os 3 clientes que o técnico deve estudar no
+                Passportal (topologia, faixas de IP, sistemas legados); os nomes aparecem em
+                destaque no portal do colaborador; cada alteração fica registrada na auditoria.
+              </p>
+            </div>
+
+            {/* As 6 fases da trilha técnica */}
+            <div className="mt-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <h4 className="font-bold text-xs uppercase tracking-wider text-slate-800 mb-2.5">
+                As 6 fases da trilha técnica com as descrições:
+              </h4>
+              <div className="space-y-2 text-xs sm:text-sm text-gray-700">
+                <p>
+                  <strong>1. Configuração e Acessos</strong> — MFA, validação dos acessos (Movidesk,
+                  Passportal, TeamViewer) e vídeos tutoriais.
+                </p>
+                <p>
+                  <strong>2. Mapeamento de Ambientes</strong> — estudo da documentação dos 3
+                  clientes de referência no Passportal.
+                </p>
+                <p>
+                  <strong>3. Shadowing Ativo</strong> — acompanhamento em tempo real da tela de um
+                  técnico sênior; contato telefônico inicial mandatório com o cliente, consulta de
+                  credenciais, TeamViewer e apontamentos no Movidesk.
+                </p>
+                <p>
+                  <strong>4. Atendimento Invertido</strong> — o técnico em formação assume o teclado
+                  em chamados reais, com contato telefônico prévio obrigatório e o sênior
+                  acompanhando em chamada simultânea; nada é finalizado sem validação.
+                </p>
+                <p>
+                  <strong>5. Atendimento Solo N1</strong> — chamados N1 individuais (redefinições,
+                  impressoras, softwares padrão), sempre com contato telefônico inicial; dúvidas vão
+                  ao padrinho designado.
+                </p>
+                <p>
+                  <strong>6. Consolidação Prática</strong> — aumento de volumetria N1 e início de
+                  demandas de média complexidade sob supervisão sob demanda.
+                </p>
+              </div>
+              <p className="mt-3 text-xs text-teal-800 font-semibold">
+                Ao concluir a última fase, o sistema envia e-mail ao gestor lembrando da avaliação
+                final.
+              </p>
+            </div>
+          </div>
+
+          {/* 3.4 Etapa 3 — Avaliação Final */}
+          <div className="border-l-4 border-indigo-600 pl-4 py-1">
+            <h3 className="text-base font-bold text-gray-900 mb-2">
+              3.4 Etapa 3 — Avaliação Final (Gestor):
+            </h3>
+            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed mb-2">
+              O gestor registra a decisão <strong>Apto</strong> ou <strong>Não apto</strong>, com
+              observações.
+            </p>
+            <div className="space-y-2 text-xs sm:text-sm text-gray-700">
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-950">
+                <strong>Apto →</strong> onboarding concluído; o colaborador recebe a mensagem de
+                liberação no portal; RH e Admin recebem o resultado por e-mail.
+              </div>
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-950">
+                <strong>Não apto →</strong> o gestor escolhe em qual fase o colaborador retorna
+                (ex.: &quot;Atendimento Solo N1&quot;) e define um prazo suplementar (5 dias por
+                padrão, editável); o status muda para &quot;Em acompanhamento&quot; (âmbar); o
+                histórico da primeira avaliação é preservado, há teto de 2 reavaliações e o gestor
+                pode encerrar como não apto definitivo.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ========================================================= */}
+        {/* SEÇÃO 4 & 5 */}
+        {/* ========================================================= */}
+        <section className="mb-10 avoid-break page-break-before">
+          {/* SEÇÃO 4 */}
+          <div className="mb-8">
+            <div className="flex items-center gap-2.5 mb-3 border-b border-gray-200 pb-2">
+              <div className="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                4
+              </div>
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+                SEÇÃO 4 — Link público do colaborador
+              </h2>
+            </div>
+            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
+              Cada onboarding tem um link exclusivo (sem senha), disponível no card &quot;Link
+              Público do Colaborador&quot;; o colaborador vê seu nome, área, contagem dos 15 dias,
+              progresso (&quot;X de Y materiais confirmados&quot;) e as fases liberadas; a Etapa 2
+              só aparece no portal após a conclusão da Etapa 1 pelo RH; as confirmações são
+              irreversíveis e registradas com data e hora — servem como comprovação formal de
+              capacitação.
+            </p>
+          </div>
+
+          {/* SEÇÃO 5 */}
+          <div>
+            <div className="flex items-center gap-2.5 mb-3 border-b border-gray-200 pb-2">
+              <div className="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                5
+              </div>
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+                SEÇÃO 5 — Auditoria e Logs
+              </h2>
+            </div>
+            <div className="space-y-2.5 text-xs sm:text-sm text-gray-700 leading-relaxed">
+              <p>
+                Aba <strong>&quot;Histórico & Auditoria&quot;</strong> (na página de cada
+                onboarding) registra toda a trilha — conclusões de etapas e fases, confirmações do
+                colaborador, definição de clientes e decisões avaliativas — com quem fez, quando, e
+                destaque explícito para prazos (ex.: &quot;Concluído 2 dias antes do prazo
+                planejado&quot; / &quot;Concluído 1 dia após o prazo&quot;).
+              </p>
+              <p>
+                Tela <strong>&quot;Logs&quot;</strong> (menu lateral, exclusiva do Admin): todos os
+                onboardings, com filtros por colaborador, gestor e &quot;somente fora do
+                prazo&quot;.
+              </p>
+              <p>
+                <strong>Exportação:</strong> botões para baixar os logs filtrados em CSV ou TXT.
+              </p>
+              <p>
+                <strong>Retenção:</strong> os registros são mantidos por 6 meses, com limpeza
+                automática diária (aviso na tela).
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* ========================================================= */}
+        {/* SEÇÃO 6, 7 & 8 */}
+        {/* ========================================================= */}
+        <section className="mb-10 avoid-break page-break-before">
+          {/* SEÇÃO 6 */}
+          <div className="mb-8">
+            <div className="flex items-center gap-2.5 mb-3 border-b border-gray-200 pb-2">
+              <div className="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                6
+              </div>
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+                SEÇÃO 6 — Modelos de Tarefas e Biblioteca
+              </h2>
+            </div>
+            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed mb-2">
+              A <strong>Biblioteca de Materiais</strong> (aba dentro de Modelos) aceita vídeos
+              (.mp4) e manuais (.pdf, .pptx, .docx, até 50 MB), sobem uma única vez e são associados
+              aos itens de qualquer área — atualizou o material na biblioteca, vale para todos os
+              onboardings futuros.
+            </p>
+            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
+              <strong>Modelos por área:</strong> cada área tem aba própria com seus itens e fases;
+              áreas novas podem ser criadas pelo botão &quot;Gerenciar Áreas&quot; (nome, descrição
+              e cor) — exclusivo para Admin/RH. Áreas administrativas (RH, Comercial, Laboratório)
+              ficam como lista simples; as técnicas têm a trilha de 6 fases.
+            </p>
+          </div>
+
+          {/* SEÇÃO 7 */}
+          <div className="mb-8">
+            <div className="flex items-center gap-2.5 mb-3 border-b border-gray-200 pb-2">
+              <div className="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                7
+              </div>
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+                SEÇÃO 7 — Notificações por e-mail
+              </h2>
+            </div>
+            <div className="space-y-1.5 text-xs sm:text-sm text-gray-700 leading-relaxed">
+              <div className="flex items-start gap-2">
+                <span className="font-bold text-brand-700">1.</span>
+                <span>
+                  Etapa 1 concluída → e-mail ao gestor responsável (com link do colaborador).
+                </span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="font-bold text-brand-700">2.</span>
+                <span>Etapa 2 concluída → e-mail ao gestor pedindo a avaliação final.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="font-bold text-brand-700">3.</span>
+                <span>Avaliação registrada → e-mail a RH e Admin com o resultado em destaque.</span>
+              </div>
+              <p className="text-xs text-gray-500 pt-1">
+                * Dependem do SMTP configurado no painel do backend pelo Admin.
+              </p>
+            </div>
+          </div>
+
+          {/* SEÇÃO 8 */}
+          <div>
+            <div className="flex items-center gap-2.5 mb-3 border-b border-gray-200 pb-2">
+              <div className="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                8
+              </div>
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+                SEÇÃO 8 — Usuários
+              </h2>
+            </div>
+            <div className="space-y-2 text-xs sm:text-sm text-gray-700 leading-relaxed">
+              <p>
+                <strong>Tela &quot;Usuários&quot;:</strong> Admin cria qualquer papel; RH também
+                pode criar usuários (não pode editar/desativar o Admin).
+              </p>
+              <p>
+                <strong>Cadastro:</strong> nome, e-mail, senha inicial e papel (Admin, RH ou
+                Gestão). Contas desativadas não conseguem logar.
+              </p>
+              <p>
+                <strong>Recuperação de senha:</strong> disponível na tela de login.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* ========================================================= */}
+        {/* SEÇÃO 9 — Checklist rápido de homologação */}
+        {/* ========================================================= */}
+        <section className="mb-10 avoid-break page-break-before">
+          <div className="flex items-center gap-2.5 mb-4 border-b border-gray-200 pb-2">
+            <div className="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+              9
+            </div>
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+              SEÇÃO 9 — Checklist rápido de homologação
+            </h2>
+          </div>
+
+          <p className="text-xs sm:text-sm text-gray-600 mb-4">
+            Utilize os itens abaixo para validar a conformidade dos fluxos operacionais e regras de
+            negócio do sistema:
+          </p>
+
+          <div className="space-y-2.5">
+            {[
+              'Criar onboarding de teste (validar soma dos 15 dias);',
+              'RH conclui Etapa 1 → verificar e-mail do gestor e liberação no portal;',
+              'Gestor indica os 3 clientes na Fase 2 → conferir no portal do colaborador;',
+              'Concluir uma fase fora do prazo de propósito → ver o destaque nos Logs;',
+              'Registrar "Não apto" → escolher fase de retorno e conferir o status "Em acompanhamento";',
+              'Exportar logs em CSV;',
+              'Testar acesso cruzado: gestor de outra área vê, mas não consegue agir.',
+            ].map((item, idx) => (
+              <div
+                key={idx}
+                onClick={() => toggleCheck(idx)}
+                className="flex items-start gap-3 p-3 rounded-xl border border-gray-200 bg-gray-50/70 hover:bg-white transition-colors cursor-pointer"
+              >
+                <div
+                  className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                    checklistState[idx]
+                      ? 'bg-brand-600 border-brand-600 text-white'
+                      : 'border-gray-400 bg-white'
+                  }`}
+                >
+                  {checklistState[idx] && <CheckSquare className="w-3.5 h-3.5" />}
+                </div>
+                <span
+                  className={`text-xs sm:text-sm ${
+                    checklistState[idx] ? 'text-gray-900 font-semibold' : 'text-gray-700'
+                  }`}
+                >
+                  {item}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Rodapé do manual */}
+        <footer className="mt-12 pt-6 border-t-2 border-gray-200 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-500 gap-2">
+          <div className="font-semibold text-gray-700">
+            Mundo Open — Onboarding de Colaboradores de TI. Documento interno.
+          </div>
+          <div className="text-[11px] text-gray-400">
+            Versão do Sistema 1.0 • Impresso via Painel de Controle
+          </div>
+        </footer>
+      </article>
+
+      {/* Dica de impressão no final da tela (Oculta na impressão) */}
+      <div className="no-print bg-slate-100 border border-slate-200/80 rounded-xl p-4 text-xs text-slate-600 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <Printer className="w-4 h-4 text-slate-500" />
+          <span>
+            Dica: No diálogo de impressão do navegador, selecione{' '}
+            <strong>&quot;Salvar como PDF&quot;</strong> e mantenha a opção de{' '}
+            <strong>&quot;Gráficos de plano de fundo&quot;</strong> marcada para preservar as cores
+            e destaques visuais.
+          </span>
+        </div>
+        <Button variant="outline" size="sm" onClick={handlePrint} className="shrink-0 font-medium">
+          Imprimir agora
+        </Button>
+      </div>
+    </div>
+  )
+}

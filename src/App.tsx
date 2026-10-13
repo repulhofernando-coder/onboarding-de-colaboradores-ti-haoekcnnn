@@ -20,6 +20,7 @@ import Avaliacoes from './pages/Avaliacoes'
 import Colaboradores from './pages/Colaboradores'
 import Usuarios from './pages/Usuarios'
 import Logs from './pages/Logs'
+import Manual from './pages/Manual'
 import ColaboradorPublico from './pages/ColaboradorPublico'
 import NotFound from './pages/NotFound'
 
@@ -50,6 +51,7 @@ const App = () => (
             <Route path="/onboardings/nova" element={<NovoOnboarding />} />
             <Route path="/colaboradores" element={<Colaboradores />} />
             <Route path="/colaboradores/:id" element={<DetalheOnboarding />} />
+            <Route path="/manual" element={<Manual />} />
             <Route
               path="/modelos"
               element={
