@@ -112,6 +112,15 @@ export interface FaseConcluidaInfo {
   destaque_prazo?: string
 }
 
+export interface FaseSinalizadaInfo {
+  fase_id: string
+  titulo?: string
+  etapa: number
+  sinalizado_em: string
+  colaborador_nome?: string
+  colaborador_email?: string
+}
+
 export interface CronogramaFaseItem {
   fase_id: string
   titulo: string
@@ -207,6 +216,7 @@ export interface Onboarding extends RecordModel {
   email_avaliacao_enviado?: boolean
   token_acesso_colaborador?: string
   fases_concluidas?: FaseConcluidaInfo[]
+  fases_sinalizadas?: FaseSinalizadaInfo[]
   fase_atual_id?: string
   reavaliacoes_count?: number
   prazo_suplementar_dias?: number

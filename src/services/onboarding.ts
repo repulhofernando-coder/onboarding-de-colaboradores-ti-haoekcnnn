@@ -518,6 +518,7 @@ export const onboardingService = {
       etapa3_concluida: false,
       token_acesso_colaborador: generateRandomToken(32),
       fases_concluidas: [],
+      fases_sinalizadas: [],
       reavaliacoes_count: 0,
       prazo_suplementar_dias: 0,
       checklist_integracao: checklistSnapshot,
@@ -683,6 +684,81 @@ export const onboardingService = {
 
   async update(id: string, data: Partial<Onboarding>): Promise<Onboarding> {
     return pb.collection('onboardings').update<Onboarding>(id, data)
+  },
+
+  /**
+   * Mecanismo "Sinalizar, não concluir":
+   * O colaborador sinaliza que finalizou os materiais/atividades da fase.
+   * Não altera o status do onboarding ou da fase.
+   * Apenas registra a data/hora do sinal, grava log de auditoria e aciona notificação.
+   */
+  async sinalizarConclusaoFase(params: {
+    onboardingId: string
+    faseId: string
+    faseTitulo: string
+    etapa: number
+    colaboradorNome: string
+    colaboradorEmail?: string
+  }): Promise<{
+    onboarding: Onboarding
+    sinalInfo: import('@/types/onboarding').FaseSinalizadaInfo
+  }> {
+    const onb = await pb.collection('onboardings').getOne<Onboarding>(params.onboardingId, {
+      expand: 'gestor_id,setor_ref',
+    })
+    const agoraIso = new Date().toISOString()
+
+    const sinalInfo: import('@/types/onboarding').FaseSinalizadaInfo = {
+      fase_id: params.faseId,
+      titulo: params.faseTitulo,
+      etapa: params.etapa,
+      sinalizado_em: agoraIso,
+      colaborador_nome: params.colaboradorNome || onb.colaborador_nome,
+      colaborador_email: params.colaboradorEmail || onb.colaborador_email,
+    }
+
+    const sinalizadasExistentes = Array.isArray(onb.fases_sinalizadas)
+      ? [...onb.fases_sinalizadas]
+      : []
+
+    const idx = sinalizadasExistentes.findIndex((s) => s.fase_id === params.faseId)
+    if (idx >= 0) {
+      sinalizadasExistentes[idx] = sinalInfo
+    } else {
+      sinalizadasExistentes.push(sinalInfo)
+    }
+
+    // Gravar no log de auditoria
+    const rotuloEtapa = params.etapa === 1 ? 'Etapa 1' : `Etapa 2 — ${params.faseTitulo}`
+    await auditoriaService.registrar({
+      onboardingId: params.onboardingId,
+      colaboradorNome: params.colaboradorNome || onb.colaborador_nome,
+      usuarioId: undefined,
+      usuarioNome: params.colaboradorNome || onb.colaborador_nome,
+      usuarioRole: 'colaborador',
+      gestorNome: onb.expand?.gestor_id?.name || '',
+      acao: 'Sinalização de conclusão pelo colaborador',
+      detalhes: `Colaborador sinalizou conclusão das atividades de "${params.faseTitulo}" (${rotuloEtapa}). Aguardando validação do responsável.`,
+      foraPrazo: false,
+      metadata: {
+        fase_id: params.faseId,
+        fase_titulo: params.faseTitulo,
+        etapa: params.etapa,
+        sinalizado_em: agoraIso,
+      },
+    })
+
+    const updated = await pb.collection('onboardings').update<Onboarding>(
+      params.onboardingId,
+      {
+        fases_sinalizadas: sinalizadasExistentes,
+      },
+      {
+        expand: 'gestor_id,setor_ref',
+      },
+    )
+
+    return { onboarding: updated, sinalInfo }
   },
 
   async atualizarTecnicoResponsavel(params: {
