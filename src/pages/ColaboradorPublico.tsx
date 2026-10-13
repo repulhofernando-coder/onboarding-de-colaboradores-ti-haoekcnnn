@@ -16,6 +16,9 @@ import {
   Flame,
   Lock,
   Building2,
+  UserCheck,
+  Mail,
+  User as UserIcon,
 } from 'lucide-react'
 import MundoOpenLogo from '@/components/MundoOpenLogo'
 import { Button } from '@/components/ui/button'
@@ -641,6 +644,47 @@ export default function ColaboradorPublico() {
               </Badge>
             )}
           </div>
+
+          {/* Destaque do Técnico Responsável pelo Acompanhamento */}
+          {etapa2Liberada && onboarding.tecnico_responsavel_nome && (
+            <div className="p-4 rounded-xl border border-brand-200 bg-brand-50/40 flex items-start sm:items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-brand-100 text-brand-800 flex items-center justify-center shrink-0">
+                  <UserCheck className="w-5 h-5 text-brand-700" />
+                </div>
+                <div>
+                  <span className="text-[11px] font-semibold text-brand-800 uppercase tracking-wider block">
+                    Seu acompanhamento inicial:
+                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-slate-900">
+                      {onboarding.tecnico_responsavel_nome}
+                    </span>
+                    {onboarding.tecnico_responsavel_email && (
+                      <a
+                        href={`mailto:${onboarding.tecnico_responsavel_email}`}
+                        className="text-xs text-brand-700 hover:text-brand-800 hover:underline flex items-center gap-1 font-medium"
+                      >
+                        <Mail className="w-3.5 h-3.5" />
+                        {onboarding.tecnico_responsavel_email}
+                      </a>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-600 mt-0.5">
+                    Técnico de referência para tirar dúvidas sobre ferramentas, chamados e
+                    procedimentos.
+                  </p>
+                </div>
+              </div>
+
+              <Badge
+                variant="outline"
+                className="hidden sm:inline-flex text-[10px] bg-white border-brand-300 text-brand-800 font-semibold shrink-0"
+              >
+                Ponto Focal
+              </Badge>
+            </div>
+          )}
 
           {!etapa2Liberada ? (
             <div className="py-8 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-2">

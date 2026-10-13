@@ -354,13 +354,41 @@ export default function Manual() {
             <h3 className="text-base font-bold text-gray-900 mb-2">
               3.2 Etapa 1 — Integração (RH):
             </h3>
-            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
-              O RH conduz os itens da etapa; o colaborador, pelo link público, confirma cada item
-              clicando em &quot;Confirmo que assisti/li&quot; — registrado com data e hora; com
-              todos os itens confirmados o RH clica em &quot;Concluir Etapa 1&quot; → o sistema
-              trava a etapa, libera a Etapa 2 e envia e-mail automático ao gestor responsável (com o
-              link do colaborador em destaque).
+            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed mb-3">
+              O RH conduz os itens da etapa; o colaborador, pelo link público, confirma cada
+              material clicando em &quot;Confirmo que assisti/li&quot; — registrado com data e hora.
             </p>
+            <div className="p-3 bg-brand-50/70 border border-brand-200 rounded-lg text-xs sm:text-sm text-brand-950 mb-3 space-y-1.5">
+              <strong className="block text-brand-900 font-bold">
+                Checklist de Integração Completo (Exigência para conclusão da Etapa 1):
+              </strong>
+              <p>
+                A Etapa 1 exige o cumprimento obrigatório do{' '}
+                <strong>Checklist de Integração</strong> (entrega física de material: notebook
+                corporativo, periféricos como teclado e mouse/mousepad, headset, cartão Flash/VR e
+                apresentações institucionais ao gestor da área e demais gestores).
+              </p>
+              <p>
+                A conferência é exclusiva do RH/Admin, registrando data/hora e o nome de quem
+                entregou. Cada item conta com campo de <strong>observação interna opcional</strong>{' '}
+                (ex.: patrimônio do equipamento, detalhes de entrega), visível para a gestão mas não
+                exposta ao colaborador. O botão{' '}
+                <strong>&quot;Concluir Etapa 1&quot; permanece desabilitado</strong> com aviso em
+                destaque enquanto houver qualquer item pendente de entrega.
+              </p>
+            </div>
+            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed mb-3">
+              Com todos os materiais confirmados e o checklist de integração 100% entregue, o RH
+              clica em &quot;Concluir Etapa 1&quot; → o sistema trava a etapa, libera a Etapa 2 e
+              envia e-mail automático ao gestor responsável (com o link do colaborador em destaque).
+            </p>
+            <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-lg text-xs sm:text-sm text-amber-950">
+              <strong>Painel Clientes de Referência visível desde a Etapa 1:</strong> o painel de
+              indicação dos clientes no Passportal já fica posicionado no bloco da Etapa 2 desde a
+              Etapa 1 em modo aguardando (&quot;Aguardando definição dos clientes pelo gestor —
+              disponível na Etapa 2&quot;), garantindo previsibilidade sobre o estudo prático que
+              virá a seguir.
+            </div>
           </div>
 
           {/* 3.3 Etapa 2 — Vivência Técnica */}
@@ -368,6 +396,20 @@ export default function Manual() {
             <h3 className="text-base font-bold text-gray-900 mb-2">
               3.3 Etapa 2 — Vivência Técnica (Gestor):
             </h3>
+            <div className="p-3 bg-brand-50/70 border border-brand-200 rounded-lg text-xs sm:text-sm text-brand-950 mb-3 space-y-1">
+              <strong className="block text-brand-900 font-bold">
+                Painel &quot;Técnico Responsável pelo Acompanhamento&quot; (Topo da Etapa 2):
+              </strong>
+              <p>
+                Localizado logo no topo da Etapa 2 (antes da listagem de fases), permite ao Gestor
+                Responsável ou Admin definir o nome (obrigatório) e e-mail (opcional) do técnico
+                experiente que fará o acompanhamento inicial do novo colaborador. O RH visualiza em
+                modo leitura, a alteração gera log formal de auditoria com histórico de quem
+                alterou, e o nome do técnico é exibido em destaque no portal público do colaborador
+                (&quot;Seu acompanhamento inicial: [nome]&quot;) para que ele saiba exatamente a
+                quem recorrer.
+              </p>
+            </div>
             <div className="space-y-2 text-xs sm:text-sm text-gray-700 leading-relaxed">
               <p>Trilha em fases ordenadas — uma fase só libera quando a anterior é concluída.</p>
               <ul className="list-disc list-inside space-y-1 pl-1">
@@ -480,10 +522,13 @@ export default function Manual() {
             <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
               Cada onboarding tem um link exclusivo (sem senha), disponível no card &quot;Link
               Público do Colaborador&quot;; o colaborador vê seu nome, área, contagem dos 15 dias,
-              progresso (&quot;X de Y materiais confirmados&quot;) e as fases liberadas; a Etapa 2
-              só aparece no portal após a conclusão da Etapa 1 pelo RH; as confirmações são
-              irreversíveis e registradas com data e hora — servem como comprovação formal de
-              capacitação.
+              progresso (&quot;X de Y materiais confirmados&quot;), o{' '}
+              <strong>Técnico Responsável pelo Acompanhamento em destaque na Etapa 2</strong> e as
+              fases liberadas sequencialmente; a Etapa 2 só é destravada no portal após a conclusão
+              da Etapa 1 pelo RH; as confirmações são irreversíveis e registradas com data e hora —
+              servem como comprovação formal de capacitação. As observações internas do checklist de
+              integração são mantidas estritamente confidenciais e nunca são exibidas ao
+              colaborador.
             </p>
           </div>
 
@@ -541,11 +586,18 @@ export default function Manual() {
               aos itens de qualquer área — atualizou o material na biblioteca, vale para todos os
               onboardings futuros.
             </p>
-            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
+            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed mb-2">
               <strong>Modelos por área:</strong> cada área tem aba própria com seus itens e fases;
               áreas novas podem ser criadas pelo botão &quot;Gerenciar Áreas&quot; (nome, descrição
               e cor) — exclusivo para Admin/RH. Áreas administrativas (RH, Comercial, Laboratório)
               ficam como lista simples; as técnicas têm a trilha de 6 fases.
+            </p>
+            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
+              <strong>Modelos do Checklist de Integração (Aba Etapa 1):</strong> os itens padrão do
+              checklist de integração (equipamentos e apresentações) podem ser editados, adicionados
+              ou reordenados por Admin e RH na aba &quot;Etapa 1 (RH / Integração Geral)&quot;.
+              Onboardings novos são criados automaticamente com a lista modelo atualizada, enquanto
+              onboardings já em andamento mantêm seu snapshot individual preservado.
             </p>
           </div>
 
@@ -626,12 +678,16 @@ export default function Manual() {
 
           <div className="space-y-2.5">
             {[
-              'Criar onboarding de teste (validar soma dos 15 dias);',
-              'RH conclui Etapa 1 → verificar e-mail do gestor e liberação no portal;',
+              'Criar onboarding de teste (validar soma dos 15 dias e checklist inicial de integração semeado);',
+              'Tentar concluir Etapa 1 com itens de checklist pendentes → verificar bloqueio;',
+              'RH marca itens do checklist como entregues com observação opcional → concluir Etapa 1;',
+              'Conferir painel "Clientes de Referência" exibido em modo aguardando desde a Etapa 1;',
+              'Gestor define Técnico Responsável no topo da Etapa 2 → conferir destaque no portal público;',
               'Gestor indica os 3 clientes na Fase 2 → conferir no portal do colaborador;',
               'Concluir uma fase fora do prazo de propósito → ver o destaque nos Logs;',
               'Registrar "Não apto" → escolher fase de retorno e conferir o status "Em acompanhamento";',
               'Exportar logs em CSV;',
+              'Editar itens modelo do checklist na aba Etapa 1 de Modelos de Tarefas;',
               'Testar acesso cruzado: gestor de outra área vê, mas não consegue agir.',
             ].map((item, idx) => (
               <div

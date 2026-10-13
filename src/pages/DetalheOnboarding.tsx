@@ -58,6 +58,8 @@ import {
   Save,
   UserCheck2,
   MessageSquare,
+  Mail,
+  User as UserIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -1470,22 +1472,249 @@ export default function DetalheOnboarding() {
                 )}
               </div>
 
+              {/* Checklist de Integração da Etapa 1 (Entrega de Equipamentos & Apresentações) */}
+              <div className="mt-6 pt-5 border-t border-gray-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                      <CheckSquare className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                          Checklist de Integração (RH)
+                        </h4>
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] font-semibold ${
+                            allChecklistEntregue
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                              : 'bg-amber-50 text-amber-800 border-amber-300'
+                          }`}
+                        >
+                          {entreguesChecklist} de {totalItensChecklist} entregues
+                        </Badge>
+                      </div>
+                      <p className="text-[11px] text-gray-500">
+                        Entrega física de equipamentos (notebook, periféricos, headset, cartão
+                        Flash) e apresentações institucionais.
+                      </p>
+                    </div>
+                  </div>
+
+                  {!podeGerenciarEtapa1 && (
+                    <span className="text-[11px] text-gray-400 italic">
+                      (Modo leitura — conferência exclusiva do RH)
+                    </span>
+                  )}
+                </div>
+
+                {checklistIntegracao.length === 0 ? (
+                  <div className="p-4 bg-gray-50 rounded-lg text-center text-xs text-gray-400">
+                    Nenhum item no checklist de integração para este colaborador.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-100 border border-gray-200 rounded-xl overflow-hidden bg-white">
+                    {checklistIntegracao.map((item) => {
+                      const isMarcando = marcandoItemChecklistId === item.id
+                      const isEditandoObs = editandoObsItemId === item.id
+
+                      return (
+                        <div
+                          key={item.id}
+                          className={`p-3.5 transition-colors ${
+                            item.entregue ? 'bg-emerald-50/20' : 'bg-white hover:bg-gray-50/50'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-3 flex-1 min-w-0">
+                              <button
+                                type="button"
+                                disabled={
+                                  onboarding.etapa1_concluida || !podeGerenciarEtapa1 || isMarcando
+                                }
+                                onClick={() => handleToggleItemChecklistIntegracao(item)}
+                                className={`mt-0.5 transition-transform shrink-0 ${
+                                  podeGerenciarEtapa1 && !onboarding.etapa1_concluida
+                                    ? 'hover:text-emerald-700 active:scale-95 cursor-pointer'
+                                    : 'cursor-default opacity-80'
+                                }`}
+                                aria-label="Marcar entrega do item"
+                                title={
+                                  !podeGerenciarEtapa1
+                                    ? 'Apenas RH ou Administrador podem marcar a entrega'
+                                    : onboarding.etapa1_concluida
+                                      ? 'Etapa 1 já concluída'
+                                      : item.entregue
+                                        ? 'Clique para desmarcar'
+                                        : 'Clique para marcar como entregue'
+                                }
+                              >
+                                {item.entregue ? (
+                                  <CheckCircle2 className="w-5 h-5 text-emerald-600 animate-fade-in" />
+                                ) : (
+                                  <Square className="w-5 h-5 text-gray-300 hover:text-gray-400" />
+                                )}
+                              </button>
+
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span
+                                    className={`text-xs font-semibold ${
+                                      item.entregue ? 'text-gray-900' : 'text-gray-800'
+                                    }`}
+                                  >
+                                    {item.titulo}
+                                  </span>
+
+                                  {item.entregue ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-full border border-emerald-300">
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                      Entregue em {formatDate(item.entregue_em)} por{' '}
+                                      {item.entregue_por_nome || 'RH'}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                                      <Clock className="w-3 h-3 text-amber-600" />
+                                      Pendente de entrega
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Observação do item (visível para RH/Gestor/Admin) */}
+                                {item.observacao && !isEditandoObs && (
+                                  <div className="mt-1.5 text-[11px] text-gray-600 bg-gray-50 border border-gray-200/80 rounded-md p-2 flex items-start gap-1.5">
+                                    <MessageSquare className="w-3 h-3 text-gray-400 shrink-0 mt-0.5" />
+                                    <div className="flex-1 min-w-0">
+                                      <strong className="text-gray-700">Obs interna:</strong>{' '}
+                                      <span>{item.observacao}</span>
+                                    </div>
+                                    {podeGerenciarEtapa1 && !onboarding.etapa1_concluida && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setObsTemp(item.observacao || '')
+                                          setEditandoObsItemId(item.id)
+                                        }}
+                                        className="text-brand-600 hover:text-brand-700 text-[10px] font-semibold ml-1 shrink-0"
+                                      >
+                                        Editar
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Editor inline de observação */}
+                                {isEditandoObs && (
+                                  <div className="mt-2 space-y-2 p-2.5 bg-gray-50 rounded-lg border border-brand-200">
+                                    <label className="text-[11px] font-semibold text-gray-700 block">
+                                      Observação interna para &quot;{item.titulo}&quot;:
+                                    </label>
+                                    <Textarea
+                                      value={obsTemp}
+                                      onChange={(e) => setObsTemp(e.target.value)}
+                                      placeholder="Ex.: Patrimônio NT-4820, entregue com cabo HDMI e adaptador..."
+                                      rows={2}
+                                      className="text-xs bg-white"
+                                      disabled={salvandoObs}
+                                    />
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        disabled={salvandoObs}
+                                        onClick={() => {
+                                          setEditandoObsItemId(null)
+                                          setObsTemp('')
+                                        }}
+                                        className="h-7 text-xs text-gray-600"
+                                      >
+                                        Cancelar
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        disabled={salvandoObs}
+                                        onClick={() => handleSalvarObservacaoItemChecklist(item.id)}
+                                        className="h-7 text-xs bg-brand-600 hover:bg-brand-700 text-white"
+                                      >
+                                        <Save className="w-3 h-3 mr-1" />
+                                        {salvandoObs ? 'Salvando...' : 'Salvar Observação'}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Botão de adicionar observação caso não exista */}
+                            {!item.observacao &&
+                              !isEditandoObs &&
+                              podeGerenciarEtapa1 &&
+                              !onboarding.etapa1_concluida && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setObsTemp('')
+                                    setEditandoObsItemId(item.id)
+                                  }}
+                                  className="h-7 text-[11px] text-gray-500 hover:text-brand-700 shrink-0"
+                                >
+                                  <MessageSquare className="w-3 h-3 mr-1" />
+                                  Obs
+                                </Button>
+                              )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
               {/* Ação Concluir Etapa 1 */}
               {!onboarding.etapa1_concluida && (
-                <div className="pt-3 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <span className="text-xs text-gray-500">
-                    {!podeGerenciarEtapa1
-                      ? 'O Gestor acompanha esta etapa em modo leitura. A conclusão cabe ao RH ou Administrador.'
-                      : allEtapa1Checked
-                        ? 'Todos os itens conferidos! O RH pode concluir a etapa e repassar ao Gestor.'
-                        : 'Marque todos os itens acima para liberar a conclusão.'}
-                  </span>
+                <div className="pt-4 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="text-xs text-gray-500">
+                    {!podeGerenciarEtapa1 ? (
+                      <span>
+                        O Gestor acompanha esta etapa em modo leitura. A conclusão cabe ao RH ou
+                        Administrador.
+                      </span>
+                    ) : !allChecklistEntregue ? (
+                      <span className="text-amber-700 font-medium flex items-center gap-1.5">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                        Checklist pendente: entregue todos os {totalItensChecklist} itens do
+                        checklist de integração antes de concluir ({entreguesChecklist}/
+                        {totalItensChecklist} entregues).
+                      </span>
+                    ) : !allEtapa1Checked ? (
+                      <span>
+                        Marque todos os materiais da empresa acima para liberar a conclusão.
+                      </span>
+                    ) : (
+                      <span className="text-emerald-700 font-medium">
+                        Todos os materiais e itens do checklist foram conferidos! O RH pode concluir
+                        a etapa e repassar ao Gestor.
+                      </span>
+                    )}
+                  </div>
 
                   {podeGerenciarEtapa1 ? (
                     <Button
                       onClick={handleConcluirEtapa1}
-                      disabled={!allEtapa1Checked || concluindoEtapa1}
+                      disabled={!allEtapa1Checked || !allChecklistEntregue || concluindoEtapa1}
                       className="bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm"
+                      title={
+                        !allChecklistEntregue
+                          ? `Existem ${totalItensChecklist - entreguesChecklist} item(ns) pendente(s) no Checklist de Integração.`
+                          : !allEtapa1Checked
+                            ? 'Marque todos os materiais da Etapa 1.'
+                            : 'Concluir Etapa 1 e notificar o gestor responsável'
+                      }
                     >
                       {concluindoEtapa1 ? (
                         <span>Concluindo...</span>
@@ -1583,18 +1812,189 @@ export default function DetalheOnboarding() {
 
               {/* Conteúdo Etapa 2 */}
               {!onboarding.etapa1_concluida ? (
-                <div className="py-8 text-center text-gray-400 text-xs flex flex-col items-center justify-center">
-                  <Lock className="w-8 h-8 text-gray-300 mb-2" />
-                  <p className="font-semibold text-gray-600">
-                    Aguarde a conclusão da Etapa 1 pelo RH
-                  </p>
-                  <p className="text-[11px] text-gray-400 mt-0.5">
-                    Esta etapa será destravada automaticamente quando a integração RH for
-                    finalizada.
-                  </p>
+                <div className="space-y-4">
+                  <div className="py-6 text-center text-gray-400 text-xs flex flex-col items-center justify-center">
+                    <Lock className="w-8 h-8 text-gray-300 mb-2" />
+                    <p className="font-semibold text-gray-600">
+                      Aguarde a conclusão da Etapa 1 pelo RH
+                    </p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      Esta etapa será destravada automaticamente quando a integração RH for
+                      finalizada.
+                    </p>
+                  </div>
+
+                  {/* Painel "Clientes de Referência" visível desde a Etapa 1 em modo aguardando */}
+                  <div className="p-4 rounded-xl border border-amber-200/80 bg-amber-50/40 space-y-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-md bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                        <Building2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h5 className="text-xs font-bold text-gray-900">
+                            Clientes de Referência no Passportal (até 3)
+                          </h5>
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] bg-amber-100/60 border-amber-300 text-amber-900 font-medium"
+                          >
+                            Estudo Técnico
+                          </Badge>
+                        </div>
+                        <p className="text-[11px] text-gray-600">
+                          Clientes indicados pelo Gestor para o colaborador analisar topologia de
+                          rede, IPs e particularidades.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="bg-white/80 border border-dashed border-amber-200 rounded-lg p-2.5 text-xs text-amber-800/90 flex items-center gap-2">
+                      <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span className="italic">
+                        Aguardando definição dos clientes pelo gestor (disponível na Etapa 2)
+                      </span>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div>
+                  {/* Painel do Técnico Responsável pelo Acompanhamento (Topo da Etapa 2) */}
+                  <div className="mb-5 p-4 rounded-xl border border-brand-200 bg-brand-50/30">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-brand-100 text-brand-800 flex items-center justify-center shrink-0">
+                          <UserCheck className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs font-bold text-gray-900">
+                              Técnico Responsável pelo Acompanhamento
+                            </h4>
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] bg-brand-100/60 border-brand-300 text-brand-900 font-medium"
+                            >
+                              Ponto Focal
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] text-gray-600">
+                            Técnico sênior/pleno que conduzirá a rotina e dúvidas do novo
+                            colaborador na área.
+                          </p>
+                        </div>
+                      </div>
+
+                      {podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida && (
+                        <div className="shrink-0">
+                          {!editandoTecnico ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setTecnicoNome(onboarding.tecnico_responsavel_nome || '')
+                                setTecnicoEmail(onboarding.tecnico_responsavel_email || '')
+                                setEditandoTecnico(true)
+                              }}
+                              className="h-7 text-xs border-brand-300 text-brand-900 hover:bg-brand-100/60"
+                            >
+                              <Pencil className="w-3 h-3 mr-1" />
+                              {onboarding.tecnico_responsavel_nome
+                                ? 'Alterar Técnico'
+                                : 'Definir Técnico'}
+                            </Button>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={salvandoTecnico}
+                                onClick={() => setEditandoTecnico(false)}
+                                className="h-7 text-xs text-gray-600 hover:text-gray-900"
+                              >
+                                Cancelar
+                              </Button>
+                              <Button
+                                size="sm"
+                                disabled={salvandoTecnico}
+                                onClick={handleSalvarTecnicoResponsavel}
+                                className="h-7 text-xs bg-brand-600 hover:bg-brand-700 text-white font-medium"
+                              >
+                                <Save className="w-3 h-3 mr-1" />
+                                {salvandoTecnico ? 'Salvando...' : 'Salvar'}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {editandoTecnico ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-gray-700 block">
+                            Nome do Técnico Responsável *
+                          </label>
+                          <Input
+                            placeholder="Ex.: Carlos Eduardo Santos"
+                            value={tecnicoNome}
+                            onChange={(e) => setTecnicoNome(e.target.value)}
+                            className="h-8 text-xs bg-white border-brand-300 focus-visible:ring-brand-500"
+                            disabled={salvandoTecnico}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-gray-700 block">
+                            E-mail do Técnico (opcional)
+                          </label>
+                          <Input
+                            type="email"
+                            placeholder="Ex.: carlos.santos@open.com.br"
+                            value={tecnicoEmail}
+                            onChange={(e) => setTecnicoEmail(e.target.value)}
+                            className="h-8 text-xs bg-white border-brand-300 focus-visible:ring-brand-500"
+                            disabled={salvandoTecnico}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="pt-2">
+                        {onboarding.tecnico_responsavel_nome ? (
+                          <div className="flex items-center gap-2 bg-white border border-brand-200/90 rounded-lg px-3 py-2 shadow-2xs">
+                            <span className="w-6 h-6 rounded-full bg-brand-100 text-brand-800 text-[11px] font-bold flex items-center justify-center shrink-0">
+                              <UserIcon className="w-3.5 h-3.5" />
+                            </span>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-xs">
+                              <span className="font-semibold text-gray-900">
+                                {onboarding.tecnico_responsavel_nome}
+                              </span>
+                              {onboarding.tecnico_responsavel_email && (
+                                <span className="text-gray-500 flex items-center gap-1 text-[11px]">
+                                  <Mail className="w-3 h-3 text-brand-600" />
+                                  {onboarding.tecnico_responsavel_email}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-white/80 border border-dashed border-brand-200 rounded-lg p-2.5 text-xs text-brand-900/90 flex items-center justify-between">
+                            <span className="italic">
+                              Nenhum técnico responsável definido ainda para este colaborador.
+                            </span>
+                            {podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida && (
+                              <button
+                                type="button"
+                                onClick={() => setEditandoTecnico(true)}
+                                className="text-brand-700 font-semibold hover:underline text-xs shrink-0 ml-2"
+                              >
+                                Definir técnico agora →
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Ações de topo da Etapa 2: Adicionar item de upload */}
                   {!onboarding.etapa2_concluida && (
                     <div className="flex justify-between items-center mb-3 pt-1">
@@ -1620,7 +2020,6 @@ export default function DetalheOnboarding() {
                       )}
                     </div>
                   )}
-
                   {/* Se a área possui Fases Técnicas Ordenadas: Exibir por Fase com Trava Sequencial */}
                   {fasesSetor.length > 0 ? (
                     <div className="space-y-5 mb-5">
