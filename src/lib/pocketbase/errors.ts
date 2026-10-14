@@ -30,16 +30,11 @@ export function getErrorMessage(error: unknown): string {
 
 export function isNetworkError(error: unknown): boolean {
   if (error instanceof ClientResponseError) {
-    return error.status === 0 || error.isAbort
+    return error.status === 0 || error.message.toLowerCase().includes('failed to fetch')
   }
   if (error instanceof Error) {
     const msg = error.message.toLowerCase()
-    return (
-      msg.includes('network') ||
-      msg.includes('failed to fetch') ||
-      msg.includes('connection') ||
-      msg.includes('timeout')
-    )
+    return msg.includes('network') || msg.includes('failed to fetch') || msg.includes('timeout')
   }
   return false
 }

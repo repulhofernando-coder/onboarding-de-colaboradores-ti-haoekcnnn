@@ -63,6 +63,7 @@ import {
   User as UserIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ModalExcluirColaborador } from '@/components/ModalExcluirColaborador'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
@@ -118,6 +119,9 @@ export default function DetalheOnboarding() {
   const [abaAtiva, setAbaAtiva] = useState<'etapas' | 'auditoria'>('etapas')
   const [logsAuditoria, setLogsAuditoria] = useState<LogAuditoria[]>([])
   const [loadingLogs, setLoadingLogs] = useState(false)
+
+  // Modal de exclusão do colaborador
+  const [modalExcluirOpen, setModalExcluirOpen] = useState(false)
 
   // Estado para fluxo "Não Apto" na Avaliação
   const [faseRetornoId, setFaseRetornoId] = useState<string>('')
@@ -998,12 +1002,29 @@ export default function DetalheOnboarding() {
           </Link>
         </Button>
 
-        {prazoInfo.isAtrasado && (
-          <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200 text-xs font-bold flex items-center gap-1">
-            <Flame className="w-3.5 h-3.5" />
-            Atrasado ({Math.abs(prazoInfo.diasRestantes)} dias além do limite)
-          </Badge>
-        )}
+        <div className="flex items-center gap-2">
+          {prazoInfo.isAtrasado && (
+            <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200 text-xs font-bold flex items-center gap-1">
+              <Flame className="w-3.5 h-3.5" />
+              Atrasado ({Math.abs(prazoInfo.diasRestantes)} dias além do limite)
+            </Badge>
+          )}
+
+          {/* Botão de Excluir Colaborador (Exclusivo RH / Admin) */}
+          {(isAdmin || isRH) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setModalExcluirOpen(true)}
+              className="border-red-200 text-red-600 hover:text-red-700 hover:bg-red-50 font-semibold text-xs h-8 gap-1.5"
+              title="Excluir este colaborador e todos os registros vinculados"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Excluir Colaborador</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Banner / Card do Link Público do Colaborador */}
@@ -3269,6 +3290,20 @@ export default function DetalheOnboarding() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Exclusão Forte em Cascata do Colaborador */}
+      {onboarding && (
+        <ModalExcluirColaborador
+          open={modalExcluirOpen}
+          onOpenChange={setModalExcluirOpen}
+          colaboradorNome={onboarding.colaborador_nome}
+          colaboradorEmail={onboarding.colaborador_email}
+          onboardingId={onboarding.id}
+          onSucesso={() => {
+            navigate('/colaboradores')
+          }}
+        />
       )}
 
       {/* Modal: Adicionar Item (Etapa 1 ou Etapa 2) */}

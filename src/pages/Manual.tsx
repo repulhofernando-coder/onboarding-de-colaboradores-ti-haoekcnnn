@@ -690,7 +690,7 @@ export default function Manual() {
           </div>
 
           {/* SEÇÃO 8 */}
-          <div>
+          <div className="mb-8">
             <div className="flex items-center gap-2.5 mb-3 border-b border-gray-200 pb-2">
               <div className="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
                 8
@@ -713,18 +713,71 @@ export default function Manual() {
               </p>
             </div>
           </div>
+
+          {/* SEÇÃO 9 */}
+          <div>
+            <div className="flex items-center gap-2.5 mb-3 border-b border-gray-200 pb-2">
+              <div className="w-7 h-7 rounded-lg bg-red-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                9
+              </div>
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+                SEÇÃO 9 — Exclusão de Colaboradores e Cascata Completa
+              </h2>
+            </div>
+            <div className="space-y-2.5 text-xs sm:text-sm text-gray-700 leading-relaxed">
+              <p>
+                Caso um colaborador desista da vaga antes ou durante o processo, ou o RH crie um
+                registro com dados incorretos, o sistema dispõe de rotina oficial de{' '}
+                <strong>exclusão definitiva em cascata</strong>.
+              </p>
+              <div className="p-3 bg-red-50/70 border border-red-200 rounded-lg space-y-1.5 text-xs text-red-950">
+                <p>
+                  <strong>Quem tem permissão:</strong> Exclusivo para perfis{' '}
+                  <span className="font-bold">Administrador</span> e{' '}
+                  <span className="font-bold">RH</span>. Usuários com perfil de{' '}
+                  <em>Gestão (gestor)</em> têm acesso estritamente somente-leitura e não visualizam
+                  os botões de exclusão.
+                </p>
+                <p>
+                  <strong>Onde acionar:</strong> Pelo ícone de lixeira no card do colaborador na
+                  página <code>/colaboradores</code> ou pelo botão &quot;Excluir Colaborador&quot;
+                  no cabeçalho da página de detalhe do colaborador (<code>/colaboradores/:id</code>
+                  ).
+                </p>
+                <p>
+                  <strong>Exclusão em cascata completa:</strong> Ao confirmar, o servidor remove em
+                  transação atômica todos os onboardings do colaborador, todas as tarefas e
+                  atividades, confirmações de leitura do portal público e avaliações. O link público
+                  (token de acesso) é imediatamente invalidado, impedindo qualquer acesso futuro
+                  pelo colaborador. Usuários de acesso ao sistema (tabela <code>users</code>) são
+                  preservados.
+                </p>
+                <p>
+                  <strong>Confirmação de segurança:</strong> Modal com resumo detalhado de todas as
+                  contagens que serão apagadas + exigência de digitação do{' '}
+                  <strong>nome exato do colaborador</strong> para habilitar o botão de confirmação.
+                </p>
+                <p>
+                  <strong>Motivo e Auditoria:</strong> Campo opcional para informar o motivo (ex.:
+                  &quot;Desistiu da vaga&quot;, &quot;Dados incorretos&quot;). A operação é gravada
+                  de forma permanente no <em>Histórico & Auditoria</em> e na tela de <em>Logs</em>,
+                  registrando executor, horário, motivo e resumo das quantidades excluídas.
+                </p>
+              </div>
+            </div>
+          </div>
         </section>
 
         {/* ========================================================= */}
-        {/* SEÇÃO 9 — Checklist rápido de homologação */}
+        {/* SEÇÃO 10 — Checklist rápido de homologação */}
         {/* ========================================================= */}
         <section className="mb-10 avoid-break page-break-before">
           <div className="flex items-center gap-2.5 mb-4 border-b border-gray-200 pb-2">
             <div className="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
-              9
+              10
             </div>
             <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
-              SEÇÃO 9 — Checklist rápido de homologação
+              SEÇÃO 10 — Checklist rápido de homologação
             </h2>
           </div>
 
@@ -747,7 +800,8 @@ export default function Manual() {
               'Registrar "Não apto" → escolher fase de retorno e conferir o status "Em acompanhamento";',
               'Exportar logs em CSV;',
               'Editar itens modelo do checklist na aba Etapa 1 de Modelos de Tarefas;',
-              'Testar acesso cruzado: gestor de outra área vê, mas não consegue agir.',
+              'Testar acesso cruzado: gestor de outra área vê, mas não consegue agir;',
+              'Exclusão de colaborador: conferir que gestor não vê o botão, RH/Admin abrem modal com resumo, exigem nome, aceitam motivo opcional e apagam em cascata sem deixar órfãos.',
             ].map((item, idx) => (
               <div
                 key={idx}

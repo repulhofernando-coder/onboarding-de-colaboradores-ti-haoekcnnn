@@ -14,11 +14,15 @@ import {
   Calendar,
   Briefcase,
   CheckCircle2,
+  Trash2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { useAuth } from '@/contexts/AuthContext'
+import { ModalExcluirColaborador } from '@/components/ModalExcluirColaborador'
+import { toast } from 'sonner'
 
 interface ColaboradorAgregado {
   nome: string
@@ -30,9 +34,20 @@ interface ColaboradorAgregado {
 }
 
 export default function Colaboradores() {
+  const { isAdmin, isRH } = useAuth()
+  const podeExcluir = isAdmin || isRH
+
   const [onboardings, setOnboardings] = useState<Onboarding[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+
+  // Estado do modal de exclusão
+  const [modalExcluirOpen, setModalExcluirOpen] = useState(false)
+  const [colaboradorParaExcluir, setColaboradorParaExcluir] = useState<{
+    nome: string
+    email?: string
+    onboardingId?: string
+  } | null>(null)
 
   const fetchOnboardings = async () => {
     try {
@@ -210,25 +225,76 @@ export default function Colaboradores() {
                     {status.nome}
                   </span>
 
-                  <Button
-                    asChild
-                    size="sm"
-                    className="h-8 text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white rounded-lg"
-                  >
-                    <Link
-                      to={`/colaboradores/${onb.id}`}
-                      className="inline-flex items-center gap-1"
+                  <div className="flex items-center gap-1.5">
+                    {podeExcluir && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setColaboradorParaExcluir({
+                            nome: item.nome,
+                            email: item.email,
+                            onboardingId: onb.id,
+                          })
+                          setModalExcluirOpen(true)
+                        }}
+                        className="h-8 px-2 text-xs font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title={`Excluir colaborador ${item.nome} e seus dados`}
+                        aria-label={`Excluir colaborador ${item.nome}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+
+                    <Button
+                      asChild
+                      size="sm"
+                      className="h-8 text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white rounded-lg"
                     >
-                      <span>Abrir Onboarding</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </Link>
-                  </Button>
+                      <Link
+                        to={`/colaboradores/${onb.id}`}
+                        className="inline-flex items-center gap-1"
+                      >
+                        <span>Abrir Onboarding</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </Link>
+                    </Button>
+                  </div>
                 </div>
               </div>
             )
           })
         )}
       </div>
+
+      {/* Modal de Exclusão Forte em Cascata */}
+      {colaboradorParaExcluir && (
+        <ModalExcluirColaborador
+          open={modalExcluirOpen}
+          onOpenChange={(aberto) => {
+            setModalExcluirOpen(aberto)
+            if (!aberto) setColaboradorParaExcluir(null)
+          }}
+          colaboradorNome={colaboradorParaExcluir.nome}
+          colaboradorEmail={colaboradorParaExcluir.email}
+          onboardingId={colaboradorParaExcluir.onboardingId}
+          onSucesso={(res) => {
+            // Atualiza estado local imediatamente sem precisar recarregar a página
+            setOnboardings((prev) =>
+              prev.filter(
+                (o) =>
+                  o.colaborador_nome.trim().toLowerCase() !== res.colaboradorNome.toLowerCase() &&
+                  (!colaboradorParaExcluir.email ||
+                    o.colaborador_email.trim().toLowerCase() !==
+                      colaboradorParaExcluir.email.toLowerCase()),
+              ),
+            )
+            // Também sincroniza com o backend
+            fetchOnboardings()
+          }}
+        />
+      )}
     </div>
   )
 }

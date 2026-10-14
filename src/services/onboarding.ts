@@ -1004,6 +1004,82 @@ export const onboardingService = {
   async delete(id: string): Promise<boolean> {
     return pb.collection('onboardings').delete(id)
   },
+
+  /**
+   * Obtém o resumo dos itens em cascata que serão removidos ao excluir o colaborador
+   */
+  async getResumoExclusaoColaborador(params: {
+    nome?: string
+    email?: string
+    onboardingId?: string
+  }): Promise<{
+    colaboradorNome: string
+    colaboradorEmail: string
+    totalOnboardings: number
+    onboardingIds: string[]
+    tarefasCount: number
+    confirmacoesCount: number
+    avaliacoesCount: number
+    tokensCount: number
+  }> {
+    const q = new URLSearchParams()
+    if (params.nome) q.set('nome', params.nome)
+    if (params.email) q.set('email', params.email)
+    if (params.onboardingId) q.set('onboardingId', params.onboardingId)
+
+    return pb.send<{
+      colaboradorNome: string
+      colaboradorEmail: string
+      totalOnboardings: number
+      onboardingIds: string[]
+      tarefasCount: number
+      confirmacoesCount: number
+      avaliacoesCount: number
+      tokensCount: number
+    }>(`/backend/v1/colaborador-resumo-exclusao?${q.toString()}`, {
+      method: 'GET',
+    })
+  },
+
+  /**
+   * Executa a exclusão forte em cascata do colaborador e seus vínculos
+   */
+  async excluirColaboradorEmCascata(params: {
+    colaboradorNome: string
+    colaboradorEmail?: string
+    onboardingId?: string
+    nomeConfirmacao: string
+    motivo?: string
+  }): Promise<{
+    success: boolean
+    colaboradorNome: string
+    totalOnboardings: number
+    totalTarefas: number
+    totalConfirmacoes: number
+    totalAvaliacoes: number
+    motivo: string | null
+    message: string
+  }> {
+    return pb.send<{
+      success: boolean
+      colaboradorNome: string
+      totalOnboardings: number
+      totalTarefas: number
+      totalConfirmacoes: number
+      totalAvaliacoes: number
+      motivo: string | null
+      message: string
+    }>('/backend/v1/excluir-colaborador', {
+      method: 'POST',
+      body: {
+        colaboradorNome: params.colaboradorNome,
+        colaboradorEmail: params.colaboradorEmail || '',
+        onboardingId: params.onboardingId || '',
+        nomeConfirmacao: params.nomeConfirmacao,
+        motivo: params.motivo || '',
+      },
+    })
+  },
 }
 
 export const tarefaService = {
