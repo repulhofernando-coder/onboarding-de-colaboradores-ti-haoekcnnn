@@ -850,8 +850,8 @@ export default function Manual() {
               <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-lg space-y-2 text-xs text-blue-950">
                 <p>
                   <strong>1. Cadastro Simples (RH / Admin):</strong> Ao cadastrar um candidato que
-                  passou da 1ª fase, são preenchidos apenas <em>Nome</em>, <em>E-mail</em>,{' '}
-                  <em>Cargo Pretendido</em> e <em>Área / Setor</em>.
+                  passou da 1ª fase de entrevista, são preenchidos apenas <em>Nome</em>,{' '}
+                  <em>E-mail</em>, <em>Cargo Pretendido</em> e <em>Área / Setor</em>.
                 </p>
                 <p>
                   <strong>2. Vínculo Automático do Questionário:</strong> O sistema pré-seleciona a
@@ -878,26 +878,52 @@ export default function Manual() {
                   resumo dos acertos, percentual e sinalização da régua.
                 </p>
                 <p>
-                  <strong>6. Decisão Soberana do Gestor da Área:</strong> Abaixo da régua do teste,
-                  o sistema exibe o badge vermelho <em>&quot;Reprovado no teste&quot;</em>, mas a
-                  decisão final cabe exclusivamente ao <strong>Gestor da Área</strong> (o RH apenas
-                  visualiza). O gestor avalia o percentual como insumo e clica em{' '}
-                  <strong>&quot;Aprovado&quot;</strong> ou <strong>&quot;Reprovado&quot;</strong> no
-                  cartão.
+                  <strong>6. Avaliação Técnica do Gestor da Área (Aprovar / Reprovar):</strong> A
+                  decisão técnica de perfil cabe exclusivamente ao <strong>Gestor da Área</strong>.
+                  Ao clicar em <em>&quot;Aprovar Perfil&quot;</em>, o candidato <strong>NÃO</strong>{' '}
+                  é convertido direto em colaborador: seu status avança para a fase intermediária{' '}
+                  <span className="font-semibold text-sky-800 bg-sky-100 px-1.5 py-0.5 rounded">
+                    &quot;Aprovado pelo Gestor — Aguardando RH&quot;
+                  </span>
+                  . Caso reprovado pelo gestor, o status vira <em>&quot;Reprovado&quot;</em> e o
+                  link morre.
                 </p>
                 <p>
-                  <strong>7. Conversão em Colaborador + Início do Onboarding:</strong> Ao clicar em
-                  Aprovado, o botão <em>&quot;Converter em Colaborador&quot;</em> abre o formulário
-                  com os dados pré-preenchidos do candidato, solicitando apenas a{' '}
-                  <em>Data de Início</em> e o <em>Gestor Responsável de TI</em>. O sistema cria o
-                  colaborador e o onboarding em transação, mantendo o cartão no status{' '}
-                  <em>&quot;Convertido em colaborador&quot;</em> com link direto para o novo
-                  Onboarding.
+                  <strong>7. Fase Intermediária de Validação e Contato pelo RH:</strong> Nesta
+                  etapa, o candidato é destacado na fila do RH para contato prévio (alinhamento
+                  salarial, disponibilidade e data de início). As ações são{' '}
+                  <strong>exclusivas de RH e Admin</strong> (gestores visualizam apenas o status de
+                  acompanhamento e não podem formalizar):
+                </p>
+                <ul className="list-disc pl-5 space-y-1 text-blue-900">
+                  <li>
+                    <strong>Formalizar Contratação:</strong> Abre o modal de contratação para
+                    informar a <em>Data de Início</em> e o <em>Gestor Responsável de TI</em>. Ao
+                    confirmar, cria o colaborador oficial, inicia o Onboarding de 15 dias com todas
+                    as tarefas e o status do candidato vira{' '}
+                    <em>&quot;Convertido em colaborador&quot;</em>.
+                  </li>
+                  <li>
+                    <strong>Registrar Desistência:</strong> Caso o candidato recuse a proposta ou
+                    desista da oportunidade. Motivo opcional gravado no histórico, status vira{' '}
+                    <em>&quot;Desistência registrada&quot;</em> e o link público é cancelado.
+                  </li>
+                  <li>
+                    <strong>Reprovação pelo RH:</strong> Possibilidade de reprovar por critério
+                    administrativo próprio do RH (ex.: pretensão salarial incompatível ou falta de
+                    documentação). O motivo é exigido, registrado na auditoria e o link público é
+                    encerrado.
+                  </li>
+                </ul>
+                <p>
+                  <strong>8. Regra de Encerramento do Link Público:</strong> O link público da prova
+                  morre (token bloqueado com HTTP 403) em qualquer desfecho terminal que não seja a
+                  conversão (reprovação pelo gestor, reprovação pelo RH ou desistência).
                 </p>
                 <p>
-                  <strong>8. Encerramento de Links:</strong> Para candidatos reprovados, o link
-                  público é encerrado imediatamente e o registro permanece gravado para histórico e
-                  auditoria.
+                  <strong>9. Rastro Completo & Auditoria:</strong> Todas as decisões (aprovação
+                  técnica do gestor, formalização do RH, desistência e reprovações) geram registros
+                  permanentes no <em>Histórico & Auditoria</em> com autor, papel, horário e motivos.
                 </p>
               </div>
             </div>
@@ -946,8 +972,12 @@ export default function Manual() {
               'Copiar link público da prova (/candidato/prova/:token) → status muda para "Prova enviada";',
               'Candidato responde as questões e submete → verificar bloqueio de segunda tentativa (sem reteste) e mensagem sem nota;',
               'Conferir notificação de conclusão da prova e insumo no cartão do candidato;',
-              'Gestor da área decide "Aprovado" ou "Reprovado" com motivo opcional;',
-              'Converter candidato aprovado em colaborador informando data de início e gestor → verificar criação do onboarding e link no cartão.',
+              'Gestor da área decide "Aprovar Perfil" ou "Reprovar" com motivo opcional;',
+              'Aprovação do gestor muda status para "Aprovado pelo Gestor — Aguardando RH" sem abrir conversão direta;',
+              'Gestor NÃO visualiza os botões de formalização do RH;',
+              'RH visualiza o cartão destacado na fila "Aguardando RH" com ações exclusivas;',
+              'RH formaliza contratação com data de início e gestor → cria colaborador e onboarding completo;',
+              'RH registra desistência ou reprovação própria com motivo → link público é invalidado e auditoria gravada.',
             ].map((item, idx) => (
               <div
                 key={idx}

@@ -1679,6 +1679,50 @@ export const candidatoService = {
     return res
   },
 
+  async registrarDesistencia(params: {
+    candidatoId: string
+    motivo?: string
+  }): Promise<{ success: boolean; message: string; candidato: CandidatoModel }> {
+    const user = pb.authStore.record
+    const res = await pb.send<{
+      success: boolean
+      message: string
+      candidato: CandidatoModel
+    }>('/backend/v1/candidatos/desistencia', {
+      method: 'POST',
+      body: {
+        candidatoId: params.candidatoId,
+        motivo: params.motivo || '',
+        usuarioId: user?.id || '',
+        usuarioNome: user?.name || user?.email || 'RH',
+        usuarioRole: user?.role || 'rh',
+      },
+    })
+    return res
+  },
+
+  async reprovarPeloRH(params: {
+    candidatoId: string
+    motivo?: string
+  }): Promise<{ success: boolean; message: string; candidato: CandidatoModel }> {
+    const user = pb.authStore.record
+    const res = await pb.send<{
+      success: boolean
+      message: string
+      candidato: CandidatoModel
+    }>('/backend/v1/candidatos/reprovar-rh', {
+      method: 'POST',
+      body: {
+        candidatoId: params.candidatoId,
+        motivo: params.motivo || '',
+        usuarioId: user?.id || '',
+        usuarioNome: user?.name || user?.email || 'RH',
+        usuarioRole: user?.role || 'rh',
+      },
+    })
+    return res
+  },
+
   async converterEmColaborador(params: {
     candidatoId: string
     dataInicio: string

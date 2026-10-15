@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-15T18:13:21.159Z",
+  "generatedAt": "2026-10-15T18:40:06.354Z",
   "collections": [
     {
       "name": "users",
@@ -1390,8 +1390,10 @@
             "pre_selecionado",
             "prova_enviada",
             "prova_concluida",
+            "aprovado_aguardando_rh",
             "aprovado",
             "reprovado",
+            "desistiu",
             "convertido"
           ]
         },
@@ -1490,6 +1492,25 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "motivo_desistencia",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "rh_responsavel",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "data_formalizacao_rh",
+          "type": "date",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [

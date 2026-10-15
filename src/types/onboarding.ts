@@ -16,8 +16,10 @@ export type CandidatoStatus =
   | 'pre_selecionado'
   | 'prova_enviada'
   | 'prova_concluida'
+  | 'aprovado_aguardando_rh'
   | 'aprovado'
   | 'reprovado'
+  | 'desistiu'
   | 'convertido'
 
 export type TarefaTipo = 'video' | 'manual'
@@ -524,11 +526,15 @@ export interface CandidatoModel extends RecordModel {
   decidido_por?: string
   data_decisao?: string
   motivo_reprovacao?: string
+  motivo_desistencia?: string
+  rh_responsavel?: string
+  data_formalizacao_rh?: string
   criado_por?: string
   colaborador_id?: string
   expand?: {
     questionario_id?: QuestionarioModel
     decidido_por?: User
+    rh_responsavel?: User
     criado_por?: User
     colaborador_id?: Onboarding
     tentativa_id?: TesteTentativa
@@ -558,6 +564,11 @@ export const CANDIDATO_STATUS_INFO: Record<
     corBg: 'bg-amber-50 text-amber-700 border-amber-200',
     corDot: 'bg-amber-500',
   },
+  aprovado_aguardando_rh: {
+    nome: 'Aprovado pelo Gestor — Aguardando RH',
+    corBg: 'bg-sky-50 text-sky-800 border-sky-300',
+    corDot: 'bg-sky-500',
+  },
   aprovado: {
     nome: 'Aprovado',
     corBg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -567,6 +578,11 @@ export const CANDIDATO_STATUS_INFO: Record<
     nome: 'Reprovado',
     corBg: 'bg-red-50 text-red-700 border-red-200',
     corDot: 'bg-red-500',
+  },
+  desistiu: {
+    nome: 'Desistência registrada',
+    corBg: 'bg-stone-100 text-stone-700 border-stone-300',
+    corDot: 'bg-stone-500',
   },
   convertido: {
     nome: 'Convertido em colaborador',

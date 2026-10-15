@@ -90,7 +90,19 @@ export default function PreSelecionados() {
   const [motivoReprovacao, setMotivoReprovacao] = useState('')
   const [salvandoDecisao, setSalvandoDecisao] = useState(false)
 
-  // Modal Conversão em Colaborador + Onboarding
+  // Modal Desistência do Candidato (RH / Admin)
+  const [modalDesistenciaOpen, setModalDesistenciaOpen] = useState(false)
+  const [candidatoDesistencia, setCandidatoDesistencia] = useState<CandidatoModel | null>(null)
+  const [motivoDesistencia, setMotivoDesistencia] = useState('')
+  const [salvandoDesistencia, setSalvandoDesistencia] = useState(false)
+
+  // Modal Reprovação pelo RH (critério próprio / contato)
+  const [modalReprovarRhOpen, setModalReprovarRhOpen] = useState(false)
+  const [candidatoReprovarRh, setCandidatoReprovarRh] = useState<CandidatoModel | null>(null)
+  const [motivoReprovacaoRh, setMotivoReprovacaoRh] = useState('')
+  const [salvandoReprovacaoRh, setSalvandoReprovacaoRh] = useState(false)
+
+  // Modal Formalização de Contratação + Onboarding (RH / Admin)
   const [modalConverterOpen, setModalConverterOpen] = useState(false)
   const [candidatoConverter, setCandidatoConverter] = useState<CandidatoModel | null>(null)
   const [dataInicioOnboarding, setDataInicioOnboarding] = useState(() => {
@@ -312,7 +324,71 @@ export default function PreSelecionados() {
     }
   }
 
-  // Abertura do Modal de Conversão
+  // Abertura do Modal de Desistência (RH / Admin)
+  const abrirModalDesistencia = (candidato: CandidatoModel) => {
+    setCandidatoDesistencia(candidato)
+    setMotivoDesistencia('')
+    setModalDesistenciaOpen(true)
+  }
+
+  const handleConfirmarDesistencia = async () => {
+    if (!candidatoDesistencia) return
+
+    try {
+      setSalvandoDesistencia(true)
+      const res = await candidatoService.registrarDesistencia({
+        candidatoId: candidatoDesistencia.id,
+        motivo: motivoDesistencia,
+      })
+
+      setCandidatos((prev) =>
+        prev.map((c) => (c.id === candidatoDesistencia.id ? res.candidato : c)),
+      )
+      toast.success(res.message || 'Desistência registrada com sucesso.')
+      setModalDesistenciaOpen(false)
+      setCandidatoDesistencia(null)
+    } catch (err: unknown) {
+      console.error('Erro ao registrar desistência:', err)
+      const msg = err instanceof Error ? err.message : 'Falha ao registrar desistência.'
+      toast.error(msg)
+    } finally {
+      setSalvandoDesistencia(false)
+    }
+  }
+
+  // Abertura do Modal de Reprovação pelo RH (RH / Admin)
+  const abrirModalReprovarRh = (candidato: CandidatoModel) => {
+    setCandidatoReprovarRh(candidato)
+    setMotivoReprovacaoRh('')
+    setModalReprovarRhOpen(true)
+  }
+
+  const handleConfirmarReprovarRh = async () => {
+    if (!candidatoReprovarRh) return
+
+    try {
+      setSalvandoReprovacaoRh(true)
+      const res = await candidatoService.reprovarPeloRH({
+        candidatoId: candidatoReprovarRh.id,
+        motivo: motivoReprovacaoRh,
+      })
+
+      setCandidatos((prev) =>
+        prev.map((c) => (c.id === candidatoReprovarRh.id ? res.candidato : c)),
+      )
+      toast.success(res.message || 'Candidato reprovado pelo RH com sucesso.')
+      setModalReprovarRhOpen(false)
+      setCandidatoReprovarRh(null)
+    } catch (err: unknown) {
+      console.error('Erro ao reprovar candidato pelo RH:', err)
+      const msg = err instanceof Error ? err.message : 'Falha ao reprovar candidato.'
+      toast.error(msg)
+    } finally {
+      setSalvandoReprovacaoRh(false)
+    }
+  }
+
+  // Abertura do Modal de Conversão (Formalização RH / Admin)
   const abrirModalConversao = (candidato: CandidatoModel) => {
     setCandidatoConverter(candidato)
     setDataInicioOnboarding(new Date().toISOString().split('T')[0])
@@ -343,7 +419,7 @@ export default function PreSelecionados() {
       })
 
       setCandidatos((prev) => prev.map((c) => (c.id === candidatoConverter.id ? res.candidato : c)))
-      toast.success('Colaborador convertido e Onboarding iniciado com sucesso!')
+      toast.success('Contratação formalizada e Onboarding iniciado com sucesso!')
       setModalConverterOpen(false)
       setCandidatoConverter(null)
     } catch (err: unknown) {
@@ -434,52 +510,207 @@ export default function PreSelecionados() {
         )}
       </div>
 
-      {/* Barra de Filtros e Busca */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200/90 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
-          <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <Input
-              placeholder="Buscar por nome, e-mail ou cargo..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 h-10 border-gray-300 text-sm focus-visible:ring-brand-500"
-            />
-          </div>
+      {/* Abas Rápidas de Fila para o RH & Barra de Filtros */}
+      <div className="space-y-3">
+        {/* Pílulas de Atalho / Fila */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setFiltroStatus('todos')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+              filtroStatus === 'todos'
+                ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            Todos ({candidatos.length})
+          </button>
 
-          <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-            <SelectTrigger className="h-10 border-gray-300 text-xs w-full sm:w-48 bg-white">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos os status</SelectItem>
-              <SelectItem value="pre_selecionado">Pré-selecionado</SelectItem>
-              <SelectItem value="prova_enviada">Prova enviada</SelectItem>
-              <SelectItem value="prova_concluida">Prova concluída</SelectItem>
-              <SelectItem value="aprovado">Aprovado</SelectItem>
-              <SelectItem value="reprovado">Reprovado</SelectItem>
-              <SelectItem value="convertido">Convertido</SelectItem>
-            </SelectContent>
-          </Select>
+          <button
+            type="button"
+            onClick={() => setFiltroStatus('aprovado_aguardando_rh')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border flex items-center gap-1.5 ${
+              filtroStatus === 'aprovado_aguardando_rh'
+                ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                : 'bg-sky-50 text-sky-800 border-sky-200 hover:bg-sky-100/70'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-sky-500" />
+            <span>Aguardando RH</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                filtroStatus === 'aprovado_aguardando_rh'
+                  ? 'bg-sky-800 text-white'
+                  : 'bg-sky-200 text-sky-900'
+              }`}
+            >
+              {
+                candidatos.filter(
+                  (c) => c.status === 'aprovado_aguardando_rh' || c.status === 'aprovado',
+                ).length
+              }
+            </span>
+          </button>
 
-          <Select value={filtroSetor} onValueChange={setFiltroSetor}>
-            <SelectTrigger className="h-10 border-gray-300 text-xs w-full sm:w-48 bg-white">
-              <SelectValue placeholder="Área / Setor" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos os setores</SelectItem>
-              {setores.map((s) => (
-                <SelectItem key={s.id} value={s.chave || s.nome}>
-                  {s.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <button
+            type="button"
+            onClick={() => setFiltroStatus('prova_concluida')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border flex items-center gap-1.5 ${
+              filtroStatus === 'prova_concluida'
+                ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                : 'bg-white text-amber-800 border-amber-200 hover:bg-amber-50'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-amber-500" />
+            <span>Avaliação do Gestor</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                filtroStatus === 'prova_concluida'
+                  ? 'bg-amber-800 text-white'
+                  : 'bg-amber-100 text-amber-800'
+              }`}
+            >
+              {candidatos.filter((c) => c.status === 'prova_concluida').length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFiltroStatus('prova_enviada')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border flex items-center gap-1.5 ${
+              filtroStatus === 'prova_enviada'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                : 'bg-white text-blue-700 border-blue-200 hover:bg-blue-50'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-blue-500" />
+            <span>Prova em Andamento</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                filtroStatus === 'prova_enviada'
+                  ? 'bg-blue-800 text-white'
+                  : 'bg-blue-100 text-blue-800'
+              }`}
+            >
+              {candidatos.filter((c) => c.status === 'prova_enviada').length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFiltroStatus('convertido')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border flex items-center gap-1.5 ${
+              filtroStatus === 'convertido'
+                ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                : 'bg-white text-purple-700 border-purple-200 hover:bg-purple-50'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-purple-500" />
+            <span>Convertidos</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                filtroStatus === 'convertido'
+                  ? 'bg-purple-800 text-white'
+                  : 'bg-purple-100 text-purple-800'
+              }`}
+            >
+              {candidatos.filter((c) => c.status === 'convertido').length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFiltroStatus('desistiu')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border flex items-center gap-1.5 ${
+              filtroStatus === 'desistiu'
+                ? 'bg-stone-700 text-white border-stone-700 shadow-xs'
+                : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-stone-500" />
+            <span>Desistências</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                filtroStatus === 'desistiu'
+                  ? 'bg-stone-800 text-white'
+                  : 'bg-stone-100 text-stone-700'
+              }`}
+            >
+              {candidatos.filter((c) => c.status === 'desistiu').length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFiltroStatus('reprovado')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border flex items-center gap-1.5 ${
+              filtroStatus === 'reprovado'
+                ? 'bg-red-600 text-white border-red-600 shadow-xs'
+                : 'bg-white text-red-700 border-red-200 hover:bg-red-50'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-red-500" />
+            <span>Reprovados</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                filtroStatus === 'reprovado' ? 'bg-red-800 text-white' : 'bg-red-100 text-red-800'
+              }`}
+            >
+              {candidatos.filter((c) => c.status === 'reprovado').length}
+            </span>
+          </button>
         </div>
 
-        <span className="text-xs text-gray-500 font-medium shrink-0 text-right">
-          Total: {candidatosFiltrados.length} candidato(s)
-        </span>
+        {/* Barra de Filtros e Busca */}
+        <div className="bg-white p-4 rounded-xl border border-gray-200/90 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Input
+                placeholder="Buscar por nome, e-mail ou cargo..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 h-10 border-gray-300 text-sm focus-visible:ring-brand-500"
+              />
+            </div>
+
+            <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+              <SelectTrigger className="h-10 border-gray-300 text-xs w-full sm:w-60 bg-white">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os status</SelectItem>
+                <SelectItem value="pre_selecionado">Pré-selecionado</SelectItem>
+                <SelectItem value="prova_enviada">Prova enviada</SelectItem>
+                <SelectItem value="prova_concluida">Prova concluída (Aval. Gestor)</SelectItem>
+                <SelectItem value="aprovado_aguardando_rh">
+                  Aprovado pelo Gestor — Aguardando RH
+                </SelectItem>
+                <SelectItem value="reprovado">Reprovado</SelectItem>
+                <SelectItem value="desistiu">Desistência registrada</SelectItem>
+                <SelectItem value="convertido">Convertido em colaborador</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={filtroSetor} onValueChange={setFiltroSetor}>
+              <SelectTrigger className="h-10 border-gray-300 text-xs w-full sm:w-48 bg-white">
+                <SelectValue placeholder="Área / Setor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os setores</SelectItem>
+                {setores.map((s) => (
+                  <SelectItem key={s.id} value={s.chave || s.nome}>
+                    {s.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <span className="text-xs text-gray-500 font-medium shrink-0 text-right">
+            Total: {candidatosFiltrados.length} candidato(s)
+          </span>
+        </div>
       </div>
 
       {/* Grid de Cartões de Pré-selecionados */}
@@ -513,8 +744,10 @@ export default function PreSelecionados() {
 
             const provaRespondida =
               item.status === 'prova_concluida' ||
+              item.status === 'aprovado_aguardando_rh' ||
               item.status === 'aprovado' ||
               item.status === 'reprovado' ||
+              item.status === 'desistiu' ||
               item.status === 'convertido' ||
               Boolean(item.data_conclusao_prova)
 
@@ -523,15 +756,27 @@ export default function PreSelecionados() {
             const percentual = item.percentual_obtido ?? 0
             const passouRegua = percentual >= regua
 
-            // Apenas Gestor da área e Admin podem aprovar/reprovar candidatos
+            // 1. Gestor da área e Admin avaliam a prova técnica (aprovado -> vai para 'aprovado_aguardando_rh')
             const podeDecidir = (isGestao || isAdmin) && item.status === 'prova_concluida'
-            const podeConverter = (isAdmin || isRH || isGestao) && item.status === 'aprovado'
+
+            // 2. Fase intermediária: Apenas RH e Admin podem agir em candidatos aprovados pelo gestor
+            const estaAguardandoRH =
+              item.status === 'aprovado_aguardando_rh' || item.status === 'aprovado'
+            const podeFormalizarRH = (isAdmin || isRH) && estaAguardandoRH
+
+            // Gestor NÃO pode formalizar contratação (ação exclusiva de RH/Admin)
             const podeExcluir = isAdmin || isRH
+
+            const cardDestacadoRH = (isRH || isAdmin) && item.status === 'aprovado_aguardando_rh'
 
             return (
               <div
                 key={item.id}
-                className="bg-white rounded-xl border border-gray-200/90 shadow-sm p-5 flex flex-col justify-between hover:shadow-md transition-shadow group relative"
+                className={`rounded-xl border p-5 flex flex-col justify-between hover:shadow-md transition-all group relative ${
+                  cardDestacadoRH
+                    ? 'bg-gradient-to-b from-sky-50/50 to-white border-sky-300 ring-2 ring-sky-400/20 shadow-sm'
+                    : 'bg-white border-gray-200/90 shadow-sm'
+                }`}
               >
                 <div className="space-y-3.5">
                   {/* Topo do Card: Nome, Cargo e Badge do Setor */}
@@ -628,21 +873,60 @@ export default function PreSelecionados() {
                     </div>
                   )}
 
-                  {/* Informações de Decisão do Gestor */}
-                  {item.status === 'aprovado' && (
-                    <div className="p-2 rounded bg-emerald-50 text-[11px] text-emerald-800 border border-emerald-200 flex items-center justify-between">
-                      <span>Aprovado pelo Gestor</span>
-                      {item.data_decisao && <span>em {formatShortDate(item.data_decisao)}</span>}
+                  {/* Informações de Status e Rastreio */}
+                  {(item.status === 'aprovado_aguardando_rh' || item.status === 'aprovado') && (
+                    <div className="p-2.5 rounded-lg bg-sky-50 text-xs text-sky-900 border border-sky-200 space-y-1">
+                      <div className="flex items-center justify-between font-semibold">
+                        <span className="flex items-center gap-1 text-sky-800">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-sky-600" />
+                          Aprovado na Avaliação Técnica
+                        </span>
+                        {item.data_decisao && (
+                          <span className="text-[10px] text-sky-600 font-normal">
+                            {formatShortDate(item.data_decisao)}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-sky-700">
+                        {isRH || isAdmin
+                          ? 'Pendente de contato e formalização pelo RH antes da contratação.'
+                          : 'Aguardando formalização e contato pelo Recursos Humanos (RH).'}
+                      </p>
+                    </div>
+                  )}
+
+                  {item.status === 'desistiu' && (
+                    <div className="p-2.5 rounded-lg bg-stone-50 text-xs text-stone-800 border border-stone-200 space-y-1">
+                      <div className="font-semibold flex items-center justify-between">
+                        <span className="flex items-center gap-1 text-stone-700">
+                          <X className="w-3.5 h-3.5 text-stone-500" />
+                          Desistência Registrada
+                        </span>
+                        {item.data_formalizacao_rh && (
+                          <span className="text-[10px] text-stone-500 font-normal">
+                            {formatShortDate(item.data_formalizacao_rh)}
+                          </span>
+                        )}
+                      </div>
+                      {item.motivo_desistencia ? (
+                        <p className="text-[11px] text-stone-600 italic">
+                          &quot;{item.motivo_desistencia}&quot;
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-stone-500">
+                          Candidato declinou a vaga ou desistiu do processo.
+                        </p>
+                      )}
                     </div>
                   )}
 
                   {item.status === 'reprovado' && (
-                    <div className="p-2.5 rounded bg-red-50 text-xs text-red-800 border border-red-200 space-y-1">
+                    <div className="p-2.5 rounded-lg bg-red-50 text-xs text-red-800 border border-red-200 space-y-1">
                       <div className="font-semibold flex items-center justify-between">
-                        <span>Reprovado pelo Gestor</span>
-                        {item.data_decisao && (
-                          <span className="text-[10px] font-normal">
-                            em {formatShortDate(item.data_decisao)}
+                        <span>Reprovado</span>
+                        {(item.data_formalizacao_rh || item.data_decisao) && (
+                          <span className="text-[10px] font-normal text-red-600">
+                            em {formatShortDate(item.data_formalizacao_rh || item.data_decisao)}
                           </span>
                         )}
                       </div>
@@ -655,20 +939,23 @@ export default function PreSelecionados() {
                   )}
 
                   {item.status === 'convertido' && (
-                    <div className="p-2.5 rounded bg-purple-50 text-xs text-purple-900 border border-purple-200 space-y-1">
+                    <div className="p-2.5 rounded-lg bg-purple-50 text-xs text-purple-900 border border-purple-200 space-y-1">
                       <div className="font-semibold flex items-center justify-between">
-                        <span>Convertido em Colaborador</span>
+                        <span>Contratação Formalizada</span>
                         <CheckCircle2 className="w-3.5 h-3.5 text-purple-600" />
                       </div>
-                      {item.colaborador_id && (
-                        <Link
-                          to={`/colaboradores/${item.colaborador_id}`}
-                          className="text-[11px] text-purple-700 font-bold hover:underline inline-flex items-center gap-1"
-                        >
-                          <span>Acessar Onboarding</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </Link>
-                      )}
+                      <div className="flex items-center justify-between pt-0.5">
+                        <span className="text-[11px] text-purple-700">Colaborador ativo</span>
+                        {item.colaborador_id && (
+                          <Link
+                            to={`/colaboradores/${item.colaborador_id}`}
+                            className="text-[11px] text-purple-700 font-bold hover:underline inline-flex items-center gap-1"
+                          >
+                            <span>Acessar Onboarding</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </Link>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -684,28 +971,30 @@ export default function PreSelecionados() {
                     </span>
 
                     {/* Botão Copiar Link da Prova */}
-                    {item.status !== 'reprovado' && item.status !== 'convertido' && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleCopiarLink(item)}
-                        className="h-8 px-2.5 text-xs font-medium border-gray-300 hover:bg-gray-50 flex items-center gap-1.5 text-gray-700"
-                        title="Copiar link público da prova técnica para o candidato"
-                      >
-                        {copiadoId === item.id ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-emerald-600" />
-                            <span className="text-emerald-700 font-semibold">Copiado!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5 text-gray-500" />
-                            <span>Copiar Link</span>
-                          </>
-                        )}
-                      </Button>
-                    )}
+                    {item.status !== 'reprovado' &&
+                      item.status !== 'desistiu' &&
+                      item.status !== 'convertido' && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleCopiarLink(item)}
+                          className="h-8 px-2.5 text-xs font-medium border-gray-300 hover:bg-gray-50 flex items-center gap-1.5 text-gray-700"
+                          title="Copiar link público da prova técnica para o candidato"
+                        >
+                          {copiadoId === item.id ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              <span className="text-emerald-700 font-semibold">Copiado!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5 text-gray-500" />
+                              <span>Copiar Link</span>
+                            </>
+                          )}
+                        </Button>
+                      )}
 
                     {podeExcluir && item.status !== 'convertido' && (
                       <Button
@@ -724,7 +1013,7 @@ export default function PreSelecionados() {
                     )}
                   </div>
 
-                  {/* Botões de Decisão do Gestor */}
+                  {/* 1. Botões de Decisão Técnica do Gestor da Área */}
                   {podeDecidir && (
                     <div className="grid grid-cols-2 gap-2 pt-1 border-t border-gray-100">
                       <Button
@@ -734,7 +1023,7 @@ export default function PreSelecionados() {
                         className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-xs"
                       >
                         <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                        Aprovado
+                        Aprovar Perfil
                       </Button>
                       <Button
                         type="button"
@@ -744,29 +1033,64 @@ export default function PreSelecionados() {
                         className="h-8 text-xs font-bold text-red-600 hover:bg-red-50 border-red-200 rounded-lg"
                       >
                         <XCircle className="w-3.5 h-3.5 mr-1" />
-                        Reprovado
+                        Reprovar
                       </Button>
                     </div>
                   )}
 
-                  {/* Informação visual para o RH quando prova concluída aguardando gestor */}
+                  {/* Informação visual para o RH quando prova concluída aguardando parecer do gestor */}
                   {item.status === 'prova_concluida' && !podeDecidir && (
-                    <div className="text-[11px] text-gray-500 text-center py-1 bg-gray-50 rounded border border-gray-100 font-medium">
-                      Aguardando parecer final do Gestor da Área
+                    <div className="text-[11px] text-gray-500 text-center py-1.5 bg-gray-50 rounded-lg border border-gray-200 font-medium">
+                      Aguardando parecer técnico do Gestor da Área
                     </div>
                   )}
 
-                  {/* Botão de Conversão em Colaborador (quando aprovado) */}
-                  {podeConverter && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => abrirModalConversao(item)}
-                      className="w-full h-8 text-xs font-bold bg-brand-600 hover:bg-brand-700 text-white rounded-lg shadow-xs flex items-center justify-center gap-1.5"
-                    >
-                      <span>Converter em Colaborador</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </Button>
+                  {/* 2. Ações exclusivas de RH / Admin na fase intermediária: "Aprovado — Aguardando RH" */}
+                  {podeFormalizarRH && (
+                    <div className="pt-2 border-t border-sky-200/80 space-y-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => abrirModalConversao(item)}
+                        className="w-full h-8.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-xs flex items-center justify-center gap-1.5"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Formalizar Contratação</span>
+                        <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
+                      </Button>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => abrirModalDesistencia(item)}
+                          className="h-7.5 text-[11px] font-semibold text-stone-700 hover:bg-stone-100 border-stone-300 rounded-lg"
+                          title="Registrar que o candidato desistiu da vaga após a aprovação técnica"
+                        >
+                          <X className="w-3 h-3 mr-1 text-stone-500" />
+                          Desistência
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => abrirModalReprovarRh(item)}
+                          className="h-7.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 border-red-200 rounded-lg"
+                          title="Reprovar por critério do RH (pretensão salarial, contato, etc.)"
+                        >
+                          <XCircle className="w-3 h-3 mr-1 text-red-500" />
+                          Reprovar RH
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Visualização para Gestores durante a fase de validação do RH: Gestor NÃO pode formalizar */}
+                  {isGestao && !isAdmin && estaAguardandoRH && (
+                    <div className="text-[11px] text-sky-800 text-center py-2 bg-sky-50 rounded-lg border border-sky-200 font-medium">
+                      Aprovado por você. Contato e formalização em andamento pelo RH.
+                    </div>
                   )}
                 </div>
               </div>
@@ -1016,11 +1340,18 @@ export default function PreSelecionados() {
             )}
 
             {tipoDecisao === 'aprovado' && (
-              <p className="text-emerald-700 bg-emerald-50 p-2.5 rounded border border-emerald-200">
-                Ao aprovar, o cartão habilitará o botão{' '}
-                <strong>&quot;Converter em Colaborador&quot;</strong> para que o RH/Gestão inicie o
-                onboarding com a data de início e gestor responsável.
-              </p>
+              <div className="text-sky-900 bg-sky-50 p-3 rounded-lg border border-sky-200 space-y-1">
+                <p className="font-semibold flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-sky-600" />
+                  Próxima etapa: Validação e Contato pelo RH
+                </p>
+                <p className="text-[11px] text-sky-700 leading-relaxed">
+                  Ao aprovar o perfil técnico, o status do candidato mudará para{' '}
+                  <strong>&quot;Aprovado — Aguardando RH&quot;</strong>. O Recursos Humanos
+                  realizará o contato para formalização da proposta e coleta de dados antes do
+                  onboarding oficial.
+                </p>
+              </div>
             )}
           </div>
 
@@ -1046,8 +1377,131 @@ export default function PreSelecionados() {
               {salvandoDecisao
                 ? 'Gravando...'
                 : tipoDecisao === 'aprovado'
-                  ? 'Confirmar Aprovação'
+                  ? 'Confirmar Aprovação Técnica'
                   : 'Confirmar Reprovação'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL 2.1: Registrar Desistência do Candidato (RH / Admin)                  */}
+      {/* ========================================================================= */}
+      <Dialog open={modalDesistenciaOpen} onOpenChange={setModalDesistenciaOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-gray-900 flex items-center gap-2">
+              <X className="w-5 h-5 text-stone-600" />
+              <span>Registrar Desistência do Candidato</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            <p className="text-gray-600 leading-relaxed">
+              Você está registrando que <strong>{candidatoDesistencia?.nome}</strong> (
+              {candidatoDesistencia?.cargo_pretendido}) desistiu ou recusou a proposta da vaga.
+            </p>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1">
+                Motivo da Desistência (Opcional)
+              </label>
+              <textarea
+                rows={3}
+                placeholder="Ex.: Candidato aceitou outra proposta de emprego, indisponibilidade de horário, etc."
+                value={motivoDesistencia}
+                onChange={(e) => setMotivoDesistencia(e.target.value)}
+                className="w-full rounded-md border border-gray-300 p-2.5 text-xs focus:ring-1 focus:ring-brand-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="p-3 bg-stone-50 rounded-lg border border-stone-200 text-stone-700 space-y-1">
+              <p className="font-semibold">Consequências do registro:</p>
+              <ul className="list-disc pl-4 space-y-0.5 text-[11px] text-stone-600">
+                <li>O link público da prova é invalidado imediatamente.</li>
+                <li>
+                  O cartão é movido para o histórico de seleção (status &quot;Desistência&quot;).
+                </li>
+                <li>Um evento de auditoria com autor e data/hora é registrado.</li>
+              </ul>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setModalDesistenciaOpen(false)}
+              disabled={salvandoDesistencia}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmarDesistencia}
+              disabled={salvandoDesistencia}
+              className="bg-stone-700 hover:bg-stone-800 text-white font-semibold"
+            >
+              {salvandoDesistencia ? 'Registrando...' : 'Confirmar Desistência'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL 2.2: Reprovação pelo RH (Critério de Formalização)                    */}
+      {/* ========================================================================= */}
+      <Dialog open={modalReprovarRhOpen} onOpenChange={setModalReprovarRhOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-gray-900 flex items-center gap-2">
+              <XCircle className="w-5 h-5 text-red-600" />
+              <span>Reprovação pelo Recursos Humanos</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            <p className="text-gray-600 leading-relaxed">
+              Registrar reprovação do candidato <strong>{candidatoReprovarRh?.nome}</strong> por
+              critério próprio do RH mesmo após a aprovação técnica (ex.: pretensão salarial,
+              contato sem retorno ou documentação).
+            </p>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1">
+                Motivo da Reprovação pelo RH *
+              </label>
+              <textarea
+                rows={3}
+                placeholder="Ex.: Pretensão salarial incompatível com a faixa da vaga..."
+                value={motivoReprovacaoRh}
+                onChange={(e) => setMotivoReprovacaoRh(e.target.value)}
+                className="w-full rounded-md border border-gray-300 p-2.5 text-xs focus:ring-1 focus:ring-brand-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="p-3 bg-red-50 rounded-lg border border-red-200 text-red-800 text-[11px] leading-relaxed">
+              O link público da prova será encerrado imediatamente e a decisão será documentada no
+              Histórico & Auditoria com seu usuário e motivo.
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setModalReprovarRhOpen(false)}
+              disabled={salvandoReprovacaoRh}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmarReprovarRh}
+              disabled={salvandoReprovacaoRh}
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold"
+            >
+              {salvandoReprovacaoRh ? 'Gravando...' : 'Confirmar Reprovação RH'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1060,15 +1514,16 @@ export default function PreSelecionados() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-gray-900 flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-purple-600" />
-              <span>Converter Candidato em Colaborador</span>
+              <Sparkles className="w-5 h-5 text-emerald-600" />
+              <span>Formalizar Contratação & Iniciar Onboarding</span>
             </DialogTitle>
           </DialogHeader>
 
           <form onSubmit={handleConfirmarConversao} className="space-y-4 py-2">
             <p className="text-xs text-gray-600 leading-relaxed">
-              O candidato <strong>{candidatoConverter?.nome}</strong> foi aprovado no processo
-              seletivo e passará para o quadro oficial de colaboradores com onboarding de TI.
+              A contratação de <strong>{candidatoConverter?.nome}</strong> foi formalizada pelo RH.
+              Ao confirmar, o candidato passará para o quadro oficial de colaboradores e o processo
+              de Onboarding de TI será iniciado.
             </p>
 
             <div className="bg-gray-50 rounded-xl p-3 border border-gray-200 text-xs space-y-1.5">
@@ -1148,9 +1603,9 @@ export default function PreSelecionados() {
               <Button
                 type="submit"
                 disabled={convertendo || !dataInicioOnboarding || !gestorResponsavelId}
-                className="bg-brand-600 hover:bg-brand-700 text-white font-semibold"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
               >
-                {convertendo ? 'Convertendo...' : 'Iniciar Onboarding'}
+                {convertendo ? 'Formalizando...' : 'Formalizar e Iniciar Onboarding'}
               </Button>
             </DialogFooter>
           </form>

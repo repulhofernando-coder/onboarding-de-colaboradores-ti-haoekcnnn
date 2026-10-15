@@ -23,15 +23,15 @@ export function extractFieldErrors(error: unknown): FieldErrors {
 export function isNetworkError(error: unknown): boolean {
   if (!error) return false
   if (error instanceof ClientResponseError) {
-    return error.status === 0 || error.isAbort
+    return error.status === 0
   }
   if (error instanceof Error) {
     const msg = error.message.toLowerCase()
     return (
       msg.includes('network') ||
-      msg.includes('fetch') ||
       msg.includes('failed to fetch') ||
-      msg.includes('connection')
+      msg.includes('connection') ||
+      msg.includes('offline')
     )
   }
   return false

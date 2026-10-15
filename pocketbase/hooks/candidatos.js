@@ -30,11 +30,15 @@ routerAdd('GET', '/backend/v1/candidato/prova/publico', (e) => {
 
     const statusCandidato = candidato.getString('status') || 'pre_selecionado'
 
-    // O link público morre para candidato reprovado
-    if (statusCandidato === 'reprovado') {
+    // O link público morre em qualquer desfecho negativo ou terminal que não seja a realização da prova
+    if (statusCandidato === 'reprovado' || statusCandidato === 'desistiu') {
       return e.json(403, {
-        error: 'Este link de avaliação não está mais ativo.',
+        error:
+          statusCandidato === 'desistiu'
+            ? 'Processo seletivo encerrado (desistência registrada). Este link de avaliação não está mais ativo.'
+            : 'Este link de avaliação não está mais ativo.',
         reprovado: true,
+        desistiu: statusCandidato === 'desistiu',
       })
     }
 
@@ -42,6 +46,7 @@ routerAdd('GET', '/backend/v1/candidato/prova/publico', (e) => {
     if (
       statusCandidato === 'prova_concluida' ||
       statusCandidato === 'aprovado' ||
+      statusCandidato === 'aprovado_aguardando_rh' ||
       statusCandidato === 'convertido' ||
       candidato.getString('data_conclusao_prova')
     ) {
@@ -177,17 +182,19 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
       return e.json(404, { error: 'Candidato não encontrado para o token fornecido.' })
     }
 
-    // Link morre para reprovado
-    if (candidato.getString('status') === 'reprovado') {
+    const candStatus = candidato.getString('status')
+    // Link morre para reprovado ou desistência
+    if (candStatus === 'reprovado' || candStatus === 'desistiu') {
       return e.json(403, { error: 'Este link de avaliação não está mais ativo.' })
     }
 
     // REGRA DE OURO: SEM RETESTE — única tentativa
     if (
       candidato.getString('data_conclusao_prova') ||
-      candidato.getString('status') === 'prova_concluida' ||
-      candidato.getString('status') === 'aprovado' ||
-      candidato.getString('status') === 'convertido'
+      candStatus === 'prova_concluida' ||
+      candStatus === 'aprovado' ||
+      candStatus === 'aprovado_aguardando_rh' ||
+      candStatus === 'convertido'
     ) {
       return e.json(403, {
         error: 'Esta prova já foi respondida. Não são permitidas novas tentativas.',
@@ -449,7 +456,7 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
 
 // --------------------------------------------------------------------------------------
 // 3. POST /backend/v1/candidatos/decidir
-//    Decisão do Gestor (aprovado / reprovado)
+//    Decisão do Gestor (aprovado -> aprovado_aguardando_rh / reprovado)
 // --------------------------------------------------------------------------------------
 routerAdd('POST', '/backend/v1/candidatos/decidir', (e) => {
   try {
@@ -491,7 +498,9 @@ routerAdd('POST', '/backend/v1/candidatos/decidir', (e) => {
     }
 
     const agoraIso = new Date().toISOString()
-    candidato.set('status', decisao)
+    // Quando o gestor aprova, o status vira "aprovado_aguardando_rh"
+    const novoStatus = decisao === 'aprovado' ? 'aprovado_aguardando_rh' : 'reprovado'
+    candidato.set('status', novoStatus)
     candidato.set('decidido_por', usuarioId || null)
     candidato.set('data_decisao', agoraIso)
     if (decisao === 'reprovado' && motivo) {
@@ -516,12 +525,16 @@ routerAdd('POST', '/backend/v1/candidatos/decidir', (e) => {
       logRecord.set(
         'acao',
         decisao === 'aprovado'
-          ? 'Aprovação de Candidato Pré-selecionado'
-          : 'Reprovação de Candidato Pré-selecionado',
+          ? 'Aprovação Técnica do Gestor (Aguardando RH)'
+          : 'Reprovação de Candidato pelo Gestor',
       )
       logRecord.set(
         'detalhes',
-        `Decisão registrada por ${usuarioNome} (${usuarioRole}). Candidato: ${candNome} (${cargoCand} - ${setorCand}). Resultado: ${decisao.toUpperCase()}${motivo ? `. Motivo: ${motivo}` : ''}.`,
+        `Avaliação técnica registrada por ${usuarioNome} (${usuarioRole}). Candidato: ${candNome} (${cargoCand} - ${setorCand}). Resultado: ${
+          decisao === 'aprovado'
+            ? 'APROVADO PELO GESTOR (Encaminhado para formalização do RH)'
+            : 'REPROVADO'
+        }${motivo ? `. Motivo: ${motivo}` : ''}.`,
       )
       logRecord.set('fora_prazo', false)
       logRecord.set('destaque_prazo', '')
@@ -529,9 +542,11 @@ routerAdd('POST', '/backend/v1/candidatos/decidir', (e) => {
         candidato_id: candidato.id,
         candidato_nome: candNome,
         decisao: decisao,
+        status_novo: novoStatus,
         motivo: motivo,
         data_decisao: agoraIso,
         decidido_por: usuarioNome,
+        autor_role: usuarioRole,
       })
       app.save(logRecord)
     } catch (errLog) {
@@ -540,7 +555,10 @@ routerAdd('POST', '/backend/v1/candidatos/decidir', (e) => {
 
     return e.json(200, {
       success: true,
-      message: `Candidato ${decisao === 'aprovado' ? 'aprovado' : 'reprovado'} com sucesso.`,
+      message:
+        decisao === 'aprovado'
+          ? 'Candidato aprovado com sucesso! Encaminhado para formalização do RH.'
+          : 'Candidato reprovado com sucesso.',
       candidato: candidato,
     })
   } catch (err) {
@@ -550,8 +568,214 @@ routerAdd('POST', '/backend/v1/candidatos/decidir', (e) => {
 })
 
 // --------------------------------------------------------------------------------------
+// 3.1 POST /backend/v1/candidatos/desistencia
+//     Registro de desistência pelo RH / Admin
+// --------------------------------------------------------------------------------------
+routerAdd('POST', '/backend/v1/candidatos/desistencia', (e) => {
+  try {
+    const app = e.app || $app
+    const rawBody = toString(e.request.body) || '{}'
+    let data = {}
+    try {
+      data = JSON.parse(rawBody)
+    } catch (_) {
+      try {
+        data = e.requestInfo().body || {}
+      } catch (_) {
+        data = {}
+      }
+    }
+
+    const candidatoId = (data.candidatoId || '').trim()
+    const motivo = (data.motivo || '').trim()
+    const usuarioId = (data.usuarioId || '').trim()
+    const usuarioNome = (data.usuarioNome || '').trim()
+    const usuarioRole = (data.usuarioRole || '').trim().toLowerCase()
+
+    if (!candidatoId) {
+      return e.json(400, { error: 'ID do candidato é obrigatório.' })
+    }
+
+    // Ação exclusiva de RH e Admin
+    if (usuarioRole !== 'rh' && usuarioRole !== 'admin') {
+      return e.json(403, { error: 'Apenas RH ou Administrador podem registrar desistência.' })
+    }
+
+    let candidato = null
+    try {
+      candidato = app.findRecordById('candidatos', candidatoId)
+    } catch (_) {}
+
+    if (!candidato) {
+      return e.json(404, { error: 'Candidato não encontrado.' })
+    }
+
+    if (candidato.getString('status') === 'convertido') {
+      return e.json(400, { error: 'Candidato já convertido em colaborador.' })
+    }
+
+    const agoraIso = new Date().toISOString()
+    candidato.set('status', 'desistiu')
+    if (motivo) {
+      candidato.set('motivo_desistencia', motivo)
+    }
+    candidato.set('rh_responsavel', usuarioId || null)
+    candidato.set('data_formalizacao_rh', agoraIso)
+    app.save(candidato)
+
+    const candNome = candidato.getString('nome') || 'Candidato'
+    const cargoCand = candidato.getString('cargo_pretendido') || 'Cargo de TI'
+    const setorCand = candidato.getString('setor') || 'TI'
+
+    // Registrar log de auditoria
+    try {
+      const logsCol = app.findCollectionByNameOrId('logs_auditoria')
+      const logRecord = new Record(logsCol)
+      logRecord.set('onboarding_id', null)
+      logRecord.set('colaborador_nome', candNome)
+      logRecord.set('usuario_id', usuarioId || null)
+      logRecord.set('usuario_nome', usuarioNome || 'RH')
+      logRecord.set('usuario_role', usuarioRole || 'rh')
+      logRecord.set('gestor_nome', '')
+      logRecord.set('acao', 'Registro de Desistência do Candidato (RH)')
+      logRecord.set(
+        'detalhes',
+        `Desistência registrada por ${usuarioNome} (${usuarioRole}). Candidato: ${candNome} (${cargoCand} - ${setorCand})${
+          motivo ? `. Motivo: ${motivo}` : ''
+        }. O link da prova foi invalidado e o processo encerrado.`,
+      )
+      logRecord.set('fora_prazo', false)
+      logRecord.set('destaque_prazo', '')
+      logRecord.set('metadata', {
+        candidato_id: candidato.id,
+        candidato_nome: candNome,
+        motivo_desistencia: motivo,
+        registrado_por: usuarioNome,
+        autor_role: usuarioRole,
+        data: agoraIso,
+      })
+      app.save(logRecord)
+    } catch (errLog) {
+      console.error('[Candidatos Hook /desistencia] Erro ao gravar log:', errLog)
+    }
+
+    return e.json(200, {
+      success: true,
+      message: 'Desistência registrada com sucesso. Cartão arquivado no histórico.',
+      candidato: candidato,
+    })
+  } catch (err) {
+    console.error('[Candidatos Hook /desistencia] Erro:', err)
+    return e.json(500, { error: 'Erro ao registrar desistência do candidato.' })
+  }
+})
+
+// --------------------------------------------------------------------------------------
+// 3.2 POST /backend/v1/candidatos/reprovar-rh
+//     Reprovação com critério próprio pelo RH / Admin (ex.: pretensão salarial, contato)
+// --------------------------------------------------------------------------------------
+routerAdd('POST', '/backend/v1/candidatos/reprovar-rh', (e) => {
+  try {
+    const app = e.app || $app
+    const rawBody = toString(e.request.body) || '{}'
+    let data = {}
+    try {
+      data = JSON.parse(rawBody)
+    } catch (_) {
+      try {
+        data = e.requestInfo().body || {}
+      } catch (_) {
+        data = {}
+      }
+    }
+
+    const candidatoId = (data.candidatoId || '').trim()
+    const motivo = (data.motivo || '').trim()
+    const usuarioId = (data.usuarioId || '').trim()
+    const usuarioNome = (data.usuarioNome || '').trim()
+    const usuarioRole = (data.usuarioRole || '').trim().toLowerCase()
+
+    if (!candidatoId) {
+      return e.json(400, { error: 'ID do candidato é obrigatório.' })
+    }
+
+    // Ação exclusiva de RH e Admin
+    if (usuarioRole !== 'rh' && usuarioRole !== 'admin') {
+      return e.json(403, { error: 'Apenas RH ou Administrador podem reprovar nesta etapa.' })
+    }
+
+    let candidato = null
+    try {
+      candidato = app.findRecordById('candidatos', candidatoId)
+    } catch (_) {}
+
+    if (!candidato) {
+      return e.json(404, { error: 'Candidato não encontrado.' })
+    }
+
+    if (candidato.getString('status') === 'convertido') {
+      return e.json(400, { error: 'Candidato já convertido em colaborador.' })
+    }
+
+    const agoraIso = new Date().toISOString()
+    candidato.set('status', 'reprovado')
+    if (motivo) {
+      candidato.set('motivo_reprovacao', motivo)
+    }
+    candidato.set('rh_responsavel', usuarioId || null)
+    candidato.set('data_formalizacao_rh', agoraIso)
+    app.save(candidato)
+
+    const candNome = candidato.getString('nome') || 'Candidato'
+    const cargoCand = candidato.getString('cargo_pretendido') || 'Cargo de TI'
+    const setorCand = candidato.getString('setor') || 'TI'
+
+    // Registrar log de auditoria
+    try {
+      const logsCol = app.findCollectionByNameOrId('logs_auditoria')
+      const logRecord = new Record(logsCol)
+      logRecord.set('onboarding_id', null)
+      logRecord.set('colaborador_nome', candNome)
+      logRecord.set('usuario_id', usuarioId || null)
+      logRecord.set('usuario_nome', usuarioNome || 'RH')
+      logRecord.set('usuario_role', usuarioRole || 'rh')
+      logRecord.set('gestor_nome', '')
+      logRecord.set('acao', 'Reprovação de Candidato pelo RH')
+      logRecord.set(
+        'detalhes',
+        `Candidato reprovado pelo RH (${usuarioNome}). Motivo do RH: ${
+          motivo || 'Critério de formalização'
+        }. Candidato: ${candNome} (${cargoCand} - ${setorCand}). O link da prova foi invalidado.`,
+      )
+      logRecord.set('fora_prazo', false)
+      logRecord.set('destaque_prazo', '')
+      logRecord.set('metadata', {
+        candidato_id: candidato.id,
+        candidato_nome: candNome,
+        motivo_reprovacao: motivo,
+        reprovado_por_rh: usuarioNome,
+        autor_role: usuarioRole,
+        data: agoraIso,
+      })
+      app.save(logRecord)
+    } catch (errLog) {
+      console.error('[Candidatos Hook /reprovar-rh] Erro ao gravar log:', errLog)
+    }
+
+    return e.json(200, {
+      success: true,
+      message: 'Candidato reprovado pelo RH com sucesso. Cartão arquivado no histórico.',
+      candidato: candidato,
+    })
+  } catch (err) {
+    console.error('[Candidatos Hook /reprovar-rh] Erro:', err)
+    return e.json(500, { error: 'Erro ao registrar reprovação do RH.' })
+  }
+})
+
+// --------------------------------------------------------------------------------------
 // 4. POST /backend/v1/candidatos/converter
-//    Conversão Aprovado -> Colaborador (Cria Onboarding em transação atômica)
+//    Conversão Formalizada pelo RH/Admin -> Colaborador (Cria Onboarding em transação atômica)
 // --------------------------------------------------------------------------------------
 routerAdd('POST', '/backend/v1/candidatos/converter', (e) => {
   try {
@@ -573,7 +797,7 @@ routerAdd('POST', '/backend/v1/candidatos/converter', (e) => {
     const gestorId = (data.gestorId || '').trim()
     const usuarioId = (data.usuarioId || '').trim()
     const usuarioNome = (data.usuarioNome || '').trim()
-    const usuarioRole = (data.usuarioRole || '').trim()
+    const usuarioRole = (data.usuarioRole || '').trim().toLowerCase()
 
     if (!candidatoId) {
       return e.json(400, { error: 'ID do candidato é obrigatório.' })
@@ -583,6 +807,13 @@ routerAdd('POST', '/backend/v1/candidatos/converter', (e) => {
     }
     if (!gestorId) {
       return e.json(400, { error: 'Gestor responsável é obrigatório.' })
+    }
+
+    // Validação de permissão: apenas RH e Admin podem formalizar contratação e converter
+    if (usuarioRole !== 'rh' && usuarioRole !== 'admin') {
+      return e.json(403, {
+        error: 'Apenas o RH ou Administrador podem formalizar a contratação de candidatos.',
+      })
     }
 
     let candidato = null
@@ -654,6 +885,7 @@ routerAdd('POST', '/backend/v1/candidatos/converter', (e) => {
     }
 
     const tokenColaborador = $security.randomString(32)
+    const agoraIso = new Date().toISOString()
 
     // Criar o registro de onboarding em transação atômica
     let novoOnboarding = null
@@ -679,9 +911,11 @@ routerAdd('POST', '/backend/v1/candidatos/converter', (e) => {
       txApp.save(rec)
       novoOnboarding = rec
 
-      // Atualizar status do candidato para 'convertido' e amarrar colaborador_id
+      // Atualizar status do candidato para 'convertido', gravar rastro do RH e amarrar colaborador_id
       candidato.set('status', 'convertido')
       candidato.set('colaborador_id', rec.id)
+      candidato.set('rh_responsavel', usuarioId || null)
+      candidato.set('data_formalizacao_rh', agoraIso)
       txApp.save(candidato)
     })
 
@@ -722,19 +956,20 @@ routerAdd('POST', '/backend/v1/candidatos/converter', (e) => {
       logRecord.set('colaborador_nome', candNome)
       logRecord.set('usuario_id', usuarioId || null)
       logRecord.set('usuario_nome', usuarioNome || 'Gestor')
-      logRecord.set('usuario_role', usuarioRole || 'gestao')
+      logRecord.set('usuario_role', usuarioRole || 'rh')
       logRecord.set('gestor_nome', '')
-      logRecord.set('acao', 'Conversão de Pré-selecionado em Colaborador')
+      logRecord.set('acao', 'Formalização e Conversão de Candidato em Colaborador (RH)')
       logRecord.set(
         'detalhes',
-        `Candidato ${candNome} aprovado na pré-seleção foi formalmente convertido em colaborador. Onboarding #${novoOnboarding.id} criado com sucesso (início em ${dataInicio}).`,
+        `Contratação formalizada pelo RH (${usuarioNome}). Candidato ${candNome} convertido em colaborador oficial. Onboarding #${novoOnboarding.id} criado com sucesso (início em ${dataInicio}, gestor responsável definido).`,
       )
       logRecord.set('fora_prazo', false)
       logRecord.set('destaque_prazo', '')
       logRecord.set('metadata', {
         candidato_id: candidato.id,
         onboarding_id: novoOnboarding.id,
-        convertido_por: usuarioNome,
+        formalizado_por: usuarioNome,
+        autor_role: usuarioRole,
         data_inicio: dataInicio,
       })
       app.save(logRecord)
