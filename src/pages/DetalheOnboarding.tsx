@@ -2980,14 +2980,15 @@ export default function DetalheOnboarding() {
                       </div>
                       <div>
                         <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                          Teste de Conhecimento Técnico
+                          {onboarding.expand?.questionario_id?.nome ||
+                            'Teste de Conhecimento Técnico'}
                           <span className="text-[10px] font-semibold uppercase tracking-wider bg-slate-200 text-slate-700 px-2 py-0.5 rounded">
-                            Régua: 95% (19/20)
+                            Régua: {onboarding.expand?.questionario_id?.percentual_aprovacao || 95}%
                           </span>
                         </h4>
                         <p className="text-xs text-slate-500">
-                          20 questões de atendimento, segurança e boas práticas aplicadas ao
-                          colaborador
+                          {onboarding.expand?.questionario_id?.descricao ||
+                            'Questões de atendimento, suporte técnico e boas práticas aplicadas ao colaborador'}
                         </p>
                       </div>
                     </div>

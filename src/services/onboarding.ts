@@ -14,6 +14,8 @@ import type {
   ConfirmacaoColaborador,
   FaseModelo,
   LogAuditoria,
+  QuestionarioModel,
+  TesteQuestaoModel,
 } from '@/types/onboarding'
 
 function generateRandomToken(length = 32): string {
@@ -418,13 +420,13 @@ export const onboardingService = {
     return pb.collection('onboardings').getFullList<Onboarding>({
       filter,
       sort,
-      expand: 'gestor_id,etapa1_concluida_por,etapa2_concluida_por,setor_ref',
+      expand: 'gestor_id,etapa1_concluida_por,etapa2_concluida_por,setor_ref,questionario_id',
     })
   },
 
   async getById(id: string): Promise<Onboarding> {
     return pb.collection('onboardings').getOne<Onboarding>(id, {
-      expand: 'gestor_id,etapa1_concluida_por,etapa2_concluida_por,setor_ref',
+      expand: 'gestor_id,etapa1_concluida_por,etapa2_concluida_por,setor_ref,questionario_id',
     })
   },
 
@@ -434,7 +436,7 @@ export const onboardingService = {
       return await pb
         .collection('onboardings')
         .getFirstListItem<Onboarding>(`token_acesso_colaborador = '${token.trim()}'`, {
-          expand: 'gestor_id,setor_ref',
+          expand: 'gestor_id,setor_ref,questionario_id',
         })
     } catch {
       return null
@@ -473,6 +475,8 @@ export const onboardingService = {
     gestor_id: string
     data_inicio: string
     cronograma_fases?: import('@/types/onboarding').CronogramaFaseItem[]
+    questionario_id?: string
+    questionarios_vinculados?: string[]
   }): Promise<Onboarding> {
     // Calcula data_fim = data_inicio + 15 dias
     const ymdMatch = data.data_inicio.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)
@@ -551,9 +555,18 @@ export const onboardingService = {
     if (setorRefId) {
       recordPayload.setor_ref = setorRefId
     }
+    if (data.questionario_id) {
+      recordPayload.questionario_id = data.questionario_id
+      recordPayload.questionarios_vinculados = data.questionarios_vinculados || [
+        data.questionario_id,
+      ]
+    } else if (data.questionarios_vinculados && data.questionarios_vinculados.length > 0) {
+      recordPayload.questionario_id = data.questionarios_vinculados[0]
+      recordPayload.questionarios_vinculados = data.questionarios_vinculados
+    }
 
     const record = await pb.collection('onboardings').create<Onboarding>(recordPayload, {
-      expand: 'gestor_id,setor_ref',
+      expand: 'gestor_id,setor_ref,questionario_id',
     })
 
     // 1. Copia os templates da Etapa 1 (Apresentação RH) para tarefas_onboarding
@@ -1288,6 +1301,124 @@ export const testeConhecimentoService = {
       throw new Error(json.error || 'Erro ao liberar reteste.')
     }
     return json
+  },
+}
+
+export const questionarioService = {
+  async listAll(filtro?: { ativo?: boolean; tipo_de_uso?: string }): Promise<QuestionarioModel[]> {
+    const filters: string[] = []
+    if (filtro?.ativo !== undefined) {
+      filters.push(`ativo = ${filtro.ativo}`)
+    }
+    if (filtro?.tipo_de_uso) {
+      filters.push(`tipo_de_uso = '${filtro.tipo_de_uso}'`)
+    }
+    return pb.collection('questionarios').getFullList<QuestionarioModel>({
+      filter: filters.length > 0 ? filters.join(' && ') : '',
+      sort: '-created',
+    })
+  },
+
+  async getById(id: string): Promise<QuestionarioModel> {
+    return pb.collection('questionarios').getOne<QuestionarioModel>(id)
+  },
+
+  async create(data: {
+    nome: string
+    descricao?: string
+    setor?: string
+    tipo_de_uso: import('@/types/onboarding').TipoDeUsoQuestionario
+    percentual_aprovacao?: number
+    ativo?: boolean
+  }): Promise<QuestionarioModel> {
+    return pb.collection('questionarios').create<QuestionarioModel>({
+      nome: data.nome.trim(),
+      descricao: data.descricao?.trim() || '',
+      setor: (data.setor || '').trim().toLowerCase(),
+      tipo_de_uso: data.tipo_de_uso,
+      percentual_aprovacao:
+        data.percentual_aprovacao !== undefined ? Number(data.percentual_aprovacao) : 95,
+      ativo: data.ativo !== false,
+    })
+  },
+
+  async update(
+    id: string,
+    data: Partial<{
+      nome: string
+      descricao: string
+      setor: string
+      tipo_de_uso: import('@/types/onboarding').TipoDeUsoQuestionario
+      percentual_aprovacao: number
+      ativo: boolean
+    }>,
+  ): Promise<QuestionarioModel> {
+    const payload: Record<string, unknown> = {}
+    if (data.nome !== undefined) payload.nome = data.nome.trim()
+    if (data.descricao !== undefined) payload.descricao = data.descricao.trim()
+    if (data.setor !== undefined) payload.setor = data.setor.trim().toLowerCase()
+    if (data.tipo_de_uso !== undefined) payload.tipo_de_uso = data.tipo_de_uso
+    if (data.percentual_aprovacao !== undefined)
+      payload.percentual_aprovacao = Number(data.percentual_aprovacao)
+    if (data.ativo !== undefined) payload.ativo = Boolean(data.ativo)
+    return pb.collection('questionarios').update<QuestionarioModel>(id, payload)
+  },
+
+  async delete(id: string): Promise<boolean> {
+    return pb.collection('questionarios').delete(id)
+  },
+
+  /**
+   * Questões do questionário
+   */
+  async listQuestoes(questionarioId?: string): Promise<TesteQuestaoModel[]> {
+    const filter = questionarioId ? `questionario_id = '${questionarioId}'` : ''
+    return pb.collection('teste_questoes').getFullList<TesteQuestaoModel>({
+      filter,
+      sort: 'ordem',
+    })
+  },
+
+  async createQuestao(data: {
+    questionario_id: string
+    enunciado: string
+    alternativas: string[]
+    correta_index: number
+    gabarito_comentario?: string
+    ordem?: number
+    ativo?: boolean
+    tema?: string
+  }): Promise<TesteQuestaoModel> {
+    return pb.collection('teste_questoes').create<TesteQuestaoModel>({
+      questionario_id: data.questionario_id,
+      enunciado: data.enunciado.trim(),
+      alternativas: data.alternativas,
+      correta_index: data.correta_index,
+      gabarito_comentario: data.gabarito_comentario?.trim() || '',
+      ordem: data.ordem || 1,
+      ativo: data.ativo !== false,
+      tema: data.tema?.trim() || '',
+    })
+  },
+
+  async updateQuestao(
+    id: string,
+    data: Partial<{
+      questionario_id: string
+      enunciado: string
+      alternativas: string[]
+      correta_index: number
+      gabarito_comentario: string
+      ordem: number
+      ativo: boolean
+      tema: string
+    }>,
+  ): Promise<TesteQuestaoModel> {
+    return pb.collection('teste_questoes').update<TesteQuestaoModel>(id, data)
+  },
+
+  async deleteQuestao(id: string): Promise<boolean> {
+    return pb.collection('teste_questoes').delete(id)
   },
 }
 

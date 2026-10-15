@@ -55,7 +55,10 @@ import {
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 
-type TabType = 'biblioteca' | 'etapa1' | string
+import { GestaoQuestionarios } from '@/components/GestaoQuestionarios'
+import { HelpCircle } from 'lucide-react'
+
+type TabType = 'biblioteca' | 'etapa1' | 'questionarios' | string
 
 export default function ModelosTarefas() {
   const { user, isAdmin, isRH } = useAuth()
@@ -913,12 +916,13 @@ export default function ModelosTarefas() {
 
   const isBiblioteca = selectedTab === 'biblioteca'
   const isEtapa1 = selectedTab === 'etapa1'
+  const isQuestionarios = selectedTab === 'questionarios'
 
   // Informações visuais do setor ativo atual
   const currentSetorInfo: SetorVisualInfo | null = useMemo(() => {
-    if (isBiblioteca || isEtapa1) return null
+    if (isBiblioteca || isEtapa1 || isQuestionarios) return null
     return getSetorVisual(selectedTab, activeSetorModel)
-  }, [isBiblioteca, isEtapa1, selectedTab, activeSetorModel])
+  }, [isBiblioteca, isEtapa1, isQuestionarios, selectedTab, activeSetorModel])
 
   // Materiais disponíveis no modal de seleção filtrados pelo tipo corrente
   const materiaisCompativeis = useMemo(() => {
@@ -1036,6 +1040,23 @@ export default function ModelosTarefas() {
           </span>
         </button>
 
+        {/* 2.5. Aba Questionários de Conhecimento */}
+        <button
+          type="button"
+          onClick={() => setSelectedTab('questionarios')}
+          className={`p-3 rounded-xl border-2 text-left transition-all flex-1 min-w-[140px] max-w-[200px] ${
+            selectedTab === 'questionarios'
+              ? 'border-indigo-600 bg-white shadow-sm ring-1 ring-indigo-200'
+              : 'border-transparent bg-white/70 hover:bg-white text-gray-600 hover:border-gray-200'
+          }`}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <HelpCircle className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+            <span className="font-bold text-xs text-gray-900 truncate">Questionários</span>
+          </div>
+          <span className="text-[11px] text-gray-400 block truncate">Provas e testes técnicos</span>
+        </button>
+
         {/* 3. Abas das Áreas Dinâmicas da Coleção (ou fallback se carregando/vazio) */}
         {(setoresList.length > 0
           ? setoresList.filter((s) => s.ativo !== false)
@@ -1087,9 +1108,11 @@ export default function ModelosTarefas() {
       </div>
 
       {/* ========================================================================= */}
-      {/* CONTEÚDO DA ABA: BIBLIOTECA CENTRAL DE MATERIAIS */}
+      {/* CONTEÚDO DA ABA: QUESTIONÁRIOS DE CONHECIMENTO TÉCNICO                     */}
       {/* ========================================================================= */}
-      {isBiblioteca ? (
+      {isQuestionarios ? (
+        <GestaoQuestionarios setoresList={setoresList} />
+      ) : isBiblioteca ? (
         <div className="bg-white rounded-xl border border-gray-200/90 shadow-sm p-6 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
             <div className="flex items-center gap-2.5">

@@ -2,37 +2,7 @@
 
 /**
  * Endpoints pb_hooks para o Teste de Conhecimento da Etapa 3.
- *
- * 1. GET  /backend/v1/teste-conhecimento/publico
- *    - Recebe ?token=... (token de acesso exclusivo do colaborador)
- *    - Valida se o onboarding existe e se a Etapa 2 foi concluída (etapa2_concluida = true).
- *    - Retorna a lista das 20 questões COM ENUNCIADO E ALTERNATIVAS, MAS SEM GABARITO (sem correta_index e sem gabarito_comentario).
- *    - Retorna status da tentativa atual (se já submeteu, se aguarda gestor, se foi liberado reteste).
- *    - O colaborador NUNCA vê nota, percentual nem gabarito.
- *
- * 2. POST /backend/v1/teste-conhecimento/submeter
- *    - Recebe body: { token, respostas: { [questaoId]: respostaIndex } }
- *    - Valida que a Etapa 2 está concluída e que o colaborador pode submeter (primeira tentativa ou reteste liberado).
- *    - Valida que todas as questões ativas foram respondidas.
- *    - Efetua a correção AUTOMÁTICA no servidor contra as respostas corretas no banco.
- *    - Registra a tentativa na coleção `teste_tentativas` com nota, percentual (aprovação >= 95%), mapa detalhado com gabarito e comentários.
- *    - Atualiza campos no onboarding (`teste_conhecimento_status`, `teste_ultima_nota`, `teste_ultimo_percentual`, `teste_tentativas_count`).
- *    - Registra log de auditoria oficial na coleção `logs_auditoria`.
- *    - Dispara notificação por e-mail ao Gestor Responsável informando a conclusão e se foi aprovado ou reprovado no teste.
- *    - Retorna para o colaborador apenas mensagem de confirmação ("Teste enviado com sucesso. Aguarde o retorno do seu gestor."), SEM nota e SEM gabarito.
- *
- * 3. POST /backend/v1/teste-conhecimento/liberar-reteste
- *    - Requer autenticação (Gestão ou Admin).
- *    - Recebe body: { onboardingId, motivo }
- *    - Valida se o onboarding está reprovado no teste.
- *    - Atualiza `teste_conhecimento_status` para 'reteste_liberado'.
- *    - Registra auditoria com executor, data e motivo.
- *    - Notifica RH e Admin caso configurado.
- *
- * 4. GET  /backend/v1/teste-conhecimento/tentativas/:onboardingId
- *    - Requer autenticação.
- *    - Se Admin: retorna gabarito completo + respostas + comentários explicativos.
- *    - Se Gestão ou RH: mascara gabarito_comentario, correta_index e detalhe das respostas, retornando APENAS nota, percentual, data e status de aprovação.
+ * Suporta a fundação de questionários independentes vinculados ao onboarding.
  */
 
 // 1. GET /backend/v1/teste-conhecimento/publico
@@ -92,14 +62,91 @@ routerAdd('GET', '/backend/v1/teste-conhecimento/publico', (e) => {
       })
     }
 
-    // Carregar as questões ativas ordenadas
-    const questoesRecords = app.findRecordsByFilter(
-      'teste_questoes',
-      'ativo = true',
-      'ordem',
-      100,
-      0,
-    )
+    // Resolver o questionário vinculado (inline)
+    let questRecord = null
+    if (ultimaTentativa) {
+      const qid = ultimaTentativa.getString('questionario_id')
+      if (qid) {
+        try {
+          questRecord = app.findRecordById('questionarios', qid)
+        } catch (_) {}
+      }
+    }
+
+    if (!questRecord) {
+      const directId = onboarding.getString('questionario_id')
+      if (directId) {
+        try {
+          questRecord = app.findRecordById('questionarios', directId)
+        } catch (_) {}
+      }
+    }
+
+    if (!questRecord) {
+      try {
+        const rawVinculados = onboarding.getString('questionarios_vinculados')
+        let ids = []
+        if (rawVinculados) {
+          try {
+            ids = JSON.parse(rawVinculados)
+          } catch (_) {}
+        }
+        if (Array.isArray(ids) && ids.length > 0) {
+          const firstId = typeof ids[0] === 'string' ? ids[0] : ids[0]?.id
+          if (firstId) {
+            questRecord = app.findRecordById('questionarios', firstId)
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!questRecord) {
+      const setorOnb = onboarding.getString('setor') || ''
+      if (setorOnb) {
+        try {
+          const qs = app.findRecordsByFilter(
+            'questionarios',
+            `ativo = true && tipo_de_uso = 'onboarding' && setor ~ '${setorOnb}'`,
+            '-created',
+            1,
+            0,
+          )
+          if (qs && qs.length > 0) questRecord = qs[0]
+        } catch (_) {}
+      }
+    }
+
+    if (!questRecord) {
+      try {
+        questRecord = app.findFirstRecordByFilter(
+          'questionarios',
+          "nome ~ 'Windows' && tipo_de_uso = 'onboarding'",
+        )
+      } catch (_) {}
+    }
+
+    if (!questRecord) {
+      try {
+        const anyQ = app.findRecordsByFilter('questionarios', 'ativo = true', '-created', 1, 0)
+        if (anyQ && anyQ.length > 0) questRecord = anyQ[0]
+      } catch (_) {}
+    }
+
+    let questoesRecords = []
+    if (questRecord) {
+      questoesRecords = app.findRecordsByFilter(
+        'teste_questoes',
+        `ativo = true && questionario_id = '${questRecord.id}'`,
+        'ordem',
+        100,
+        0,
+      )
+    }
+
+    // Fallback de segurança se nenhuma questão foi encontrada com questionario_id
+    if (!questoesRecords || questoesRecords.length === 0) {
+      questoesRecords = app.findRecordsByFilter('teste_questoes', 'ativo = true', 'ordem', 100, 0)
+    }
 
     // Sanitizar questões para o portal público: NUNCA enviar correta_index nem gabarito_comentario
     const questoesSanitizadas = questoesRecords.map((q) => {
@@ -129,6 +176,9 @@ routerAdd('GET', '/backend/v1/teste-conhecimento/publico', (e) => {
       questoes: questoesSanitizadas,
       colaboradorNome: onboarding.getString('colaborador_nome'),
       cargo: onboarding.getString('cargo'),
+      questionarioNome: questRecord ? questRecord.getString('nome') : 'Teste de Conhecimento',
+      questionarioId: questRecord ? questRecord.id : null,
+      percentualAprovacao: questRecord ? questRecord.getFloat('percentual_aprovacao') || 95 : 95,
     })
   } catch (err) {
     console.error('[Teste Hook /publico] Erro:', err)
@@ -188,6 +238,7 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/submeter', (e) => {
       )
     } catch (_) {}
 
+    const ultimaTentativa = tentativasAnteriores.length > 0 ? tentativasAnteriores[0] : null
     const statusAtual = onboarding.getString('teste_conhecimento_status') || 'liberado'
     if (tentativasAnteriores.length > 0 && statusAtual !== 'reteste_liberado') {
       return e.json(403, {
@@ -196,17 +247,94 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/submeter', (e) => {
       })
     }
 
-    // Carregar todas as questões ativas
-    const questoesRecords = app.findRecordsByFilter(
-      'teste_questoes',
-      'ativo = true',
-      'ordem',
-      100,
-      0,
-    )
+    // Resolver o questionário vinculado (reteste usa SEMPRE o mesmo questionário da tentativa anterior)
+    let questRecord = null
+    if (ultimaTentativa) {
+      const qid = ultimaTentativa.getString('questionario_id')
+      if (qid) {
+        try {
+          questRecord = app.findRecordById('questionarios', qid)
+        } catch (_) {}
+      }
+    }
+
+    if (!questRecord) {
+      const directId = onboarding.getString('questionario_id')
+      if (directId) {
+        try {
+          questRecord = app.findRecordById('questionarios', directId)
+        } catch (_) {}
+      }
+    }
+
+    if (!questRecord) {
+      try {
+        const rawVinculados = onboarding.getString('questionarios_vinculados')
+        let ids = []
+        if (rawVinculados) {
+          try {
+            ids = JSON.parse(rawVinculados)
+          } catch (_) {}
+        }
+        if (Array.isArray(ids) && ids.length > 0) {
+          const firstId = typeof ids[0] === 'string' ? ids[0] : ids[0]?.id
+          if (firstId) {
+            questRecord = app.findRecordById('questionarios', firstId)
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!questRecord) {
+      const setorOnb = onboarding.getString('setor') || ''
+      if (setorOnb) {
+        try {
+          const qs = app.findRecordsByFilter(
+            'questionarios',
+            `ativo = true && tipo_de_uso = 'onboarding' && setor ~ '${setorOnb}'`,
+            '-created',
+            1,
+            0,
+          )
+          if (qs && qs.length > 0) questRecord = qs[0]
+        } catch (_) {}
+      }
+    }
+
+    if (!questRecord) {
+      try {
+        questRecord = app.findFirstRecordByFilter(
+          'questionarios',
+          "nome ~ 'Windows' && tipo_de_uso = 'onboarding'",
+        )
+      } catch (_) {}
+    }
+
+    if (!questRecord) {
+      try {
+        const anyQ = app.findRecordsByFilter('questionarios', 'ativo = true', '-created', 1, 0)
+        if (anyQ && anyQ.length > 0) questRecord = anyQ[0]
+      } catch (_) {}
+    }
+
+    // Carregar questões ativas do questionário
+    let questoesRecords = []
+    if (questRecord) {
+      questoesRecords = app.findRecordsByFilter(
+        'teste_questoes',
+        `ativo = true && questionario_id = '${questRecord.id}'`,
+        'ordem',
+        100,
+        0,
+      )
+    }
 
     if (!questoesRecords || questoesRecords.length === 0) {
-      return e.json(500, { error: 'Nenhuma questão cadastrada para o teste de conhecimento.' })
+      questoesRecords = app.findRecordsByFilter('teste_questoes', 'ativo = true', 'ordem', 100, 0)
+    }
+
+    if (!questoesRecords || questoesRecords.length === 0) {
+      return e.json(500, { error: 'Nenhuma questão cadastrada para este questionário.' })
     }
 
     // Validação: todas as questões devem estar respondidas
@@ -220,7 +348,7 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/submeter', (e) => {
 
     if (faltantes.length > 0) {
       return e.json(400, {
-        error: `Existem ${faltantes.length} questão(ões) não respondida(s): Questão(ões) ${faltantes.join(', ')}. Responda todas as 20 questões para enviar.`,
+        error: `Existem ${faltantes.length} questão(ões) não respondida(s): Questão(ões) ${faltantes.join(', ')}. Responda todas as ${questoesRecords.length} questões para enviar.`,
         faltantes: faltantes,
       })
     }
@@ -258,8 +386,9 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/submeter', (e) => {
     }
 
     const percentual = Number(((acertos / totalQuestoes) * 100).toFixed(1))
-    // Régua oficial: aprovação com 95% ou mais (19/20)
-    const aprovado = percentual >= 95.0
+    // Régua oficial do questionário (padrão 95%)
+    const reguaAprovacao = questRecord ? questRecord.getFloat('percentual_aprovacao') || 95.0 : 95.0
+    const aprovado = percentual >= reguaAprovacao
 
     const novaTentativaNumero = tentativasAnteriores.length + 1
     const agoraIso = new Date().toISOString()
@@ -281,6 +410,9 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/submeter', (e) => {
     tentativaRec.set('data_submissao', agoraIso)
     tentativaRec.set('ip', ipOrigem)
     tentativaRec.set('reteste_liberado', false)
+    if (questRecord) {
+      tentativaRec.set('questionario_id', questRecord.id)
+    }
     app.save(tentativaRec)
 
     // Atualizar onboarding
@@ -289,9 +421,13 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/submeter', (e) => {
     onboarding.set('teste_ultima_nota', acertos)
     onboarding.set('teste_ultimo_percentual', percentual)
     onboarding.set('teste_tentativas_count', novaTentativaNumero)
+    if (questRecord && !onboarding.getString('questionario_id')) {
+      onboarding.set('questionario_id', questRecord.id)
+    }
     app.save(onboarding)
 
     const colabNome = onboarding.getString('colaborador_nome') || 'Colaborador'
+    const qNome = questRecord ? questRecord.getString('nome') : 'Questionário'
 
     // Registrar log de auditoria oficial
     let gestorNome = ''
@@ -322,35 +458,38 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/submeter', (e) => {
       )
       logRecord.set(
         'detalhes',
-        `Colaborador enviou o teste de 20 questões. Resultado: ${acertos}/${totalQuestoes} (${percentual}%). Status: ${aprovado ? 'APROVADO (>=95%)' : 'REPROVADO (<95%)'}.`,
+        `Colaborador enviou o questionário "${qNome}" (${totalQuestoes} questões). Resultado: ${acertos}/${totalQuestoes} (${percentual}%). Status: ${aprovado ? `APROVADO (>=${reguaAprovacao}%)` : `REPROVADO (<${reguaAprovacao}%)`}.`,
       )
       logRecord.set('fora_prazo', false)
       logRecord.set('destaque_prazo', '')
       logRecord.set('metadata', {
+        questionario_id: questRecord ? questRecord.id : null,
+        questionario_nome: qNome,
         tentativa_numero: novaTentativaNumero,
         acertos: acertos,
         total_questoes: totalQuestoes,
         percentual: percentual,
+        regua_aprovacao: reguaAprovacao,
         aprovado: aprovado,
         data_submissao: agoraIso,
         ip: ipOrigem,
       })
       app.save(logRecord)
       console.log(
-        `[Teste Hook] Tentativa ${novaTentativaNumero} salva para onboarding ${onboarding.id}: ${acertos}/${totalQuestoes} (${percentual}%)`,
+        `[Teste Hook] Tentativa ${novaTentativaNumero} salva para onboarding ${onboarding.id} (${qNome}): ${acertos}/${totalQuestoes} (${percentual}%)`,
       )
     } catch (errLog) {
       console.error('[Teste Hook] Erro ao registrar log de auditoria:', errLog)
     }
 
-    // Disparar e-mail de notificação ao Gestor Responsável informando sobre o teste concluído
+    // Disparar e-mail de notificação ao Gestor Responsável
     if (gestorEmail) {
       try {
         const appUrl = 'https://onboarding-de-colaboradores-ti-8af12.goskip.app'
         const onboardingUrl = `${appUrl}/colaboradores/${onboarding.id}`
         const statusBadge = aprovado
-          ? '<span style="color: #16a34a; font-weight: bold;">APROVADO (>=95%)</span>'
-          : '<span style="color: #dc2626; font-weight: bold;">REPROVADO (<95%)</span>'
+          ? `<span style="color: #16a34a; font-weight: bold;">APROVADO (&gt;=${reguaAprovacao}%)</span>`
+          : `<span style="color: #dc2626; font-weight: bold;">REPROVADO (&lt;${reguaAprovacao}%)</span>`
 
         const emailHtml = `
           <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"></head><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; padding: 24px;">
@@ -361,17 +500,18 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/submeter', (e) => {
               </td></tr>
               <tr><td style="padding: 24px; font-size: 14px; line-height: 1.6; color: #334155;">
                 <p>Olá, <strong>${gestorNome || 'Gestor'}</strong>,</p>
-                <p>O colaborador <strong>${colabNome}</strong> concluiu o <strong>Teste de Conhecimento</strong> de 20 questões sobre atendimento e rotinas de TI.</p>
+                <p>O colaborador <strong>${colabNome}</strong> concluiu o questionário <strong>${qNome}</strong> de ${totalQuestoes} questões sobre rotinas de TI.</p>
                 <div style="background-color: #f1f5f9; border-left: 4px solid ${aprovado ? '#16a34a' : '#dc2626'}; border-radius: 4px; padding: 14px 18px; margin: 18px 0;">
                   <p style="margin: 0 0 6px;"><strong>Colaborador:</strong> ${colabNome}</p>
+                  <p style="margin: 0 0 6px;"><strong>Questionário:</strong> ${qNome}</p>
                   <p style="margin: 0 0 6px;"><strong>Tentativa:</strong> #${novaTentativaNumero}</p>
                   <p style="margin: 0 0 6px;"><strong>Nota:</strong> ${acertos} de ${totalQuestoes} questões (${percentual}%)</p>
                   <p style="margin: 0 0 6px;"><strong>Resultado:</strong> ${statusBadge}</p>
-                  <p style="margin: 0;"><strong>Régua de Aprovação:</strong> 95% (mínimo de 19 acertos)</p>
+                  <p style="margin: 0;"><strong>Régua de Aprovação:</strong> ${reguaAprovacao}% (mínimo de ${Math.ceil((totalQuestoes * reguaAprovacao) / 100)} acertos)</p>
                 </div>
                 ${
                   !aprovado
-                    ? '<p style="color: #b91c1c; font-size: 13px;"><em>Atenção:</em> O colaborador obteve aproveitamento abaixo de 95%. Acesse a página do onboarding para decidir entre liberar um <strong>Reteste</strong> ou registrar <strong>Não Apto</strong> na Avaliação Final.</p>'
+                    ? '<p style="color: #b91c1c; font-size: 13px;"><em>Atenção:</em> O colaborador obteve aproveitamento abaixo da régua. Acesse a página do onboarding para decidir entre liberar um <strong>Reteste</strong> ou registrar <strong>Não Apto</strong> na Avaliação Final.</p>'
                     : '<p style="color: #15803d; font-size: 13px;">O colaborador atingiu o critério de aprovação e está pronto para a reunião de avaliação final com você.</p>'
                 }
                 <div style="margin: 24px 0 10px; text-align: center;">
@@ -472,7 +612,8 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/liberar-reteste', (e) => {
       } catch (_) {}
     }
 
-    // Atualizar última tentativa se houver
+    // Atualizar última tentativa se houver (preserva o questionário amarrado)
+    let questionarioIdReteste = onboarding.getString('questionario_id')
     try {
       const tentativas = app.findRecordsByFilter(
         'teste_tentativas',
@@ -486,6 +627,9 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/liberar-reteste', (e) => {
         tentativas[0].set('reteste_liberado_em', agoraIso)
         tentativas[0].set('reteste_liberado_por', usuarioNome || 'Gestor')
         app.save(tentativas[0])
+        if (!questionarioIdReteste && tentativas[0].getString('questionario_id')) {
+          questionarioIdReteste = tentativas[0].getString('questionario_id')
+        }
       }
     } catch (_) {}
 
@@ -502,7 +646,7 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/liberar-reteste', (e) => {
       logRecord.set('acao', 'Liberação de Reteste do Teste de Conhecimento')
       logRecord.set(
         'detalhes',
-        `Reteste autorizado por ${usuarioNome} (${usuarioRole}). Motivo: ${motivo || 'Revisão com o colaborador antes da reavaliação'}. O portal público foi liberado para nova tentativa.`,
+        `Reteste autorizado por ${usuarioNome} (${usuarioRole}). Motivo: ${motivo || 'Revisão com o colaborador antes da reavaliação'}. O portal público foi liberado para nova tentativa mantendo o mesmo questionário original.`,
       )
       logRecord.set('fora_prazo', false)
       logRecord.set('destaque_prazo', '')
@@ -510,6 +654,7 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/liberar-reteste', (e) => {
         motivo: motivo,
         liberado_em: agoraIso,
         liberado_por: usuarioNome,
+        questionario_id: questionarioIdReteste,
       })
       app.save(logRecord)
     } catch (errLog) {
@@ -564,6 +709,16 @@ routerAdd('GET', '/backend/v1/teste-conhecimento/tentativas/{onboardingId}', (e)
         respostas = t.get('respostas') || []
       }
 
+      // Buscar nome do questionário da tentativa
+      let questionarioNome = ''
+      const qid = t.getString('questionario_id')
+      if (qid) {
+        try {
+          const qrec = app.findRecordById('questionarios', qid)
+          if (qrec) questionarioNome = qrec.getString('nome')
+        } catch (_) {}
+      }
+
       const base = {
         id: t.id,
         tentativa_numero: t.getInt('tentativa_numero'),
@@ -573,6 +728,8 @@ routerAdd('GET', '/backend/v1/teste-conhecimento/tentativas/{onboardingId}', (e)
         aprovado: t.getBool('aprovado'),
         data_submissao: t.getString('data_submissao'),
         reteste_liberado: t.getBool('reteste_liberado'),
+        questionario_id: qid || '',
+        questionario_nome: questionarioNome,
         created: t.getString('created'),
       }
 

@@ -487,47 +487,56 @@ export default function Manual() {
                 3.4 Etapa 3 — Teste de Conhecimento Técnico e Avaliação Final:
               </h3>
               <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
-                A Etapa 3 integra agora o <strong>Teste de Conhecimento Técnico</strong> prévio como
-                insumo mandatório para a decisão avaliativa do gestor.
+                A Etapa 3 integra agora a realização prévia da prova de conhecimento vinculada ao
+                colaborador como insumo mandatório para a decisão avaliativa do gestor.
               </p>
             </div>
 
-            {/* Sub-bloco Teste de Conhecimento */}
+            {/* Sub-bloco Questionário Vinculado e Regras da Prova */}
             <div className="p-3.5 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-2 text-xs sm:text-sm text-indigo-950">
               <strong className="block font-bold text-indigo-900 uppercase tracking-wide text-xs">
-                Teste de Conhecimento (Regras Oficiais):
+                Questionário Vinculado & Teste de Conhecimento (Regras Oficiais):
               </strong>
-              <ul className="list-disc list-inside space-y-1 text-xs text-indigo-900">
+              <ul className="list-disc list-inside space-y-1.5 text-xs text-indigo-900">
                 <li>
-                  <strong>Liberação automática:</strong> O teste é liberado no portal do colaborador
-                  assim que o gestor conclui formalmente a Etapa 2 (Vivência Técnica).
+                  <strong>Vínculo no Onboarding:</strong> Ao cadastrar um onboarding, o sistema
+                  pré-preenche automaticamente o questionário do setor do colaborador (ex.: setor
+                  Windows vincula a <em>&quot;Prova de Windows — Atendimento e Suporte&quot;</em>).
+                  O questionário fica fixado na criação do onboarding, garantindo que edições
+                  futuras não alterem provas já em andamento.
                 </li>
                 <li>
-                  <strong>Régua de aprovação rigorosa:</strong> São 20 questões objetivas (4
-                  alternativas cada) sobre normas de suporte, reinício de servidores, backup em
-                  horário comercial, DNS, software pirata, senha de terceiros, SLA, WhatsApp
-                  particular e regime de plantão. A aprovação exige{' '}
-                  <strong>95% de aproveitamento (mínimo de 19 acertos)</strong>.
+                  <strong>Liberação automática:</strong> O teste é liberado no portal do colaborador
+                  assim que o gestor conclui formalmente a Etapa 2 (Vivência Técnica). Se não houver
+                  questionário ativo para o setor, a prova permanece bloqueada até vinculação
+                  manual.
+                </li>
+                <li>
+                  <strong>Régua de aprovação por questionário (Padrão 95%):</strong> Cada
+                  questionário tem sua nota mínima de aprovação configurável (padrão oficial de 95%
+                  — mínimo de 19 acertos na prova padrão de 20 questões).
                 </li>
                 <li>
                   <strong>Correção automática segura no servidor:</strong> A submissão é corrigida
-                  automaticamente via endpoint server-side protegido. O colaborador{' '}
-                  <strong>NÃO visualiza nota nem gabarito</strong> no portal público — recebe apenas
-                  confirmação formal de envio para aguardar a reunião com o gestor.
+                  automaticamente via hook server-side protegido (<code>teste_conhecimento.js</code>
+                  ). O colaborador <strong>NÃO visualiza nota nem gabarito</strong> no portal
+                  público — recebe apenas confirmação formal de envio para aguardar a reunião com o
+                  gestor.
                 </li>
                 <li>
-                  <strong>Visibilidade por papel:</strong> O <em>Administrador</em> tem acesso ao
-                  gabarito comentado completo e ao mapa comparativo das alternativas escolhidas. O{' '}
+                  <strong>Visibilidade restrita por papel:</strong> O <em>Administrador</em> tem
+                  acesso exclusivo ao gabarito comentado completo e ao mapa comparativo das
+                  alternativas escolhidas para fins de auditoria técnica. O{' '}
                   <em>Gestor Responsável</em> e o <em>RH</em> visualizam exclusivamente a nota
-                  numérica e o percentual obtido em cada tentativa.
+                  numérica e o percentual obtido.
                 </li>
                 <li>
                   <strong>Insumo para a avaliação e fluxo de Reteste:</strong> Se a nota for
-                  inferior a 95%, o sistema destaca &quot;Reprovado no teste&quot; ao gestor, que
-                  pode optar entre liberar um <strong>Reteste</strong> pelo portal público (com
-                  justificativa e auditoria) ou registrar <strong>Não Apto</strong> na avaliação. A
-                  decisão de aprovação final do onboarding continua sendo ato privativo e soberano
-                  do gestor.
+                  inferior à régua configurada, o sistema destaca &quot;Reprovado no teste&quot; ao
+                  gestor, que pode optar entre liberar um <strong>Reteste</strong> pelo portal
+                  público (com justificativa e registro em auditoria) ou registrar{' '}
+                  <strong>Não Apto</strong> na avaliação. O reteste sempre reaplica o MESMO
+                  questionário fixado originalmente no onboarding.
                 </li>
               </ul>
             </div>
@@ -694,12 +703,21 @@ export default function Manual() {
               e cor) — exclusivo para Admin/RH. Áreas administrativas (RH, Comercial, Laboratório)
               ficam como lista simples; as técnicas têm a trilha de 6 fases.
             </p>
-            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
+            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed mb-2">
               <strong>Modelos do Checklist de Integração (Aba Etapa 1):</strong> os itens padrão do
               checklist de integração (equipamentos e apresentações) podem ser editados, adicionados
               ou reordenados por Admin e RH na aba &quot;Etapa 1 (RH / Integração Geral)&quot;.
               Onboardings novos são criados automaticamente com a lista modelo atualizada, enquanto
               onboardings já em andamento mantêm seu snapshot individual preservado.
+            </p>
+            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
+              <strong>Gestão de Questionários de Conhecimento (Aba Questionários):</strong> o
+              Administrador gerencia questionários independentes por setor (Windows, Linux, Redes) e
+              tipo de uso (&quot;onboarding&quot;, &quot;reciclagem&quot;, &quot;mudanca_area&quot;,
+              &quot;avaliacao&quot;, &quot;contratacao&quot;). Cada questionário possui nome,
+              descrição, setor, nota mínima configurável (padrão 95%), status ativo/inativo e seu
+              respectivo banco de questões de múltipla escolha com alternativas, gabarito e
+              comentário explicativo de auditoria.
             </p>
           </div>
 

@@ -21,10 +21,10 @@ export function extractFieldErrors(error: unknown): FieldErrors {
 }
 
 export function isNetworkError(error: unknown): boolean {
-  if (error instanceof TypeError && error.message.toLowerCase().includes('fetch')) {
-    return true
+  if (error instanceof ClientResponseError) {
+    return error.status === 0 || error.isAbort
   }
-  if (error instanceof ClientResponseError && (error.status === 0 || error.isAbort)) {
+  if (error instanceof TypeError && error.message.toLowerCase().includes('failed to fetch')) {
     return true
   }
   return false

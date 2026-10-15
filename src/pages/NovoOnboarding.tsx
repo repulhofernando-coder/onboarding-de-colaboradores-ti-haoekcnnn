@@ -1,6 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { onboardingService, userService, setorService, faseService } from '@/services/onboarding'
+import {
+  onboardingService,
+  userService,
+  setorService,
+  faseService,
+  questionarioService,
+} from '@/services/onboarding'
+import type { QuestionarioModel } from '@/types/onboarding'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
 import type { Setor, User, SetorModel, FaseModelo, CronogramaFaseItem } from '@/types/onboarding'
 import { formatShortDate } from '@/lib/dateUtils'
@@ -45,6 +52,9 @@ export default function NovoOnboarding() {
   const [loadingGestores, setLoadingGestores] = useState(true)
   const [fasesDoSetor, setFasesDoSetor] = useState<FaseModelo[]>([])
   const [loadingFases, setLoadingFases] = useState(false)
+  const [questionariosDisponiveis, setQuestionariosDisponiveis] = useState<QuestionarioModel[]>([])
+  const [questionarioId, setQuestionarioId] = useState<string>('')
+  const [loadingQuestionarios, setLoadingQuestionarios] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -69,7 +79,7 @@ export default function NovoOnboarding() {
     // Carregar setores ativos da coleção
     setorService
       .listAtivos()
-      .then((res: SetorModel[]) => {
+      .then(async (res: SetorModel[]) => {
         if (res.length > 0) {
           setSetoresList(res)
           const firstKey = res[0].chave || res[0].nome
@@ -82,11 +92,25 @@ export default function NovoOnboarding() {
       .finally(() => {
         setLoadingSetores(false)
       })
+
+    // Carregar questionários ativos
+    questionarioService
+      .listAll({ ativo: true })
+      .then((qs) => {
+        setQuestionariosDisponiveis(qs)
+      })
+      .catch((err) => {
+        console.error('Erro ao carregar questionários:', err)
+      })
+      .finally(() => {
+        setLoadingQuestionarios(false)
+      })
   }, [])
 
-  // Carregar fases quando setor mudar
+  // Carregar fases e auto-selecionar questionário quando setor mudar
   useEffect(() => {
     if (!setor) return
+    const setorNormalizado = setor.trim().toLowerCase()
     const foundModel = setoresList.find(
       (s) => s.chave === setor || s.nome === setor || s.id === setor,
     )
@@ -102,7 +126,37 @@ export default function NovoOnboarding() {
       .finally(() => {
         setLoadingFases(false)
       })
-  }, [setor, setoresList])
+
+    // Auto-selecionar questionário compatível com o setor:
+    // Prioridade 1: tipo_de_uso == 'onboarding' e setor bate com a chave/nome/id
+    // Prioridade 2: qualquer questionário ativo cujo setor coincida
+    if (questionariosDisponiveis.length > 0) {
+      const qCompativel =
+        questionariosDisponiveis.find((q) => {
+          const qSetor = (q.setor || '').toLowerCase()
+          return (
+            q.tipo_de_uso === 'onboarding' &&
+            (qSetor === setorNormalizado ||
+              qSetor === (foundModel?.chave || '').toLowerCase() ||
+              qSetor === (foundModel?.nome || '').toLowerCase())
+          )
+        }) ||
+        questionariosDisponiveis.find((q) => {
+          const qSetor = (q.setor || '').toLowerCase()
+          return (
+            qSetor === setorNormalizado ||
+            qSetor === (foundModel?.chave || '').toLowerCase() ||
+            qSetor === (foundModel?.nome || '').toLowerCase()
+          )
+        })
+
+      if (qCompativel) {
+        setQuestionarioId(qCompativel.id)
+      } else {
+        setQuestionarioId('')
+      }
+    }
+  }, [setor, setoresList, questionariosDisponiveis])
 
   // Cálculo e validação dos 15 dias:
   // Etapa 1 RH: 1 dia
@@ -328,6 +382,8 @@ export default function NovoOnboarding() {
         gestor_id: gestorId,
         data_inicio: dataInicio,
         cronograma_fases: cronogramaPayload,
+        questionario_id: questionarioId || undefined,
+        questionarios_vinculados: questionarioId ? [questionarioId] : [],
       })
 
       toast.success('Onboarding criado com sucesso com cronograma de 15 dias!')
@@ -634,6 +690,72 @@ export default function NovoOnboarding() {
                 </p>
               )}
             </div>
+          </div>
+
+          {/* Questionário de Conhecimento (Etapa 3) */}
+          <div className="p-4 rounded-lg bg-gray-50/90 border border-gray-200 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700">
+                Questionário de Conhecimento (Etapa 3) *
+              </label>
+              {questionarioId ? (
+                <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> Questionário fixado
+                </span>
+              ) : (
+                <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" /> Sem prova vinculada
+                </span>
+              )}
+            </div>
+
+            <Select
+              value={questionarioId}
+              onValueChange={(val) => setQuestionarioId(val)}
+              disabled={submitting || loadingQuestionarios}
+            >
+              <SelectTrigger className="h-11 border-gray-300 text-sm bg-white">
+                <SelectValue
+                  placeholder={
+                    loadingQuestionarios
+                      ? 'Carregando questionários...'
+                      : questionariosDisponiveis.length === 0
+                        ? 'Nenhum questionário cadastrado no sistema'
+                        : 'Selecione um questionário para a prova'
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {questionariosDisponiveis.map((q) => (
+                  <SelectItem key={q.id} value={q.id}>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{q.nome}</span>
+                      <span className="text-gray-400 text-xs">
+                        ({q.setor?.toUpperCase() || 'TODOS'} — {q.tipo_de_uso} — mín.{' '}
+                        {q.percentual_aprovacao || 95}%)
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {!questionarioId ? (
+              <div className="p-2.5 rounded bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <p>
+                  <strong>Não há questionário cadastrado para este setor.</strong> O colaborador
+                  ficará com a Etapa 3 bloqueada até que uma prova seja vinculada manualmente aqui
+                  ou cadastrada em <em>Modelos &gt; Questionários</em>.
+                </p>
+              </div>
+            ) : (
+              <p className="text-[11px] text-gray-500">
+                Pré-preenchido automaticamente com base no setor do colaborador. O questionário
+                ficará fixado neste onboarding — alterações posteriores no modelo não alteram a
+                prova já em andamento.
+              </p>
+            )}
           </div>
 
           {/* Data de início e Prazo calculado */}

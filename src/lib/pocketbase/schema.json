@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-15T14:28:20.455Z",
+  "generatedAt": "2026-10-15T17:54:05.963Z",
   "collections": [
     {
       "name": "users",
@@ -427,6 +427,19 @@
           "type": "number",
           "required": false,
           "system": false
+        },
+        {
+          "name": "questionarios_vinculados",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "questionario_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "questionarios"
         }
       ],
       "indexes": [
@@ -1126,6 +1139,13 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "questionario_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "questionarios"
         }
       ],
       "indexes": [
@@ -1230,11 +1250,86 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "questionario_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "questionarios"
         }
       ],
       "indexes": [
         "CREATE INDEX idx_teste_tentativas_onboarding ON teste_tentativas (onboarding_id)",
         "CREATE INDEX idx_teste_tentativas_submissao ON teste_tentativas (data_submissao DESC)"
+      ]
+    },
+    {
+      "name": "questionarios",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.role = 'admin'",
+        "update": "@request.auth.role = 'admin'",
+        "delete": "@request.auth.role = 'admin'"
+      },
+      "fields": [
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "setor",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tipo_de_uso",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "percentual_aprovacao",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "descricao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_questionarios_setor ON questionarios (setor)",
+        "CREATE INDEX idx_questionarios_tipo ON questionarios (tipo_de_uso)",
+        "CREATE INDEX idx_questionarios_ativo ON questionarios (ativo)"
       ]
     }
   ]

@@ -234,12 +234,42 @@ export interface Onboarding extends RecordModel {
   teste_ultima_nota?: number
   teste_ultimo_percentual?: number
   teste_tentativas_count?: number
+  questionarios_vinculados?: string[] | { id: string; nome?: string }[]
+  questionario_id?: string
   expand?: {
     gestor_id?: User
     etapa1_concluida_por?: User
     etapa2_concluida_por?: User
     setor_ref?: SetorModel
+    questionario_id?: QuestionarioModel
   }
+}
+
+export type TipoDeUsoQuestionario =
+  | 'onboarding'
+  | 'reciclagem'
+  | 'mudanca_area'
+  | 'avaliacao'
+  | 'contratacao'
+
+export interface QuestionarioModel extends RecordModel {
+  nome: string
+  descricao?: string
+  setor?: string
+  tipo_de_uso: TipoDeUsoQuestionario
+  percentual_aprovacao: number // padrão 95
+  ativo: boolean
+}
+
+export interface TesteQuestaoModel extends RecordModel {
+  questionario_id?: string
+  enunciado: string
+  alternativas: string[]
+  correta_index: number
+  gabarito_comentario?: string
+  ordem: number
+  ativo: boolean
+  tema?: string
 }
 
 export interface TesteQuestaoPublica {
