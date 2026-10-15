@@ -480,26 +480,71 @@ export default function Manual() {
             </div>
           </div>
 
-          {/* 3.4 Etapa 3 — Avaliação Final */}
-          <div className="border-l-4 border-indigo-600 pl-4 py-1">
-            <h3 className="text-base font-bold text-gray-900 mb-2">
-              3.4 Etapa 3 — Avaliação Final (Gestor):
-            </h3>
-            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed mb-2">
-              O gestor registra a decisão <strong>Apto</strong> ou <strong>Não apto</strong>, com
-              observações.
-            </p>
+          {/* 3.4 Etapa 3 — Teste de Conhecimento e Avaliação Final */}
+          <div className="border-l-4 border-indigo-600 pl-4 py-1 space-y-3">
+            <div>
+              <h3 className="text-base font-bold text-gray-900 mb-1">
+                3.4 Etapa 3 — Teste de Conhecimento Técnico e Avaliação Final:
+              </h3>
+              <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
+                A Etapa 3 integra agora o <strong>Teste de Conhecimento Técnico</strong> prévio como
+                insumo mandatório para a decisão avaliativa do gestor.
+              </p>
+            </div>
+
+            {/* Sub-bloco Teste de Conhecimento */}
+            <div className="p-3.5 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-2 text-xs sm:text-sm text-indigo-950">
+              <strong className="block font-bold text-indigo-900 uppercase tracking-wide text-xs">
+                Teste de Conhecimento (Regras Oficiais):
+              </strong>
+              <ul className="list-disc list-inside space-y-1 text-xs text-indigo-900">
+                <li>
+                  <strong>Liberação automática:</strong> O teste é liberado no portal do colaborador
+                  assim que o gestor conclui formalmente a Etapa 2 (Vivência Técnica).
+                </li>
+                <li>
+                  <strong>Régua de aprovação rigorosa:</strong> São 20 questões objetivas (4
+                  alternativas cada) sobre normas de suporte, reinício de servidores, backup em
+                  horário comercial, DNS, software pirata, senha de terceiros, SLA, WhatsApp
+                  particular e regime de plantão. A aprovação exige{' '}
+                  <strong>95% de aproveitamento (mínimo de 19 acertos)</strong>.
+                </li>
+                <li>
+                  <strong>Correção automática segura no servidor:</strong> A submissão é corrigida
+                  automaticamente via endpoint server-side protegido. O colaborador{' '}
+                  <strong>NÃO visualiza nota nem gabarito</strong> no portal público — recebe apenas
+                  confirmação formal de envio para aguardar a reunião com o gestor.
+                </li>
+                <li>
+                  <strong>Visibilidade por papel:</strong> O <em>Administrador</em> tem acesso ao
+                  gabarito comentado completo e ao mapa comparativo das alternativas escolhidas. O{' '}
+                  <em>Gestor Responsável</em> e o <em>RH</em> visualizam exclusivamente a nota
+                  numérica e o percentual obtido em cada tentativa.
+                </li>
+                <li>
+                  <strong>Insumo para a avaliação e fluxo de Reteste:</strong> Se a nota for
+                  inferior a 95%, o sistema destaca &quot;Reprovado no teste&quot; ao gestor, que
+                  pode optar entre liberar um <strong>Reteste</strong> pelo portal público (com
+                  justificativa e auditoria) ou registrar <strong>Não Apto</strong> na avaliação. A
+                  decisão de aprovação final do onboarding continua sendo ato privativo e soberano
+                  do gestor.
+                </li>
+              </ul>
+            </div>
+
+            {/* Sub-bloco Avaliação do Gestor */}
             <div className="space-y-2 text-xs sm:text-sm text-gray-700">
               <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-950">
-                <strong>Apto →</strong> onboarding concluído; o colaborador recebe a mensagem de
-                liberação no portal; RH e Admin recebem o resultado por e-mail.
+                <strong>Apto →</strong> onboarding concluído com sucesso; o colaborador recebe a
+                mensagem de liberação no portal; RH e Admin recebem o resultado por e-mail
+                institucional.
               </div>
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-950">
-                <strong>Não apto →</strong> o gestor escolhe em qual fase o colaborador retorna
-                (ex.: &quot;Atendimento Solo N1&quot;) e define um prazo suplementar (5 dias por
-                padrão, editável); o status muda para &quot;Em acompanhamento&quot; (âmbar); o
-                histórico da primeira avaliação é preservado, há teto de 2 reavaliações e o gestor
-                pode encerrar como não apto definitivo.
+                <strong>Não apto →</strong> o gestor escolhe em qual fase técnica o colaborador
+                retorna (ex.: &quot;Atendimento Solo N1&quot;) e define prazo suplementar (5 dias
+                por padrão, editável); o status muda para &quot;Em acompanhamento&quot; (âmbar); o
+                histórico da primeira avaliação é preservado, respeitando o teto de 2 reavaliações
+                ou encerramento como não apto definitivo.
               </div>
             </div>
           </div>
@@ -800,6 +845,10 @@ export default function Manual() {
               'Registrar "Não apto" → escolher fase de retorno e conferir o status "Em acompanhamento";',
               'Exportar logs em CSV;',
               'Editar itens modelo do checklist na aba Etapa 1 de Modelos de Tarefas;',
+              'Teste de Conhecimento na Etapa 3: colaborador responde 20 questões no portal público sem ver nota/gabarito;',
+              'Simular correção automática: 19 acertos (95%) aprova no teste; 18 acertos (90%) sinaliza reprovado ao gestor;',
+              'Gestor/RH visualizam nota e percentual da tentativa; Admin confere gabarito detalhado com justificativas comentadas;',
+              'Gestor clica em "Liberar Reteste" com motivo → colaborador consegue submeter nova tentativa no portal público;',
               'Testar acesso cruzado: gestor de outra área vê, mas não consegue agir;',
               'Exclusão de colaborador: conferir que gestor não vê o botão, RH/Admin abrem modal com resumo, exigem nome, aceitam motivo opcional e apagam em cascata sem deixar órfãos.',
             ].map((item, idx) => (

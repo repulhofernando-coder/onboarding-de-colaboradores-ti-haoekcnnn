@@ -412,6 +412,7 @@ export default function Avaliacoes() {
               <tr className="bg-gray-50/80 border-b border-gray-200/80 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 <th className="py-3.5 px-4">Colaborador</th>
                 <th className="py-3.5 px-4">Setor</th>
+                <th className="py-3.5 px-4">Teste de Conhecimento</th>
                 <th className="py-3.5 px-4">Conclusão Etapa 2</th>
                 <th className="py-3.5 px-4">Prazo (15 dias)</th>
                 <th className="py-3.5 px-4">Status de Prazo</th>
@@ -421,7 +422,7 @@ export default function Avaliacoes() {
             <tbody className="divide-y divide-gray-100 text-sm">
               {pendentes.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-gray-400 text-sm">
+                  <td colSpan={7} className="py-12 text-center text-gray-400 text-sm">
                     {loading
                       ? 'Carregando pendências...'
                       : 'Nenhum colaborador aguardando avaliação no momento.'}
@@ -453,6 +454,34 @@ export default function Avaliacoes() {
                           />
                           {setor.nome}
                         </span>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        {item.teste_conhecimento_status === 'aprovado' ? (
+                          <div className="space-y-0.5">
+                            <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 text-[10px] font-bold">
+                              Aprovado ({item.teste_ultima_nota || 0}/20 •{' '}
+                              {item.teste_ultimo_percentual || 0}%)
+                            </Badge>
+                            <span className="text-[10px] text-gray-400 block">
+                              Tentativas: {item.teste_tentativas_count || 1}
+                            </span>
+                          </div>
+                        ) : item.teste_conhecimento_status === 'reprovado' ? (
+                          <div className="space-y-0.5">
+                            <Badge className="bg-red-100 text-red-800 border-red-200 text-[10px] font-bold">
+                              Reprovado ({item.teste_ultima_nota || 0}/20 •{' '}
+                              {item.teste_ultimo_percentual || 0}%)
+                            </Badge>
+                            <span className="text-[10px] text-red-600 block">Abaixo de 95%</span>
+                          </div>
+                        ) : item.teste_conhecimento_status === 'reteste_liberado' ? (
+                          <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[10px] font-medium">
+                            Reteste Liberado
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-gray-400 italic">Pendente no Portal</span>
+                        )}
                       </td>
 
                       <td className="py-3.5 px-4 text-xs text-gray-600">
@@ -588,11 +617,11 @@ export default function Avaliacoes() {
 
           {selectedOnboarding && (
             <div className="space-y-4 py-2">
-              <div className="p-3 rounded-lg bg-gray-50 border border-gray-200 text-xs">
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-200 text-xs space-y-1.5">
                 <div className="font-bold text-sm text-gray-900">
                   {selectedOnboarding.colaborador_nome}
                 </div>
-                <div className="text-gray-500 mt-0.5">
+                <div className="text-gray-500">
                   Setor{' '}
                   {
                     getSetorVisual(selectedOnboarding.setor, selectedOnboarding.expand?.setor_ref)
@@ -600,6 +629,24 @@ export default function Avaliacoes() {
                   }{' '}
                   • Início: {formatShortDate(selectedOnboarding.data_inicio)} • Prazo:{' '}
                   {formatShortDate(selectedOnboarding.data_fim)}
+                </div>
+
+                {/* Insumo do Teste de Conhecimento */}
+                <div className="pt-1 border-t border-gray-200 flex items-center justify-between">
+                  <span className="font-semibold text-gray-700">Insumo: Teste de Conhecimento</span>
+                  {selectedOnboarding.teste_conhecimento_status === 'aprovado' ? (
+                    <Badge className="bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                      Aprovado ({selectedOnboarding.teste_ultima_nota || 0}/20 •{' '}
+                      {selectedOnboarding.teste_ultimo_percentual || 0}%)
+                    </Badge>
+                  ) : selectedOnboarding.teste_conhecimento_status === 'reprovado' ? (
+                    <Badge className="bg-red-100 text-red-800 text-[10px] font-bold">
+                      Reprovado ({selectedOnboarding.teste_ultima_nota || 0}/20 •{' '}
+                      {selectedOnboarding.teste_ultimo_percentual || 0}%)
+                    </Badge>
+                  ) : (
+                    <span className="text-gray-400 italic">Pendente no portal</span>
+                  )}
                 </div>
               </div>
 

@@ -225,12 +225,55 @@ export interface Onboarding extends RecordModel {
   tecnico_responsavel_nome?: string
   tecnico_responsavel_email?: string
   checklist_integracao?: ItemChecklistIntegracao[]
+  teste_conhecimento_status?:
+    | 'bloqueado'
+    | 'liberado'
+    | 'aprovado'
+    | 'reprovado'
+    | 'reteste_liberado'
+  teste_ultima_nota?: number
+  teste_ultimo_percentual?: number
+  teste_tentativas_count?: number
   expand?: {
     gestor_id?: User
     etapa1_concluida_por?: User
     etapa2_concluida_por?: User
     setor_ref?: SetorModel
   }
+}
+
+export interface TesteQuestaoPublica {
+  id: string
+  ordem: number
+  tema?: string
+  enunciado: string
+  alternativas: string[]
+}
+
+export interface TesteRespostaItem {
+  questao_id: string
+  ordem: number
+  tema?: string
+  enunciado: string
+  alternativas: string[]
+  resposta_escolhida: number
+  correta_index?: number
+  correta?: boolean
+  gabarito_comentario?: string
+}
+
+export interface TesteTentativa extends RecordModel {
+  onboarding_id: string
+  tentativa_numero: number
+  total_questoes: number
+  acertos: number
+  percentual: number
+  aprovado: boolean
+  data_submissao: string
+  reteste_liberado?: boolean
+  reteste_liberado_em?: string
+  reteste_liberado_por?: string
+  respostas_detalhe?: TesteRespostaItem[]
 }
 
 export interface TarefaOnboarding extends RecordModel {

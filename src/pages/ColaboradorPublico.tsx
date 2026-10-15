@@ -38,6 +38,7 @@ import {
   tarefaService,
   confirmacaoColaboradorService,
   faseService,
+  testeConhecimentoService,
 } from '@/services/onboarding'
 import type {
   Onboarding,
@@ -45,6 +46,7 @@ import type {
   ConfirmacaoColaborador,
   TarefaTipo,
   FaseModelo,
+  TesteQuestaoPublica,
 } from '@/types/onboarding'
 import { getSetorVisual } from '@/types/onboarding'
 import { calcularDiasRestantes, formatShortDate, formatDateTime } from '@/lib/dateUtils'
@@ -60,6 +62,22 @@ export default function ColaboradorPublico() {
   const [confirmacoes, setConfirmacoes] = useState<Record<string, ConfirmacaoColaborador>>({})
   const [confirmandoId, setConfirmandoId] = useState<string | null>(null)
   const [sinalizandoFaseId, setSinalizandoFaseId] = useState<string | null>(null)
+
+  // Estados do Teste de Conhecimento (Etapa 3)
+  const [testeDados, setTesteDados] = useState<{
+    liberado: boolean
+    jaSubmetido?: boolean
+    reteste?: boolean
+    dataSubmissao?: string
+    tentativaNumero?: number
+    totalQuestoes?: number
+    questoes?: TesteQuestaoPublica[]
+    mensagem?: string
+    motivo?: string
+  } | null>(null)
+  const [testeRespostas, setTesteRespostas] = useState<Record<string, number>>({})
+  const [enviandoTeste, setEnviandoTeste] = useState(false)
+  const [testeSucessoMsg, setTesteSucessoMsg] = useState<string | null>(null)
 
   // Modal de preview/player
   const [previewModalOpen, setPreviewModalOpen] = useState(false)
@@ -89,13 +107,20 @@ export default function ColaboradorPublico() {
       setOnboarding(onb)
 
       // Carregar tarefas do onboarding e fases do setor
-      const [items, confs, fasesList] = await Promise.all([
+      const [items, confs, fasesList, testeInfo] = await Promise.all([
         tarefaService.listByOnboarding(onb.id),
         confirmacaoColaboradorService.listByOnboarding(onb.id),
         onb.setor ? faseService.listBySetor(onb.setor, onb.setor_ref) : Promise.resolve([]),
+        testeConhecimentoService.getPublico(token).catch((err) => {
+          console.warn('Teste de conhecimento não carregado:', err)
+          return null
+        }),
       ])
       setTarefas(items)
       setFasesSetor(fasesList)
+      if (testeInfo) {
+        setTesteDados(testeInfo)
+      }
 
       // Carregar confirmações do colaborador
       const mapConfs: Record<string, ConfirmacaoColaborador> = {}
@@ -270,6 +295,53 @@ export default function ColaboradorPublico() {
 
   const formatDateTimeLocal = (iso?: string) => {
     return formatDateTime(iso)
+  }
+
+  // Ações do Teste de Conhecimento
+  const handleSelecionarAlternativa = (questaoId: string, alternativaIndex: number) => {
+    setTesteRespostas((prev) => ({
+      ...prev,
+      [questaoId]: alternativaIndex,
+    }))
+  }
+
+  const handleSubmeterTeste = async () => {
+    if (!testeDados?.questoes || testeDados.questoes.length === 0) return
+
+    // Validação de todas respondidas
+    const total = testeDados.questoes.length
+    const respondidas = Object.keys(testeRespostas).length
+    const faltam = total - respondidas
+
+    if (faltam > 0) {
+      toast.error(
+        `Faltam ${faltam} questão(ões) para responder. Responda todas as ${total} questões antes de enviar.`,
+      )
+      return
+    }
+
+    try {
+      setEnviandoTeste(true)
+      const res = await testeConhecimentoService.submeterPublico(token || '', testeRespostas)
+      setTesteSucessoMsg(
+        res.mensagem || 'Teste enviado com sucesso. Aguarde o retorno do seu gestor.',
+      )
+      toast.success('Teste de conhecimento enviado com sucesso!')
+
+      // Atualizar dados locais
+      const novoTesteDados = await testeConhecimentoService
+        .getPublico(token || '')
+        .catch(() => null)
+      if (novoTesteDados) {
+        setTesteDados(novoTesteDados)
+      }
+    } catch (err: unknown) {
+      console.error('Erro ao submeter teste:', err)
+      const msg = err instanceof Error ? err.message : 'Erro ao submeter teste. Tente novamente.'
+      toast.error(msg)
+    } finally {
+      setEnviandoTeste(false)
+    }
   }
 
   // Formato compacto para sinalização: dd/mm hh:mm
@@ -1483,6 +1555,256 @@ export default function ColaboradorPublico() {
             </div>
           )}
         </section>
+        {/* ======================================================== */}
+        {/* ETAPA 3 — TESTE DE CONHECIMENTO & AVALIAÇÃO FINAL        */}
+        {/* ======================================================== */}
+        <section
+          className={`bg-white rounded-2xl border p-5 sm:p-6 shadow-sm space-y-5 transition-all ${
+            !onboarding.etapa2_concluida
+              ? 'border-slate-200/60 opacity-90'
+              : 'border-brand-200 ring-1 ring-brand-100'
+          }`}
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shadow-sm text-white ${
+                  onboarding.etapa2_concluida ? 'bg-brand-600' : 'bg-slate-400'
+                }`}
+              >
+                {!onboarding.etapa2_concluida ? <Lock className="w-4 h-4" /> : 3}
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900">
+                    Etapa 3 — Teste de Conhecimento Técnico
+                  </h3>
+                  {testeDados?.reteste && (
+                    <Badge className="bg-amber-100 text-amber-900 border-amber-300 text-xs font-semibold">
+                      Reteste Liberado pelo Gestor
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500">
+                  Avaliação teórica com 20 questões sobre normas de atendimento, segurança e boas
+                  práticas de TI.
+                </p>
+              </div>
+            </div>
+
+            {onboarding.etapa3_concluida ? (
+              <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs font-semibold">
+                Etapa 3 Concluída
+              </Badge>
+            ) : testeDados?.jaSubmetido || testeSucessoMsg ? (
+              <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-xs font-semibold">
+                Teste Enviado — Aguardando Gestor
+              </Badge>
+            ) : onboarding.etapa2_concluida ? (
+              <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs font-semibold">
+                Liberado para Resposta
+              </Badge>
+            ) : (
+              <Badge
+                variant="outline"
+                className="text-slate-400 border-slate-200 text-xs font-medium"
+              >
+                Bloqueada (Aguardando Etapa 2)
+              </Badge>
+            )}
+          </div>
+
+          {!onboarding.etapa2_concluida ? (
+            <div className="py-8 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-2">
+              <Lock className="w-8 h-8 text-slate-400 mx-auto" />
+              <p className="font-semibold text-slate-700">Etapa 3 Bloqueada</p>
+              <p className="text-slate-400 max-w-md mx-auto">
+                O Teste de Conhecimento será liberado automaticamente assim que o seu Gestor
+                Responsável validar a conclusão de todas as fases da Etapa 2 (Vivência Técnica).
+              </p>
+            </div>
+          ) : testeSucessoMsg || (testeDados?.jaSubmetido && !testeDados?.reteste) ? (
+            /* Confirmação de envio (SEM NOTA E SEM GABARITO) */
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-6 text-center space-y-4">
+              <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-7 h-7" />
+              </div>
+              <div className="space-y-1.5">
+                <h4 className="text-base font-bold text-emerald-950">Teste enviado com sucesso!</h4>
+                <p className="text-xs sm:text-sm text-emerald-800 max-w-lg mx-auto leading-relaxed">
+                  {testeSucessoMsg ||
+                    testeDados?.mensagem ||
+                    'Suas respostas foram gravadas e computadas de forma segura. Seu Gestor Responsável foi notificado e agendará a reunião de avaliação final com você.'}
+                </p>
+              </div>
+              {testeDados?.dataSubmissao && (
+                <div className="text-[11px] text-emerald-700 font-medium">
+                  Submissão registrada em: {formatDateTime(testeDados.dataSubmissao)}
+                </div>
+              )}
+            </div>
+          ) : testeDados?.questoes && testeDados.questoes.length > 0 ? (
+            /* FORMULÁRIO DO TESTE: 20 QUESTÕES EM TELA ÚNICA COM SCROLL E ALTERNATIVA ÚNICA */
+            <div className="space-y-6 pt-2">
+              {/* Barra de Progresso de Respostas */}
+              {(() => {
+                const total = testeDados.questoes.length
+                const respondidas = Object.keys(testeRespostas).length
+                const faltam = total - respondidas
+                const pct = Math.round((respondidas / total) * 100)
+
+                return (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2 sticky top-20 z-20 shadow-xs backdrop-blur-md bg-white/95">
+                    <div className="flex items-center justify-between text-xs font-semibold">
+                      <span className="text-slate-800 flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-brand-600" />
+                        Progresso do Teste: {respondidas} de {total} questões respondidas ({pct}%)
+                      </span>
+                      {faltam > 0 ? (
+                        <span className="text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200 font-bold">
+                          Faltam {faltam} questão(ões)
+                        </span>
+                      ) : (
+                        <span className="text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 font-bold flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Tudo respondido! Pronto para enviar.
+                        </span>
+                      )}
+                    </div>
+                    <Progress value={pct} className="h-2 rounded-full" />
+                  </div>
+                )
+              })()}
+
+              {/* Lista das 20 questões */}
+              <div className="space-y-5">
+                {testeDados.questoes.map((q, idx) => {
+                  const respostaSelecionada = testeRespostas[q.id]
+                  const respondida = respostaSelecionada !== undefined
+
+                  return (
+                    <div
+                      key={q.id}
+                      className={`p-5 rounded-xl border transition-all ${
+                        respondida
+                          ? 'bg-white border-slate-300 shadow-2xs'
+                          : 'bg-white border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span
+                          className={`w-7 h-7 rounded-lg text-xs font-bold flex items-center justify-center shrink-0 mt-0.5 ${
+                            respondida
+                              ? 'bg-brand-600 text-white'
+                              : 'bg-slate-100 text-slate-700 border border-slate-200'
+                          }`}
+                        >
+                          {idx + 1}
+                        </span>
+
+                        <div className="space-y-3 flex-1 min-w-0">
+                          <div>
+                            {q.tema && (
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-brand-700 bg-brand-50 px-2 py-0.5 rounded border border-brand-200 inline-block mb-1.5">
+                                {q.tema}
+                              </span>
+                            )}
+                            <h4 className="text-sm font-bold text-slate-900 leading-snug">
+                              {q.enunciado}
+                            </h4>
+                          </div>
+
+                          {/* Alternativas (A, B, C, D) */}
+                          <div className="space-y-2 pt-1">
+                            {q.alternativas.map((altText, altIdx) => {
+                              const letra = ['A', 'B', 'C', 'D'][altIdx] || String(altIdx + 1)
+                              const isChecked = respostaSelecionada === altIdx
+
+                              return (
+                                <label
+                                  key={altIdx}
+                                  onClick={() => handleSelecionarAlternativa(q.id, altIdx)}
+                                  className={`flex items-start gap-3 p-3 rounded-lg border text-xs cursor-pointer transition-all ${
+                                    isChecked
+                                      ? 'bg-brand-50/70 border-brand-500 text-brand-950 font-medium ring-1 ring-brand-300'
+                                      : 'bg-slate-50/50 border-slate-200 text-slate-700 hover:bg-slate-100/70'
+                                  }`}
+                                >
+                                  <input
+                                    type="radio"
+                                    name={`questao_${q.id}`}
+                                    checked={isChecked}
+                                    onChange={() => handleSelecionarAlternativa(q.id, altIdx)}
+                                    className="mt-0.5 w-4 h-4 text-brand-600 border-slate-300 focus:ring-brand-500"
+                                  />
+                                  <span className="font-bold text-slate-900 shrink-0">
+                                    {letra})
+                                  </span>
+                                  <span className="flex-1 leading-relaxed">{altText}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Bloco de Submissão Única com Validação */}
+              {(() => {
+                const total = testeDados.questoes.length
+                const respondidas = Object.keys(testeRespostas).length
+                const faltam = total - respondidas
+                const tudoPreenchido = faltam === 0
+
+                return (
+                  <div className="bg-slate-50 rounded-xl border border-slate-200 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="text-sm font-bold text-slate-900">
+                        {tudoPreenchido
+                          ? 'Todas as 20 questões foram preenchidas!'
+                          : `Atenção: faltam ${faltam} questão(ões) para você concluir.`}
+                      </div>
+                      <p className="text-xs text-slate-500 max-w-md leading-relaxed">
+                        Ao enviar, suas respostas serão corrigidas automaticamente pelo sistema e
+                        seu gestor receberá a notificação da conclusão.
+                      </p>
+                    </div>
+
+                    <Button
+                      type="button"
+                      disabled={!tudoPreenchido || enviandoTeste}
+                      onClick={handleSubmeterTeste}
+                      className={`h-11 px-6 font-bold text-sm shadow-sm transition-all ${
+                        tudoPreenchido
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          : 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {enviandoTeste ? (
+                        'Processando envio...'
+                      ) : tudoPreenchido ? (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 mr-2" />
+                          Finalizar e Enviar Teste
+                        </>
+                      ) : (
+                        `Faltam ${faltam} questão(ões)`
+                      )}
+                    </Button>
+                  </div>
+                )
+              })()}
+            </div>
+          ) : (
+            <div className="py-6 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-slate-200">
+              Nenhuma questão disponível no momento. Contate o suporte ou seu gestor.
+            </div>
+          )}
+        </section>
+
         {/* Rodapé informativo */}
         <div className="text-center text-xs text-slate-400 py-4 space-y-1">
           <div className="flex items-center justify-center gap-2 mb-1">

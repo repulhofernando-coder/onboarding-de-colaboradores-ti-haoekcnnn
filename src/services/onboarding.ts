@@ -1188,6 +1188,109 @@ export const confirmacaoColaboradorService = {
   },
 }
 
+export const testeConhecimentoService = {
+  /**
+   * Busca as questões do teste para o portal público do colaborador.
+   * Não expõe gabarito nem notas.
+   */
+  async getPublico(token: string): Promise<{
+    liberado: boolean
+    jaSubmetido?: boolean
+    reteste?: boolean
+    dataSubmissao?: string
+    tentativaNumero?: number
+    totalQuestoes?: number
+    questoes?: import('../types/onboarding').TesteQuestaoPublica[]
+    mensagem?: string
+    motivo?: string
+    colaboradorNome?: string
+    cargo?: string
+  }> {
+    const res = await fetch(
+      `${pb.baseUrl}/backend/v1/teste-conhecimento/publico?token=${encodeURIComponent(token)}`,
+    )
+    const json = await res.json()
+    if (!res.ok) {
+      throw new Error(json.error || 'Erro ao carregar teste de conhecimento.')
+    }
+    return json
+  },
+
+  /**
+   * Submete as respostas do colaborador via link público.
+   * A correção é 100% server-side e não devolve a nota na resposta.
+   */
+  async submeterPublico(
+    token: string,
+    respostas: Record<string, number>,
+  ): Promise<{
+    success: boolean
+    mensagem: string
+  }> {
+    const res = await fetch(`${pb.baseUrl}/backend/v1/teste-conhecimento/submeter`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ token, respostas }),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      throw new Error(json.error || 'Erro ao submeter teste de conhecimento.')
+    }
+    return json
+  },
+
+  /**
+   * Consulta o histórico de tentativas de um onboarding.
+   * Se role === 'admin', inclui o mapa detalhado com gabarito e comentários.
+   * Se 'gestao' ou 'rh', inclui apenas nota e percentual.
+   */
+  async listarTentativas(
+    onboardingId: string,
+    role: string,
+  ): Promise<import('../types/onboarding').TesteTentativa[]> {
+    const res = await fetch(
+      `${pb.baseUrl}/backend/v1/teste-conhecimento/tentativas/${encodeURIComponent(onboardingId)}?role=${encodeURIComponent(role)}`,
+      {
+        headers: {
+          Authorization: pb.authStore.token ? `Bearer ${pb.authStore.token}` : '',
+        },
+      },
+    )
+    const json = await res.json()
+    if (!res.ok) {
+      throw new Error(json.error || 'Erro ao consultar tentativas do teste.')
+    }
+    return json.tentativas || []
+  },
+
+  /**
+   * Libera um novo reteste para o colaborador (Gestão / Admin).
+   */
+  async liberarReteste(params: {
+    onboardingId: string
+    motivo?: string
+    usuarioId?: string
+    usuarioNome?: string
+    usuarioRole?: string
+  }): Promise<{ success: boolean; message: string }> {
+    const res = await fetch(`${pb.baseUrl}/backend/v1/teste-conhecimento/liberar-reteste`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: pb.authStore.token ? `Bearer ${pb.authStore.token}` : '',
+      },
+      body: JSON.stringify(params),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      throw new Error(json.error || 'Erro ao liberar reteste.')
+    }
+    return json
+  },
+}
+
 export const avaliacaoService = {
   async getByOnboarding(onboardingId: string): Promise<Avaliacao | null> {
     try {

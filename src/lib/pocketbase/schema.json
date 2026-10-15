@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-14T13:38:38.203Z",
+  "generatedAt": "2026-10-15T14:28:20.455Z",
   "collections": [
     {
       "name": "users",
@@ -400,6 +400,31 @@
         {
           "name": "setor",
           "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "teste_conhecimento_status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["bloqueado", "liberado", "aprovado", "reprovado", "reteste_liberado"]
+        },
+        {
+          "name": "teste_ultima_nota",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "teste_ultimo_percentual",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "teste_tentativas_count",
+          "type": "number",
           "required": false,
           "system": false
         }
@@ -1034,6 +1059,183 @@
         }
       ],
       "indexes": ["CREATE INDEX idx_itens_integracao_ordem ON itens_integracao_modelo (ordem)"]
+    },
+    {
+      "name": "teste_questoes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.role = 'admin'",
+        "update": "@request.auth.role = 'admin'",
+        "delete": "@request.auth.role = 'admin'"
+      },
+      "fields": [
+        {
+          "name": "enunciado",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "alternativas",
+          "type": "json",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "correta_index",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "gabarito_comentario",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ordem",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tema",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_teste_questoes_ordem ON teste_questoes (ordem)",
+        "CREATE INDEX idx_teste_questoes_ativo ON teste_questoes (ativo)"
+      ]
+    },
+    {
+      "name": "teste_tentativas",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": null,
+        "update": null,
+        "delete": "@request.auth.role = 'admin'"
+      },
+      "fields": [
+        {
+          "name": "onboarding_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "onboardings"
+        },
+        {
+          "name": "tentativa_numero",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "respostas",
+          "type": "json",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "total_questoes",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "acertos",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "percentual",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "aprovado",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_submissao",
+          "type": "date",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "ip",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "reteste_liberado",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "reteste_liberado_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "reteste_liberado_por",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_teste_tentativas_onboarding ON teste_tentativas (onboarding_id)",
+        "CREATE INDEX idx_teste_tentativas_submissao ON teste_tentativas (data_submissao DESC)"
+      ]
     }
   ]
 }

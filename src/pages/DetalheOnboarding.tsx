@@ -9,6 +9,7 @@ import {
   materialService,
   faseService,
   auditoriaService,
+  testeConhecimentoService,
 } from '@/services/onboarding'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -23,6 +24,7 @@ import type {
   LogAuditoria,
   FaseConcluidaInfo,
   ItemChecklistIntegracao,
+  TesteTentativa,
 } from '@/types/onboarding'
 import { itemIntegracaoModeloService } from '@/services/onboarding'
 import { SETORES_INFO, STATUS_INFO, getSetorVisual } from '@/types/onboarding'
@@ -146,6 +148,17 @@ export default function DetalheOnboarding() {
   const [observacoesAvaliacao, setObservacoesAvaliacao] = useState('')
   const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false)
 
+  // Estados do Teste de Conhecimento (Etapa 3)
+  const [tentativasTeste, setTentativasTeste] = useState<TesteTentativa[]>([])
+  const [loadingTeste, setLoadingTeste] = useState(false)
+  const [liberandoReteste, setLiberandoReteste] = useState(false)
+  const [modalRetesteOpen, setModalRetesteOpen] = useState(false)
+  const [motivoReteste, setMotivoReteste] = useState('')
+  const [modalGabaritoAdminOpen, setModalGabaritoAdminOpen] = useState(false)
+  const [tentativaSelecionadaAdmin, setTentativaSelecionadaAdmin] = useState<TesteTentativa | null>(
+    null,
+  )
+
   // Modal de Visualização de Arquivo (Player Vídeo / Visualizador Doc)
   const [previewModalOpen, setPreviewModalOpen] = useState(false)
   const [previewItem, setPreviewItem] = useState<{
@@ -155,6 +168,18 @@ export default function DetalheOnboarding() {
   } | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const carregarTentativasTeste = async (onbId: string) => {
+    try {
+      setLoadingTeste(true)
+      const res = await testeConhecimentoService.listarTentativas(onbId, role || 'gestao')
+      setTentativasTeste(res)
+    } catch (e) {
+      console.warn('Erro ao carregar tentativas do teste:', e)
+    } finally {
+      setLoadingTeste(false)
+    }
+  }
 
   const fetchData = async () => {
     if (!id) return
@@ -168,6 +193,9 @@ export default function DetalheOnboarding() {
       setOnboarding(onb)
       setTarefas(tars)
       setAvaliacao(aval)
+
+      // Carregar histórico de tentativas do teste de conhecimento
+      carregarTentativasTeste(id)
 
       if (onb?.clientes_mapeamento && Array.isArray(onb.clientes_mapeamento)) {
         setCliente1(onb.clientes_mapeamento[0] || '')
@@ -877,6 +905,33 @@ export default function DetalheOnboarding() {
       toast.error(msg ? `Falha ao adicionar item: ${msg}` : 'Falha ao adicionar item.')
     } finally {
       setEnviandoItem(false)
+    }
+  }
+
+  // Ação: Liberar Reteste do Teste de Conhecimento
+  const handleConfirmarLiberacaoReteste = async () => {
+    if (!onboarding) return
+    try {
+      setLiberandoReteste(true)
+      await testeConhecimentoService.liberarReteste({
+        onboardingId: onboarding.id,
+        motivo: motivoReteste || 'Revisão com o colaborador antes de nova avaliação',
+        usuarioId: user?.id,
+        usuarioNome: user?.name,
+        usuarioRole: role,
+      })
+      toast.success(
+        'Reteste liberado com sucesso! O colaborador já pode refazer o teste no portal público.',
+      )
+      setModalRetesteOpen(false)
+      setMotivoReteste('')
+      fetchData()
+    } catch (err: unknown) {
+      console.error('Erro ao liberar reteste:', err)
+      const msg = err instanceof Error ? err.message : 'Erro ao liberar reteste.'
+      toast.error(msg)
+    } finally {
+      setLiberandoReteste(false)
     }
   }
 
@@ -2915,6 +2970,180 @@ export default function DetalheOnboarding() {
                 )}
               </div>
 
+              {/* PAINEL DO TESTE DE CONHECIMENTO (INSUMO DA ETAPA 3) */}
+              {onboarding.etapa2_concluida && (
+                <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-brand-50 text-brand-700 flex items-center justify-center">
+                        <FileCheck2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                          Teste de Conhecimento Técnico
+                          <span className="text-[10px] font-semibold uppercase tracking-wider bg-slate-200 text-slate-700 px-2 py-0.5 rounded">
+                            Régua: 95% (19/20)
+                          </span>
+                        </h4>
+                        <p className="text-xs text-slate-500">
+                          20 questões de atendimento, segurança e boas práticas aplicadas ao
+                          colaborador
+                        </p>
+                      </div>
+                    </div>
+
+                    {tentativasTeste.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        {tentativasTeste[0].aprovado ? (
+                          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 font-bold text-xs">
+                            Aprovado no Teste ({tentativasTeste[0].acertos}/
+                            {tentativasTeste[0].total_questoes} — {tentativasTeste[0].percentual}%)
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-red-100 text-red-800 border-red-200 font-bold text-xs">
+                            Reprovado no Teste ({tentativasTeste[0].acertos}/
+                            {tentativasTeste[0].total_questoes} — {tentativasTeste[0].percentual}%)
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {tentativasTeste.length === 0 ? (
+                    <div className="py-5 text-center text-xs text-slate-500 bg-white rounded-lg border border-dashed border-slate-200 space-y-1">
+                      <Clock className="w-6 h-6 text-slate-400 mx-auto" />
+                      <p className="font-semibold text-slate-700">
+                        Aguardando envio do teste pelo colaborador
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        O teste de conhecimento já está liberado no portal público. Assim que o
+                        colaborador responder, o resultado será exibido aqui como insumo da
+                        avaliação.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {/* Destaque para reprovação */}
+                      {!tentativasTeste[0].aprovado && (
+                        <div className="p-4 rounded-xl bg-red-50 border border-red-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="space-y-1">
+                            <span className="text-xs font-bold text-red-900 flex items-center gap-1.5 uppercase tracking-wide">
+                              <AlertCircle className="w-4 h-4 text-red-600" />
+                              Colaborador Reprovado no Teste de Conhecimento
+                            </span>
+                            <p className="text-xs text-red-800 leading-relaxed">
+                              O aproveitamento ({tentativasTeste[0].percentual}%) ficou abaixo da
+                              régua de 95% (mínimo de 19 acertos). Como Gestor, você pode decidir
+                              entre liberar uma nova tentativa (reteste) ou registrar a avaliação
+                              final como Não Apto.
+                            </p>
+                          </div>
+
+                          {podeGerenciarEtapa2e3 && !onboarding.etapa3_concluida && (
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setModalRetesteOpen(true)}
+                                className="h-9 text-xs font-semibold bg-white text-brand-700 border-brand-300 hover:bg-brand-50"
+                              >
+                                Liberar Reteste
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => {
+                                  setDecisaoAvaliacao('nao_apto')
+                                  if (!faseRetornoId && fasesSetor.length > 0) {
+                                    setFaseRetornoId(fasesSetor[0].id)
+                                  }
+                                  const el = document.getElementById('secaoDecisaoGestor')
+                                  if (el) el.scrollIntoView({ behavior: 'smooth' })
+                                }}
+                                className="h-9 text-xs font-semibold bg-red-600 hover:bg-red-700 text-white"
+                              >
+                                Registrar Não Apto
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Tabela de histórico de tentativas */}
+                      <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                        <div className="px-3.5 py-2.5 bg-slate-100/70 border-b border-slate-200 flex items-center justify-between text-xs font-semibold text-slate-700">
+                          <span>Histórico de Tentativas</span>
+                          <span>Total: {tentativasTeste.length}</span>
+                        </div>
+                        <div className="divide-y divide-slate-100">
+                          {tentativasTeste.map((tent) => (
+                            <div
+                              key={tent.id}
+                              className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                            >
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-slate-900">
+                                    Tentativa #{tent.tentativa_numero}
+                                  </span>
+                                  <Badge
+                                    className={
+                                      tent.aprovado
+                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]'
+                                        : 'bg-red-50 text-red-700 border-red-200 text-[10px]'
+                                    }
+                                  >
+                                    {tent.aprovado ? 'Aprovado' : 'Reprovado'}
+                                  </Badge>
+                                  {tent.reteste_liberado && (
+                                    <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                      Reteste concedido
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[11px] text-slate-500">
+                                  Submetido em:{' '}
+                                  {formatDateTime(tent.data_submissao || tent.created)}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3 shrink-0">
+                                <div className="text-right">
+                                  <div className="font-bold text-slate-900">
+                                    {tent.acertos} de {tent.total_questoes} ({tent.percentual}%)
+                                  </div>
+                                  <div className="text-[10px] text-slate-400">
+                                    {tent.aprovado ? '≥ 95% atingido' : '< 95% insuficiente'}
+                                  </div>
+                                </div>
+
+                                {/* ADMIN: Botão para ver gabarito e mapa completo */}
+                                {isAdmin && (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setTentativaSelecionadaAdmin(tent)
+                                      setModalGabaritoAdminOpen(true)
+                                    }}
+                                    className="h-8 text-[11px] text-brand-700 border-brand-200 hover:bg-brand-50"
+                                  >
+                                    <Eye className="w-3.5 h-3.5 mr-1" />
+                                    Ver Gabarito
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Conteúdo Etapa 3 */}
               {!onboarding.etapa2_concluida ? (
                 <div className="py-8 text-center text-gray-400 text-xs flex flex-col items-center justify-center">
@@ -2980,7 +3209,7 @@ export default function DetalheOnboarding() {
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-4">
+                    <div id="secaoDecisaoGestor" className="space-y-4">
                       <div>
                         <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-2">
                           Decisão Obrigatória *
@@ -3498,6 +3727,222 @@ export default function DetalheOnboarding() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Liberar Reteste do Teste de Conhecimento */}
+      <Dialog open={modalRetesteOpen} onOpenChange={setModalRetesteOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <FileCheck2 className="w-5 h-5 text-brand-600" />
+              <span>Liberar Reteste do Teste de Conhecimento</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-2 space-y-3">
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Ao liberar o reteste, o colaborador <strong>{onboarding?.colaborador_nome}</strong>{' '}
+              poderá acessar novamente o link público e submeter uma nova tentativa de 20 questões.
+            </p>
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900">
+              <strong>Importante:</strong> Esta ação será registrada no histórico de auditoria com
+              seu usuário e data/hora. A nota anterior será substituída para fins de resultado
+              atual, mantendo o histórico de tentativas gravado.
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Justificativa / Motivo da Liberação *
+              </label>
+              <Textarea
+                rows={3}
+                placeholder="Ex.: Realizada sessão de alinhamento sobre as normas de atendimento e procedimentos antes da reavaliação..."
+                value={motivoReteste}
+                onChange={(e) => setMotivoReteste(e.target.value)}
+                className="text-xs border-slate-300 resize-none"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="flex items-center justify-end gap-2 border-t pt-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setModalRetesteOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={liberandoReteste}
+              onClick={handleConfirmarLiberacaoReteste}
+              className="bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs"
+            >
+              {liberandoReteste ? 'Liberando...' : 'Confirmar e Liberar no Portal'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Gabarito e Mapa Completo de Respostas (Exclusivo Administrador) */}
+      <Dialog open={modalGabaritoAdminOpen} onOpenChange={setModalGabaritoAdminOpen}>
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-purple-600" />
+              <span>
+                Auditoria de Gabarito — Tentativa #{tentativaSelecionadaAdmin?.tentativa_numero}{' '}
+                (Admin)
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+
+          {tentativaSelecionadaAdmin && (
+            <div className="py-2 space-y-4">
+              <div className="p-3.5 bg-purple-50 border border-purple-200 rounded-xl flex items-center justify-between text-xs">
+                <div>
+                  <span className="font-bold text-purple-950 block">
+                    Colaborador: {onboarding?.colaborador_nome}
+                  </span>
+                  <span className="text-purple-800">
+                    Data:{' '}
+                    {formatDateTime(
+                      tentativaSelecionadaAdmin.data_submissao || tentativaSelecionadaAdmin.created,
+                    )}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <div className="font-bold text-sm text-purple-950">
+                    {tentativaSelecionadaAdmin.acertos}/{tentativaSelecionadaAdmin.total_questoes} (
+                    {tentativaSelecionadaAdmin.percentual}%)
+                  </div>
+                  <Badge
+                    className={
+                      tentativaSelecionadaAdmin.aprovado
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-red-100 text-red-800'
+                    }
+                  >
+                    {tentativaSelecionadaAdmin.aprovado ? 'Aprovado' : 'Reprovado'}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Detalhe de cada questão */}
+              <div className="space-y-4">
+                {tentativaSelecionadaAdmin.respostas_detalhe &&
+                tentativaSelecionadaAdmin.respostas_detalhe.length > 0 ? (
+                  tentativaSelecionadaAdmin.respostas_detalhe.map((item, idx) => {
+                    const acertou = item.correta
+                    const letras = ['A', 'B', 'C', 'D']
+                    const letraEscolhida = letras[item.resposta_escolhida] || '-'
+                    const letraCorreta =
+                      item.correta_index !== undefined ? letras[item.correta_index] : '-'
+
+                    return (
+                      <div
+                        key={idx}
+                        className={`p-4 rounded-xl border text-xs space-y-2.5 ${
+                          acertou
+                            ? 'bg-emerald-50/20 border-emerald-200'
+                            : 'bg-red-50/20 border-red-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`w-6 h-6 rounded-md font-bold text-xs flex items-center justify-center shrink-0 ${
+                                acertou ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                              }`}
+                            >
+                              {item.ordem || idx + 1}
+                            </span>
+                            <span className="font-bold text-slate-900">
+                              Questão {item.ordem || idx + 1}
+                              {item.tema ? ` • ${item.tema}` : ''}
+                            </span>
+                          </div>
+                          <Badge
+                            className={
+                              acertou
+                                ? 'bg-emerald-100 text-emerald-800 border-emerald-200 text-[10px]'
+                                : 'bg-red-100 text-red-800 border-red-200 text-[10px]'
+                            }
+                          >
+                            {acertou ? 'Correta' : 'Incorreta'}
+                          </Badge>
+                        </div>
+
+                        <p className="text-slate-800 font-medium leading-relaxed">
+                          {item.enunciado}
+                        </p>
+
+                        {/* Comparativo de alternativas */}
+                        <div className="space-y-1.5 pt-1">
+                          {item.alternativas?.map((alt, aIdx) => {
+                            const l = letras[aIdx]
+                            const foiEscolhida = item.resposta_escolhida === aIdx
+                            const eCorreta = item.correta_index === aIdx
+
+                            return (
+                              <div
+                                key={aIdx}
+                                className={`p-2 rounded border text-[11px] flex items-start gap-2 ${
+                                  eCorreta
+                                    ? 'bg-emerald-100/70 border-emerald-300 font-bold text-emerald-950'
+                                    : foiEscolhida
+                                      ? 'bg-red-100/70 border-red-300 font-bold text-red-950'
+                                      : 'bg-white border-slate-200 text-slate-600'
+                                }`}
+                              >
+                                <span className="shrink-0">{l})</span>
+                                <span className="flex-1">{alt}</span>
+                                {foiEscolhida && (
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-white shrink-0">
+                                    Marcada pelo Colaborador
+                                  </span>
+                                )}
+                                {eCorreta && (
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-700 text-white shrink-0">
+                                    Gabarito Correto
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+
+                        {/* Comentário explicativo do gabarito (Admin Only) */}
+                        {item.gabarito_comentario && (
+                          <div className="p-2.5 rounded-lg bg-purple-50 border border-purple-200 text-[11px] text-purple-900 leading-relaxed">
+                            <strong>Comentário do Gabarito:</strong> {item.gabarito_comentario}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })
+                ) : (
+                  <div className="p-4 text-center text-xs text-slate-500">
+                    Mapa de respostas detalhado não disponível para esta tentativa.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="border-t pt-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setModalGabaritoAdminOpen(false)}
+            >
+              Fechar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
