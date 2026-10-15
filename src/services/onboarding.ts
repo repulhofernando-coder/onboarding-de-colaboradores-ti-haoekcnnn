@@ -16,6 +16,9 @@ import type {
   LogAuditoria,
   QuestionarioModel,
   TesteQuestaoModel,
+  TesteQuestaoPublica,
+  TesteTentativa,
+  CandidatoModel,
 } from '@/types/onboarding'
 
 function generateRandomToken(length = 32): string {
@@ -1533,6 +1536,227 @@ export const avaliacaoService = {
       .update<Onboarding>(params.onboardingId, updatePayload)
 
     return { avaliacao, onboarding }
+  },
+}
+
+export const candidatoService = {
+  async listAll(filtro?: {
+    busca?: string
+    setor?: string
+    status?: string
+  }): Promise<CandidatoModel[]> {
+    const filters: string[] = []
+    if (filtro?.busca) {
+      const q = filtro.busca.trim().toLowerCase()
+      filters.push(`(nome ~ '${q}' || email ~ '${q}' || cargo_pretendido ~ '${q}')`)
+    }
+    if (filtro?.setor) {
+      filters.push(`setor ~ '${filtro.setor}'`)
+    }
+    if (filtro?.status) {
+      filters.push(`status = '${filtro.status}'`)
+    }
+
+    try {
+      return await pb.collection('candidatos').getFullList<CandidatoModel>({
+        filter: filters.length > 0 ? filters.join(' && ') : '',
+        sort: '-created',
+        expand: 'questionario_id,decidido_por,criado_por,colaborador_id,tentativa_id',
+      })
+    } catch (err) {
+      console.error('Erro ao listar candidatos:', err)
+      return []
+    }
+  },
+
+  async getById(id: string): Promise<CandidatoModel | null> {
+    try {
+      return await pb.collection('candidatos').getOne<CandidatoModel>(id, {
+        expand: 'questionario_id,decidido_por,criado_por,colaborador_id,tentativa_id',
+      })
+    } catch (_) {
+      return null
+    }
+  },
+
+  async create(dados: {
+    nome: string
+    email: string
+    cargo_pretendido?: string
+    setor?: string
+    questionario_id?: string
+    criado_por?: string
+  }): Promise<CandidatoModel> {
+    // Gerar token público aleatório único (32 caracteres)
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+    let token = ''
+    for (let i = 0; i < 32; i++) {
+      token += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
+
+    const record = await pb.collection('candidatos').create<CandidatoModel>({
+      nome: dados.nome.trim(),
+      email: dados.email.trim(),
+      cargo_pretendido: dados.cargo_pretendido?.trim() || '',
+      setor: dados.setor || '',
+      questionario_id: dados.questionario_id || null,
+      status: 'pre_selecionado',
+      token_publico: token,
+      criado_por: dados.criado_por || pb.authStore.record?.id || null,
+    })
+
+    // Log de auditoria
+    await auditoriaService.registrar({
+      colaboradorNome: record.nome,
+      usuarioId: pb.authStore.record?.id || '',
+      usuarioNome: pb.authStore.record?.name || pb.authStore.record?.email || 'RH',
+      usuarioRole: pb.authStore.record?.role || 'rh',
+      acao: 'Cadastro de Candidato Pré-selecionado',
+      detalhes: `Candidato cadastrado para a vaga de ${record.cargo_pretendido || 'TI'} (Setor: ${record.setor}). Prova vinculada pronta para envio.`,
+      metadata: {
+        candidato_id: record.id,
+        nome: record.nome,
+        email: record.email,
+        cargo_pretendido: record.cargo_pretendido,
+        setor: record.setor,
+        questionario_id: record.questionario_id,
+      },
+    })
+
+    return record
+  },
+
+  async marcarProvaEnviada(candidatoId: string): Promise<CandidatoModel> {
+    const agoraIso = new Date().toISOString()
+    const cand = await pb.collection('candidatos').getOne<CandidatoModel>(candidatoId)
+
+    // Se já foi enviada, concluída ou decidida, não rebaixa o status
+    const updatePayload: Partial<CandidatoModel> = {
+      data_envio_prova: cand.data_envio_prova || agoraIso,
+    }
+    if (cand.status === 'pre_selecionado') {
+      updatePayload.status = 'prova_enviada'
+    }
+
+    const updated = await pb
+      .collection('candidatos')
+      .update<CandidatoModel>(candidatoId, updatePayload)
+
+    await auditoriaService.registrar({
+      colaboradorNome: cand.nome,
+      usuarioId: pb.authStore.record?.id || '',
+      usuarioNome: pb.authStore.record?.name || pb.authStore.record?.email || 'RH',
+      usuarioRole: pb.authStore.record?.role || 'rh',
+      acao: 'Cópia / Envio do Link da Prova do Candidato',
+      detalhes: `Link público da prova técnica copiado para envio ao candidato ${cand.nome}.`,
+      metadata: { candidato_id: cand.id, data_envio: agoraIso },
+    })
+
+    return updated
+  },
+
+  async decidir(params: {
+    candidatoId: string
+    decisao: 'aprovado' | 'reprovado'
+    motivo?: string
+  }): Promise<{ success: boolean; message: string; candidato: CandidatoModel }> {
+    const user = pb.authStore.record
+    const res = await pb.send<{
+      success: boolean
+      message: string
+      candidato: CandidatoModel
+    }>('/backend/v1/candidatos/decidir', {
+      method: 'POST',
+      body: {
+        candidatoId: params.candidatoId,
+        decisao: params.decisao,
+        motivo: params.motivo || '',
+        usuarioId: user?.id || '',
+        usuarioNome: user?.name || user?.email || 'Gestor',
+        usuarioRole: user?.role || 'gestao',
+      },
+    })
+    return res
+  },
+
+  async converterEmColaborador(params: {
+    candidatoId: string
+    dataInicio: string
+    gestorId: string
+  }): Promise<{
+    success: boolean
+    message: string
+    onboarding: Onboarding
+    candidato: CandidatoModel
+  }> {
+    const user = pb.authStore.record
+    const res = await pb.send<{
+      success: boolean
+      message: string
+      onboarding: Onboarding
+      candidato: CandidatoModel
+    }>('/backend/v1/candidatos/converter', {
+      method: 'POST',
+      body: {
+        candidatoId: params.candidatoId,
+        dataInicio: params.dataInicio,
+        gestorId: params.gestorId,
+        usuarioId: user?.id || '',
+        usuarioNome: user?.name || user?.email || 'RH',
+        usuarioRole: user?.role || 'rh',
+      },
+    })
+    return res
+  },
+
+  async excluir(candidatoId: string): Promise<boolean> {
+    const cand = await pb.collection('candidatos').getOne<CandidatoModel>(candidatoId)
+    await pb.collection('candidatos').delete(candidatoId)
+
+    await auditoriaService.registrar({
+      colaboradorNome: cand.nome,
+      usuarioId: pb.authStore.record?.id || '',
+      usuarioNome: pb.authStore.record?.name || pb.authStore.record?.email || 'Admin',
+      usuarioRole: pb.authStore.record?.role || 'admin',
+      acao: 'Exclusão de Candidato Pré-selecionado',
+      detalhes: `Registro do candidato ${cand.nome} (${cand.cargo_pretendido}) removido do sistema.`,
+      metadata: { candidato_id: cand.id, nome: cand.nome },
+    })
+
+    return true
+  },
+}
+
+export const candidatoProvaPublicaService = {
+  async getProva(token: string): Promise<{
+    liberado: boolean
+    jaSubmetido?: boolean
+    reprovado?: boolean
+    candidatoNome?: string
+    cargoPretendido?: string
+    setor?: string
+    questionarioNome?: string
+    questionarioDescricao?: string
+    totalQuestoes?: number
+    questoes?: TesteQuestaoPublica[]
+    dataConclusao?: string
+    mensagem?: string
+    error?: string
+  }> {
+    return await pb.send('/backend/v1/candidato/prova/publico', {
+      method: 'GET',
+      query: { token },
+    })
+  },
+
+  async submeterProva(
+    token: string,
+    respostas: Record<string, number>,
+  ): Promise<{ success: boolean; mensagem: string }> {
+    return await pb.send('/backend/v1/candidato/prova/submeter', {
+      method: 'POST',
+      body: { token, respostas },
+    })
   },
 }
 

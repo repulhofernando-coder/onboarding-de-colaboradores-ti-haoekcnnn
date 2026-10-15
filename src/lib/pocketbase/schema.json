@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-15T17:54:05.963Z",
+  "generatedAt": "2026-10-15T18:13:21.159Z",
   "collections": [
     {
       "name": "users",
@@ -1257,6 +1257,13 @@
           "required": false,
           "system": false,
           "collectionRef": "questionarios"
+        },
+        {
+          "name": "candidato_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "candidatos"
         }
       ],
       "indexes": [
@@ -1330,6 +1337,166 @@
         "CREATE INDEX idx_questionarios_setor ON questionarios (setor)",
         "CREATE INDEX idx_questionarios_tipo ON questionarios (tipo_de_uso)",
         "CREATE INDEX idx_questionarios_ativo ON questionarios (ativo)"
+      ]
+    },
+    {
+      "name": "candidatos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.role = 'admin' || @request.auth.role = 'rh'",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.role = 'admin' || @request.auth.role = 'rh'"
+      },
+      "fields": [
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "cargo_pretendido",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "setor",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "questionario_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "questionarios"
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "pre_selecionado",
+            "prova_enviada",
+            "prova_concluida",
+            "aprovado",
+            "reprovado",
+            "convertido"
+          ]
+        },
+        {
+          "name": "token_publico",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tentativa_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "teste_tentativas"
+        },
+        {
+          "name": "nota_acertos",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "total_questoes",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "percentual_obtido",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "aprovado_teste",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_envio_prova",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_conclusao_prova",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "decidido_por",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "data_decisao",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "motivo_reprovacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "criado_por",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "colaborador_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "onboardings"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_candidatos_token ON candidatos (token_publico) WHERE token_publico IS NOT NULL AND token_publico != ''",
+        "CREATE INDEX idx_candidatos_status ON candidatos (status)",
+        "CREATE INDEX idx_candidatos_setor ON candidatos (setor)",
+        "CREATE INDEX idx_candidatos_email ON candidatos (email)"
       ]
     }
   ]

@@ -22,6 +22,8 @@ import Usuarios from './pages/Usuarios'
 import Logs from './pages/Logs'
 import Manual from './pages/Manual'
 import ColaboradorPublico from './pages/ColaboradorPublico'
+import CandidatoProvaPublica from './pages/CandidatoProvaPublica'
+import PreSelecionados from './pages/PreSelecionados'
 import LimpezaAmbiente from './pages/LimpezaAmbiente'
 import NotFound from './pages/NotFound'
 
@@ -38,6 +40,7 @@ const App = () => (
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/colaborador/:token" element={<ColaboradorPublico />} />
+          <Route path="/candidato/prova/:token" element={<CandidatoProvaPublica />} />
 
           {/* Rotas Protegidas (Exigem Login) */}
           <Route
@@ -48,6 +51,7 @@ const App = () => (
             }
           >
             <Route path="/" element={<Index />} />
+            <Route path="/pre-selecionados" element={<PreSelecionados />} />
             <Route path="/onboardings" element={<OnboardingsList />} />
             <Route path="/onboardings/nova" element={<NovoOnboarding />} />
             <Route path="/colaboradores" element={<Colaboradores />} />

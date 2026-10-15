@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   ListTodo,
   Users,
+  UserCheck2,
   Layers,
   ClipboardCheck,
   LogOut,
@@ -39,6 +40,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Visão Geral', path: '/', icon: LayoutDashboard },
+  { label: 'Pré-selecionados', path: '/pre-selecionados', icon: UserCheck2 },
   { label: 'Onboardings', path: '/onboardings', icon: ListTodo },
   { label: 'Colaboradores', path: '/colaboradores', icon: Users },
   { label: 'Modelos de Tarefas', path: '/modelos', icon: Layers, allowedRoles: ['admin', 'rh'] },
@@ -64,6 +66,7 @@ export default function Layout() {
   const getPageTitle = () => {
     const p = location.pathname
     if (p === '/') return 'Visão Geral'
+    if (p.startsWith('/pre-selecionados')) return 'Pré-selecionados & Contratação'
     if (p.startsWith('/onboardings/nova')) return 'Novo Onboarding'
     if (p.startsWith('/onboardings')) return 'Lista de Onboardings'
     if (p.startsWith('/colaboradores/')) return 'Detalhes do Onboarding'

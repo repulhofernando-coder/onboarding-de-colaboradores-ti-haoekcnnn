@@ -12,6 +12,14 @@ export type OnboardingStatus =
   | 'nao_apto'
   | 'em_acompanhamento'
 
+export type CandidatoStatus =
+  | 'pre_selecionado'
+  | 'prova_enviada'
+  | 'prova_concluida'
+  | 'aprovado'
+  | 'reprovado'
+  | 'convertido'
+
 export type TarefaTipo = 'video' | 'manual'
 
 export type AvaliacaoDecisao = 'apto' | 'nao_apto'
@@ -496,6 +504,75 @@ export function getSetorVisual(
     corBorder: 'border-indigo-500',
     descricao: 'Área da empresa',
   }
+}
+
+export interface CandidatoModel extends RecordModel {
+  nome: string
+  email: string
+  cargo_pretendido?: string
+  setor?: string
+  questionario_id?: string
+  status: CandidatoStatus
+  token_publico?: string
+  tentativa_id?: string
+  nota_acertos?: number
+  total_questoes?: number
+  percentual_obtido?: number
+  aprovado_teste?: boolean
+  data_envio_prova?: string
+  data_conclusao_prova?: string
+  decidido_por?: string
+  data_decisao?: string
+  motivo_reprovacao?: string
+  criado_por?: string
+  colaborador_id?: string
+  expand?: {
+    questionario_id?: QuestionarioModel
+    decidido_por?: User
+    criado_por?: User
+    colaborador_id?: Onboarding
+    tentativa_id?: TesteTentativa
+  }
+}
+
+export const CANDIDATO_STATUS_INFO: Record<
+  CandidatoStatus,
+  {
+    nome: string
+    corBg: string
+    corDot: string
+  }
+> = {
+  pre_selecionado: {
+    nome: 'Pré-selecionado',
+    corBg: 'bg-slate-100 text-slate-700 border-slate-200',
+    corDot: 'bg-slate-400',
+  },
+  prova_enviada: {
+    nome: 'Prova enviada',
+    corBg: 'bg-blue-50 text-blue-700 border-blue-200',
+    corDot: 'bg-blue-500',
+  },
+  prova_concluida: {
+    nome: 'Prova concluída',
+    corBg: 'bg-amber-50 text-amber-700 border-amber-200',
+    corDot: 'bg-amber-500',
+  },
+  aprovado: {
+    nome: 'Aprovado',
+    corBg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    corDot: 'bg-emerald-500',
+  },
+  reprovado: {
+    nome: 'Reprovado',
+    corBg: 'bg-red-50 text-red-700 border-red-200',
+    corDot: 'bg-red-500',
+  },
+  convertido: {
+    nome: 'Convertido em colaborador',
+    corBg: 'bg-purple-50 text-purple-700 border-purple-200',
+    corDot: 'bg-purple-500',
+  },
 }
 
 export const STATUS_INFO: Record<

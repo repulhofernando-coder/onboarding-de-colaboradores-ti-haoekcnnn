@@ -778,7 +778,7 @@ export default function Manual() {
           </div>
 
           {/* SEÇÃO 9 */}
-          <div>
+          <div className="mb-8">
             <div className="flex items-center gap-2.5 mb-3 border-b border-gray-200 pb-2">
               <div className="w-7 h-7 rounded-lg bg-red-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
                 9
@@ -829,18 +829,91 @@ export default function Manual() {
               </div>
             </div>
           </div>
+
+          {/* SEÇÃO 10 */}
+          <div>
+            <div className="flex items-center gap-2.5 mb-3 border-b border-gray-200 pb-2">
+              <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                10
+              </div>
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+                SEÇÃO 10 — Módulo de Pré-selecionados & Contratação
+              </h2>
+            </div>
+            <div className="space-y-3 text-xs sm:text-sm text-gray-700 leading-relaxed">
+              <p>
+                O módulo <strong>Pré-selecionados</strong> (<code>/pre-selecionados</code>) atende
+                ao fluxo de candidatos que foram aprovados na 1ª fase de entrevista e avançam para a
+                avaliação técnica da vaga antes da contratação formal.
+              </p>
+
+              <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-lg space-y-2 text-xs text-blue-950">
+                <p>
+                  <strong>1. Cadastro Simples (RH / Admin):</strong> Ao cadastrar um candidato que
+                  passou da 1ª fase, são preenchidos apenas <em>Nome</em>, <em>E-mail</em>,{' '}
+                  <em>Cargo Pretendido</em> e <em>Área / Setor</em>.
+                </p>
+                <p>
+                  <strong>2. Vínculo Automático do Questionário:</strong> O sistema pré-seleciona a
+                  prova ativa do setor escolhido (dando prioridade para questionários com{' '}
+                  <code>tipo_de_uso = &quot;contratacao&quot;</code>; se não houver, utiliza o
+                  questionário de onboarding do setor). Caso o setor não possua provas, o sistema
+                  alerta e solicita a escolha manual.
+                </p>
+                <p>
+                  <strong>3. Link Público da Prova (Sem Login):</strong> O cartão do candidato exibe
+                  o botão <em>&quot;Copiar Link da Prova&quot;</em> (rota{' '}
+                  <code>/candidato/prova/:token</code>). Ao copiar, o status muda automaticamente
+                  para <em>&quot;Prova enviada&quot;</em> e aguarda o preenchimento.
+                </p>
+                <p>
+                  <strong>4. Tentativa Única e Correção no Servidor (Sem Reteste):</strong> A prova
+                  de contratação não possui reteste. O candidato preenche as questões de múltipla
+                  escolha e, ao enviar, o servidor corrige imediatamente e grava a tentativa única.
+                  O candidato NUNCA visualiza sua nota ou gabarito (apenas a tela de confirmação).
+                </p>
+                <p>
+                  <strong>5. Notificação por E-mail ao Gestor:</strong> Quando a prova é concluída,
+                  o sistema envia e-mail automático via SMTP aos Gestores e Admins da área com o
+                  resumo dos acertos, percentual e sinalização da régua.
+                </p>
+                <p>
+                  <strong>6. Decisão Soberana do Gestor da Área:</strong> Abaixo da régua do teste,
+                  o sistema exibe o badge vermelho <em>&quot;Reprovado no teste&quot;</em>, mas a
+                  decisão final cabe exclusivamente ao <strong>Gestor da Área</strong> (o RH apenas
+                  visualiza). O gestor avalia o percentual como insumo e clica em{' '}
+                  <strong>&quot;Aprovado&quot;</strong> ou <strong>&quot;Reprovado&quot;</strong> no
+                  cartão.
+                </p>
+                <p>
+                  <strong>7. Conversão em Colaborador + Início do Onboarding:</strong> Ao clicar em
+                  Aprovado, o botão <em>&quot;Converter em Colaborador&quot;</em> abre o formulário
+                  com os dados pré-preenchidos do candidato, solicitando apenas a{' '}
+                  <em>Data de Início</em> e o <em>Gestor Responsável de TI</em>. O sistema cria o
+                  colaborador e o onboarding em transação, mantendo o cartão no status{' '}
+                  <em>&quot;Convertido em colaborador&quot;</em> com link direto para o novo
+                  Onboarding.
+                </p>
+                <p>
+                  <strong>8. Encerramento de Links:</strong> Para candidatos reprovados, o link
+                  público é encerrado imediatamente e o registro permanece gravado para histórico e
+                  auditoria.
+                </p>
+              </div>
+            </div>
+          </div>
         </section>
 
         {/* ========================================================= */}
-        {/* SEÇÃO 10 — Checklist rápido de homologação */}
+        {/* SEÇÃO 11 — Checklist rápido de homologação */}
         {/* ========================================================= */}
         <section className="mb-10 avoid-break page-break-before">
           <div className="flex items-center gap-2.5 mb-4 border-b border-gray-200 pb-2">
             <div className="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
-              10
+              11
             </div>
             <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
-              SEÇÃO 10 — Checklist rápido de homologação
+              SEÇÃO 11 — Checklist rápido de homologação
             </h2>
           </div>
 
@@ -868,7 +941,13 @@ export default function Manual() {
               'Gestor/RH visualizam nota e percentual da tentativa; Admin confere gabarito detalhado com justificativas comentadas;',
               'Gestor clica em "Liberar Reteste" com motivo → colaborador consegue submeter nova tentativa no portal público;',
               'Testar acesso cruzado: gestor de outra área vê, mas não consegue agir;',
-              'Exclusão de colaborador: conferir que gestor não vê o botão, RH/Admin abrem modal com resumo, exigem nome, aceitam motivo opcional e apagam em cascata sem deixar órfãos.',
+              'Exclusão de colaborador: conferir que gestor não vê o botão, RH/Admin abrem modal com resumo, exigem nome, aceitam motivo opcional e apagam em cascata sem deixar órfãos;',
+              'Módulo Pré-selecionados: cadastrar candidato com nome, e-mail, cargo e setor → verificar questionário pré-selecionado;',
+              'Copiar link público da prova (/candidato/prova/:token) → status muda para "Prova enviada";',
+              'Candidato responde as questões e submete → verificar bloqueio de segunda tentativa (sem reteste) e mensagem sem nota;',
+              'Conferir notificação de conclusão da prova e insumo no cartão do candidato;',
+              'Gestor da área decide "Aprovado" ou "Reprovado" com motivo opcional;',
+              'Converter candidato aprovado em colaborador informando data de início e gestor → verificar criação do onboarding e link no cartão.',
             ].map((item, idx) => (
               <div
                 key={idx}
