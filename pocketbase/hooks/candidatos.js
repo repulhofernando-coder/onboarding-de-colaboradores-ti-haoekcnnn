@@ -296,10 +296,24 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
       ipOrigem = e.request.header.get('x-forwarded-for') || e.request.remoteAddr || ''
     } catch (_) {}
 
-    // Gravar tentativa em teste_tentativas com privilégio de sistema
+    // Validação defensiva: garantir que a coleção teste_tentativas não exija onboarding_id
+    // para submissões de pré-candidatos que ainda não possuem onboarding
     const tentativasCol = app.findCollectionByNameOrId('teste_tentativas')
+    try {
+      const obField = tentativasCol.fields.getByName('onboarding_id')
+      if (obField && obField.required) {
+        obField.required = false
+        app.save(tentativasCol)
+      }
+    } catch (fieldErr) {
+      console.warn('[Candidato Hook /prova/submeter] Aviso ao checar onboarding_id:', fieldErr)
+    }
+
+    // Gravar tentativa em teste_tentativas com privilégio de sistema
+    // Vinculada ao candidato pelo campo candidato_id, sem onboarding_id
     const tentativaRec = new Record(tentativasCol)
     tentativaRec.set('candidato_id', candidato.id)
+    tentativaRec.set('onboarding_id', null)
     tentativaRec.set('tentativa_numero', 1)
     tentativaRec.set('respostas', mapaRespostas)
     tentativaRec.set('total_questoes', totalQuestoes)

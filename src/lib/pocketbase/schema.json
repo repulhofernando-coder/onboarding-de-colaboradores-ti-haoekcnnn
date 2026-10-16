@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-15T18:40:06.354Z",
+  "generatedAt": "2026-10-16T13:11:53.785Z",
   "collections": [
     {
       "name": "users",
@@ -398,12 +398,6 @@
           "system": false
         },
         {
-          "name": "setor",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
           "name": "teste_conhecimento_status",
           "type": "select",
           "required": false,
@@ -440,6 +434,12 @@
           "required": false,
           "system": false,
           "collectionRef": "questionarios"
+        },
+        {
+          "name": "setor",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -1167,7 +1167,7 @@
         {
           "name": "onboarding_id",
           "type": "relation",
-          "required": true,
+          "required": false,
           "system": false,
           "collectionRef": "onboardings"
         },
