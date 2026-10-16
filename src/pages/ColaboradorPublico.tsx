@@ -25,6 +25,7 @@ import MundoOpenLogo from '@/components/MundoOpenLogo'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
@@ -62,6 +63,19 @@ export default function ColaboradorPublico() {
   const [confirmacoes, setConfirmacoes] = useState<Record<string, ConfirmacaoColaborador>>({})
   const [confirmandoId, setConfirmandoId] = useState<string | null>(null)
   const [sinalizandoFaseId, setSinalizandoFaseId] = useState<string | null>(null)
+
+  // Modal de Sinalização com Relato Dissertativo Obrigatório (Etapa 2)
+  const [modalRelatoOpen, setModalRelatoOpen] = useState(false)
+  const [faseParaSinalizar, setFaseParaSinalizar] = useState<{
+    faseId: string
+    faseTitulo: string
+    etapa: number
+    isRefacao?: boolean
+    motivoRefacao?: string
+    cicloRefacao?: number
+  } | null>(null)
+  const [relatoTexto, setRelatoTexto] = useState('')
+  const [relatoErro, setRelatoErro] = useState<string | null>(null)
 
   // Estados do Teste de Conhecimento (Etapa 3)
   const [testeDados, setTesteDados] = useState<{
@@ -359,11 +373,46 @@ export default function ColaboradorPublico() {
     }
   }
 
-  // Sinalizar conclusão das atividades da fase pelo colaborador
-  const handleSinalizarFase = async (params: {
+  // Abrir modal de sinalização da fase (Etapa 2 requer relato dissertativo)
+  const iniciarSinalizacaoFase = (params: {
     faseId: string
     faseTitulo: string
     etapa: number
+  }) => {
+    if (!onboarding) return
+
+    // Para Etapa 1, não há relato obrigatório, envia direto
+    if (params.etapa === 1) {
+      executarSinalizacaoFase({
+        ...params,
+        relato: '',
+      })
+      return
+    }
+
+    // Para Etapa 2, checa se a fase já teve refação solicitada
+    const sinalizacaoFase = onboarding.fases_sinalizadas?.find((s) => s.fase_id === params.faseId)
+    const isRefacao = sinalizacaoFase?.status_sinalizacao === 'refacao_solicitada'
+    const motivoRefacao = sinalizacaoFase?.motivo_refacao_atual || ''
+    const cicloRefacao = sinalizacaoFase?.refacoes_count || 0
+
+    setFaseParaSinalizar({
+      ...params,
+      isRefacao,
+      motivoRefacao,
+      cicloRefacao,
+    })
+    setRelatoTexto('')
+    setRelatoErro(null)
+    setModalRelatoOpen(true)
+  }
+
+  // Execução do envio do relato e sinalização
+  const executarSinalizacaoFase = async (params: {
+    faseId: string
+    faseTitulo: string
+    etapa: number
+    relato?: string
   }) => {
     if (!onboarding) return
 
@@ -375,22 +424,48 @@ export default function ColaboradorPublico() {
         faseId: params.faseId,
         faseTitulo: params.faseTitulo,
         etapa: params.etapa,
+        relato: params.relato,
         colaboradorNome: onboarding.colaborador_nome,
         colaboradorEmail: onboarding.colaborador_email,
       })
 
       setOnboarding(updated)
+      setModalRelatoOpen(false)
+      setFaseParaSinalizar(null)
+      setRelatoTexto('')
+      setRelatoErro(null)
+
       const avisoResponsavel =
         params.etapa === 1
           ? 'Responsável notificado. Aguarde a validação da fase pela equipe de RH.'
-          : 'Responsável notificado. Aguarde a conclusão da fase pelo seu gestor.'
+          : 'Relato registrado com sucesso! Seu gestor foi notificado para validar e concluir a fase.'
       toast.success(avisoResponsavel)
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Erro ao sinalizar conclusão da fase:', err)
-      toast.error('Erro ao sinalizar conclusão da fase. Tente novamente.')
+      const msg =
+        err instanceof Error ? err.message : 'Erro ao sinalizar conclusão da fase. Tente novamente.'
+      toast.error(msg)
     } finally {
       setSinalizandoFaseId(null)
     }
+  }
+
+  const handleConfirmarRelatoESinalizar = () => {
+    if (!faseParaSinalizar) return
+    const textoLimpo = relatoTexto.trim()
+    if (!textoLimpo || textoLimpo.length < 10) {
+      setRelatoErro(
+        'Por favor, descreva detalhadamente (pelo menos 10 caracteres) o que você entendeu e aprendeu nesta fase.',
+      )
+      return
+    }
+
+    executarSinalizacaoFase({
+      faseId: faseParaSinalizar.faseId,
+      faseTitulo: faseParaSinalizar.faseTitulo,
+      etapa: faseParaSinalizar.etapa,
+      relato: textoLimpo,
+    })
   }
 
   // Estado de Carregamento
@@ -846,7 +921,7 @@ export default function ColaboradorPublico() {
                               size="sm"
                               disabled={isSinalizando}
                               onClick={() =>
-                                handleSinalizarFase({
+                                iniciarSinalizacaoFase({
                                   faseId: 'etapa1',
                                   faseTitulo: 'Apresentação da Empresa',
                                   etapa: 1,
@@ -864,7 +939,7 @@ export default function ColaboradorPublico() {
                             size="sm"
                             disabled={isSinalizando}
                             onClick={() =>
-                              handleSinalizarFase({
+                              iniciarSinalizacaoFase({
                                 faseId: 'etapa1',
                                 faseTitulo: 'Apresentação da Empresa',
                                 etapa: 1,
@@ -1308,7 +1383,7 @@ export default function ColaboradorPublico() {
                                   size="sm"
                                   disabled={isSinalizando}
                                   onClick={() =>
-                                    handleSinalizarFase({
+                                    iniciarSinalizacaoFase({
                                       faseId: fase.id,
                                       faseTitulo: fase.titulo,
                                       etapa: 2,
@@ -1326,7 +1401,7 @@ export default function ColaboradorPublico() {
                                 size="sm"
                                 disabled={isSinalizando}
                                 onClick={() =>
-                                  handleSinalizarFase({
+                                  iniciarSinalizacaoFase({
                                     faseId: fase.id,
                                     faseTitulo: fase.titulo,
                                     etapa: 2,
@@ -1819,6 +1894,98 @@ export default function ColaboradorPublico() {
           </p>
         </div>
       </main>
+
+      {/* Modal de Sinalização com Relato da Fase (Etapa 2) */}
+      <Dialog open={modalRelatoOpen} onOpenChange={setModalRelatoOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-emerald-600" />
+              <span>Sinalizar Conclusão — {faseParaSinalizar?.faseTitulo}</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-2 space-y-4 text-xs">
+            {/* Aviso se a fase estiver em refação */}
+            {faseParaSinalizar?.isRefacao ? (
+              <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-xl space-y-2 text-amber-950">
+                <div className="flex items-center gap-2 font-bold text-amber-900">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>
+                    Atenção: Esta fase foi reaberta para refação (Ciclo{' '}
+                    {faseParaSinalizar.cicloRefacao}/2)
+                  </span>
+                </div>
+                {faseParaSinalizar.motivoRefacao && (
+                  <div className="p-2.5 bg-white/80 rounded border border-amber-200">
+                    <span className="font-semibold block text-[11px] text-amber-800 uppercase tracking-wider">
+                      Motivo apontado pelo seu Gestor:
+                    </span>
+                    <p className="mt-0.5 text-slate-800 leading-relaxed italic">
+                      "{faseParaSinalizar.motivoRefacao}"
+                    </p>
+                  </div>
+                )}
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  Por favor, revise os materiais solicitados e descreva detalhadamente abaixo o que
+                  você praticou e compreendeu nesta nova rodada.
+                </p>
+              </div>
+            ) : (
+              <p className="text-slate-600 leading-relaxed">
+                Parabéns por completar as leituras e atividades desta fase! Para que seu gestor
+                possa validar sua vivência prática, é necessário registrar o que você aprendeu.
+              </p>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-800 flex items-center justify-between">
+                <span>Relato da Fase (Obrigatório) *</span>
+                <span className="text-[11px] font-normal text-slate-500">Mínimo 10 caracteres</span>
+              </label>
+              <Textarea
+                rows={5}
+                placeholder="Descreva com suas palavras o que você entendeu/aprendeu nesta fase, quais procedimentos praticou e quais dúvidas sanou..."
+                value={relatoTexto}
+                onChange={(e) => {
+                  setRelatoTexto(e.target.value)
+                  if (relatoErro) setRelatoErro(null)
+                }}
+                className="text-xs resize-none"
+              />
+              {relatoErro && <p className="text-[11px] text-red-600 font-semibold">{relatoErro}</p>}
+            </div>
+
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-500 text-[11px] leading-relaxed">
+              <strong>Importante:</strong> Este relato será registrado no seu histórico e enviado
+              diretamente ao seu gestor para avaliação do seu aprendizado prático antes da conclusão
+              formal da fase.
+            </div>
+          </div>
+
+          <DialogFooter className="border-t pt-3 flex flex-col sm:flex-row items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={Boolean(sinalizandoFaseId)}
+              onClick={() => setModalRelatoOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={Boolean(sinalizandoFaseId)}
+              onClick={handleConfirmarRelatoESinalizar}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex items-center gap-1.5"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>{sinalizandoFaseId ? 'Registrando...' : 'Confirmar e Enviar Relato'}</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal: Player de Vídeo e Leitor de Documentos */}
       <Dialog open={previewModalOpen} onOpenChange={setPreviewModalOpen}>

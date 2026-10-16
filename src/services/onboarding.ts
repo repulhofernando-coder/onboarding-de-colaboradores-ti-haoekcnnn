@@ -271,6 +271,27 @@ export const materialService = {
 }
 
 export const faseService = {
+  async solicitarRefacaoFase(params: {
+    onboardingId: string
+    faseId: string
+    faseTitulo: string
+    motivo: string
+    usuarioId: string
+    usuarioNome: string
+    usuarioRole: string
+  }): Promise<{
+    success: boolean
+    message: string
+    refacoesCount: number
+    onboarding: Onboarding
+    fases_sinalizadas: import('@/types/onboarding').FaseSinalizadaInfo[]
+  }> {
+    return await pb.send('/backend/v1/fase/solicitar-refacao', {
+      method: 'POST',
+      body: params,
+    })
+  },
+
   async listBySetor(setor: Setor, setorId?: string): Promise<FaseModelo[]> {
     const setorVal = typeof setor === 'string' ? setor : String(setor || '')
     const setorLower = setorVal.toLowerCase()

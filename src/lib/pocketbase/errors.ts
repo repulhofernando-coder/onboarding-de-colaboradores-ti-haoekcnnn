@@ -27,3 +27,30 @@ export function getErrorMessage(error: unknown): string {
   const msgs = Object.values(extractFieldErrors(error))
   return msgs.length > 0 ? msgs.join(' ') : error.message || 'An unexpected error occurred.'
 }
+
+export function isNetworkError(error: unknown): boolean {
+  if (error instanceof ClientResponseError) {
+    // status 0 usually means aborted, network disconnect, CORS failure or timeout
+    if (error.status === 0) return true
+    const msg = (error.message || '').toLowerCase()
+    if (
+      msg.includes('network') ||
+      msg.includes('failed to fetch') ||
+      msg.includes('timeout') ||
+      msg.includes('connection')
+    ) {
+      return true
+    }
+  }
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase()
+    return (
+      msg.includes('network') ||
+      msg.includes('failed to fetch') ||
+      msg.includes('networkerror') ||
+      msg.includes('timeout') ||
+      msg.includes('connection refused')
+    )
+  }
+  return false
+}

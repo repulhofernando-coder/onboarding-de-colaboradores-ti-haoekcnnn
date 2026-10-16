@@ -27,7 +27,7 @@ import {
   setorService,
   questionarioService,
 } from '@/services/onboarding'
-import { pb } from '@/lib/pocketbase/client'
+import pb from '@/lib/pocketbase/client'
 import type { Onboarding, User, SetorModel, Questionario } from '@/types/onboarding'
 
 export interface ModalEditarColaboradorProps {

@@ -63,6 +63,8 @@ import {
   MessageSquare,
   Mail,
   User as UserIcon,
+  RotateCcw,
+  AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ModalExcluirColaborador } from '@/components/ModalExcluirColaborador'
@@ -173,6 +175,16 @@ export default function DetalheOnboarding() {
   const [tentativaSelecionadaAdmin, setTentativaSelecionadaAdmin] = useState<TesteTentativa | null>(
     null,
   )
+
+  // Modal Solicitar Refação da Fase (Gestor/Admin e RH)
+  const [modalRefacaoOpen, setModalRefacaoOpen] = useState(false)
+  const [faseParaRefacao, setFaseParaRefacao] = useState<{
+    faseId: string
+    faseTitulo: string
+    refacoesAtuais: number
+  } | null>(null)
+  const [motivoRefacao, setMotivoRefacao] = useState('')
+  const [solicitandoRefacao, setSolicitandoRefacao] = useState(false)
 
   // Modal de Visualização de Arquivo (Player Vídeo / Visualizador Doc)
   const [previewModalOpen, setPreviewModalOpen] = useState(false)
@@ -656,6 +668,62 @@ export default function DetalheOnboarding() {
       toast.error('Erro ao concluir Etapa 1.')
     } finally {
       setConcluindoEtapa1(false)
+    }
+  }
+
+  // Abrir Modal de Solicitação de Refação da Fase
+  const handleAbrirSolicitarRefacao = (fase: FaseModelo) => {
+    if (!onboarding) return
+    const sinalizacao = onboarding.fases_sinalizadas?.find((s) => s.fase_id === fase.id)
+    const refacoesAtuais = sinalizacao?.refacoes_count || 0
+
+    if (refacoesAtuais >= 2) {
+      toast.error('Esta fase já atingiu o limite máximo de 2 refações permitidas.')
+      return
+    }
+
+    setFaseParaRefacao({
+      faseId: fase.id,
+      faseTitulo: fase.titulo,
+      refacoesAtuais,
+    })
+    setMotivoRefacao('')
+    setModalRefacaoOpen(true)
+  }
+
+  // Confirmar Solicitação de Refação da Fase
+  const handleConfirmarSolicitacaoRefacao = async () => {
+    if (!onboarding || !user || !faseParaRefacao) return
+    const motivoLimpo = motivoRefacao.trim()
+    if (!motivoLimpo || motivoLimpo.length < 5) {
+      toast.error('Informe uma justificativa clara (ao menos 5 caracteres) para a refação.')
+      return
+    }
+
+    try {
+      setSolicitandoRefacao(true)
+      const res = await faseService.solicitarRefacaoFase({
+        onboardingId: onboarding.id,
+        faseId: faseParaRefacao.faseId,
+        faseTitulo: faseParaRefacao.faseTitulo,
+        motivo: motivoLimpo,
+        usuarioId: user.id,
+        usuarioNome: user.name || user.email,
+        usuarioRole: role || '',
+      })
+
+      setOnboarding(res.onboarding)
+      setModalRefacaoOpen(false)
+      setFaseParaRefacao(null)
+      setMotivoRefacao('')
+      toast.success(res.message || 'Refação solicitada com sucesso!')
+      fetchData()
+    } catch (err: unknown) {
+      console.error('Erro ao solicitar refação da fase:', err)
+      const msg = err instanceof Error ? err.message : 'Falha ao solicitar refação da fase.'
+      toast.error(msg)
+    } finally {
+      setSolicitandoRefacao(false)
     }
   }
 
@@ -2215,15 +2283,37 @@ export default function DetalheOnboarding() {
                                         (s) => s.fase_id === fase.id,
                                       )
                                       if (!sinalizacao) return null
+                                      const isRefacaoSolicitada =
+                                        sinalizacao.status_sinalizacao === 'refacao_solicitada'
+                                      const count = sinalizacao.refacoes_count || 0
+
                                       return (
-                                        <span
-                                          className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 shadow-2xs"
-                                          title={`O colaborador sinalizou que finalizou suas atividades nesta fase em ${formatDate(sinalizacao.sinalizado_em)}`}
-                                        >
-                                          <CheckCircle2 className="w-3 h-3 text-amber-700" />
-                                          Sinalizado pelo colaborador em{' '}
-                                          {formatDate(sinalizacao.sinalizado_em)}
-                                        </span>
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          {isRefacaoSolicitada ? (
+                                            <span
+                                              className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 shadow-2xs"
+                                              title={`Refação solicitada por ${sinalizacao.refacao_solicitada_por || 'Gestor'}`}
+                                            >
+                                              <RotateCcw className="w-3 h-3 text-amber-700" />
+                                              Refação Solicitada (Ciclo {count}/2)
+                                            </span>
+                                          ) : (
+                                            <span
+                                              className="text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 shadow-2xs"
+                                              title={`O colaborador sinalizou que finalizou suas atividades nesta fase em ${formatDate(sinalizacao.sinalizado_em)}`}
+                                            >
+                                              <CheckCircle2 className="w-3 h-3 text-emerald-700" />
+                                              Sinalizado pelo colaborador em{' '}
+                                              {formatDate(sinalizacao.sinalizado_em)}
+                                            </span>
+                                          )}
+
+                                          {count > 0 && !isRefacaoSolicitada && (
+                                            <span className="text-[10px] font-semibold bg-gray-100 text-gray-700 border border-gray-300 px-2 py-0.5 rounded-full">
+                                              Refações: {count}/2
+                                            </span>
+                                          )}
+                                        </div>
                                       )
                                     })()}
                                   </div>
@@ -2236,6 +2326,49 @@ export default function DetalheOnboarding() {
                               </div>
 
                               <div className="flex items-center gap-2 shrink-0 self-end sm:self-center flex-wrap">
+                                {/* Botão Solicitar Refação da Fase (Gestor/Admin e RH) */}
+                                {!onboarding.etapa2_concluida &&
+                                  (podeGerenciarEtapa2e3 || isRH) &&
+                                  (() => {
+                                    const sinalizacao = onboarding.fases_sinalizadas?.find(
+                                      (s) => s.fase_id === fase.id,
+                                    )
+                                    const refacoesCount = sinalizacao?.refacoes_count || 0
+                                    const atingiuLimite = refacoesCount >= 2
+
+                                    if (atingiuLimite) {
+                                      return (
+                                        <Badge
+                                          variant="outline"
+                                          className="h-8 text-[11px] font-semibold bg-red-50 text-red-700 border-red-200 inline-flex items-center gap-1"
+                                          title="Teto máximo de 2 refações já atingido para esta fase"
+                                        >
+                                          <AlertTriangle className="w-3 h-3 text-red-600" />
+                                          Limite atingido (2/2 refações)
+                                        </Badge>
+                                      )
+                                    }
+
+                                    return (
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleAbrirSolicitarRefacao(fase)}
+                                        className="h-8 text-xs font-semibold border-amber-300 text-amber-900 hover:bg-amber-50 flex items-center gap-1"
+                                        title={`Solicitar refação desta fase ao colaborador (Ciclo ${refacoesCount + 1}/2)`}
+                                      >
+                                        <RotateCcw className="w-3.5 h-3.5 text-amber-700" />
+                                        <span>Solicitar Refação</span>
+                                        {refacoesCount > 0 && (
+                                          <span className="text-[10px] bg-amber-200/70 text-amber-950 px-1.5 py-0.2 rounded-full font-bold">
+                                            {refacoesCount}/2
+                                          </span>
+                                        )}
+                                      </Button>
+                                    )
+                                  })()}
+
                                 {/* Botão de Concluir Fase Uniforme */}
                                 {!onboarding.etapa2_concluida && (
                                   <>
@@ -2311,6 +2444,80 @@ export default function DetalheOnboarding() {
                                 )}
                               </div>
                             </div>
+
+                            {/* Exibição do Relato Dissertativo da Fase e Histórico de Refações */}
+                            {(() => {
+                              const sinalizacao = onboarding.fases_sinalizadas?.find(
+                                (s) => s.fase_id === fase.id,
+                              )
+                              if (!sinalizacao) return null
+
+                              const temRelato = Boolean(
+                                sinalizacao.relato && sinalizacao.relato.trim(),
+                              )
+                              const historico = sinalizacao.historico_refacoes || []
+
+                              return (
+                                <div className="p-3.5 border-b bg-purple-50/30 border-purple-200/70 space-y-2.5 text-xs">
+                                  {temRelato ? (
+                                    <div className="space-y-1">
+                                      <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-purple-900">
+                                        <span className="flex items-center gap-1.5">
+                                          <MessageSquare className="w-3.5 h-3.5 text-purple-700" />
+                                          Relato de Aprendizado do Colaborador:
+                                        </span>
+                                        <span className="text-[10px] font-normal text-purple-700 lowercase">
+                                          enviado em {formatDate(sinalizacao.sinalizado_em)}
+                                        </span>
+                                      </div>
+                                      <div className="p-3 rounded-lg bg-white border border-purple-200 text-slate-800 leading-relaxed font-sans shadow-2xs whitespace-pre-wrap">
+                                        {sinalizacao.relato}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="text-[11px] text-purple-800 italic flex items-center gap-1.5">
+                                      <Info className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                      <span>
+                                        {sinalizacao.status_sinalizacao === 'refacao_solicitada'
+                                          ? 'Aguardando o colaborador reenviar novo relato após praticar a refação.'
+                                          : 'Nenhum relato dissertativo associado a este sinal.'}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {/* Histórico de Refações desta Fase */}
+                                  {historico.length > 0 && (
+                                    <div className="space-y-1.5 pt-1 border-t border-purple-200/60">
+                                      <span className="font-bold text-[11px] text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                                        <RotateCcw className="w-3 h-3 text-amber-700" />
+                                        Histórico de Refações Solicitadas ({historico.length}/2):
+                                      </span>
+                                      <div className="space-y-1.5">
+                                        {historico.map((h, hIdx) => (
+                                          <div
+                                            key={hIdx}
+                                            className="p-2.5 rounded-md bg-amber-50 border border-amber-200 text-[11px] space-y-1 text-amber-950"
+                                          >
+                                            <div className="flex items-center justify-between font-semibold">
+                                              <span>
+                                                Ciclo {h.ciclo} — Solicitado por {h.solicitado_por}{' '}
+                                                ({h.solicitado_por_role || 'gestor'})
+                                              </span>
+                                              <span className="text-[10px] text-amber-800 font-normal">
+                                                {formatDate(h.solicitado_em)}
+                                              </span>
+                                            </div>
+                                            <p className="italic text-slate-800">
+                                              <strong>Justificativa:</strong> "{h.motivo}"
+                                            </p>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })()}
 
                             {/* Destaque explícito de prazo se a fase estiver concluída */}
                             {faseStatus.registroConclusao && (
@@ -3856,6 +4063,72 @@ export default function DetalheOnboarding() {
               className="bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs"
             >
               {liberandoReteste ? 'Liberando...' : 'Confirmar e Liberar no Portal'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Solicitar Refação da Fase (Gestor/Admin e RH) */}
+      <Dialog open={modalRefacaoOpen} onOpenChange={setModalRefacaoOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <RotateCcw className="w-5 h-5 text-amber-600" />
+              <span>Solicitar Refação de Fase — {faseParaRefacao?.faseTitulo}</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-2 space-y-3.5 text-xs">
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1 text-amber-950">
+              <span className="font-bold block">
+                Ciclo de Refação: {(faseParaRefacao?.refacoesAtuais || 0) + 1} de 2 permitidos
+              </span>
+              <p className="leading-relaxed text-amber-900 text-[11px]">
+                Ao solicitar a refação, a fase será reaberta para o colaborador no portal público, o
+                status de conclusão será cancelado e o colaborador será orientado a praticar e
+                preencher um novo relato dissertativo.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-800 block">
+                Justificativa / Orientações para a Refação *
+              </label>
+              <Textarea
+                rows={4}
+                placeholder="Explique o que precisa ser revisto ou melhor executado pelo colaborador nesta fase..."
+                value={motivoRefacao}
+                onChange={(e) => setMotivoRefacao(e.target.value)}
+                className="text-xs resize-none"
+              />
+              <span className="text-[11px] text-slate-500 block">
+                Esta justificativa será visível para o colaborador no portal e ficará registrada
+                permanentemente na auditoria do onboarding.
+              </span>
+            </div>
+          </div>
+
+          <DialogFooter className="border-t pt-3 flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={solicitandoRefacao}
+              onClick={() => setModalRefacaoOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={solicitandoRefacao}
+              onClick={handleConfirmarSolicitacaoRefacao}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs flex items-center gap-1.5"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>
+                {solicitandoRefacao ? 'Solicitando...' : 'Confirmar Solicitação de Refação'}
+              </span>
             </Button>
           </DialogFooter>
         </DialogContent>

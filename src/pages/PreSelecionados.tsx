@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import {
   candidatoService,
+  candidatoProvaPublicaService,
   questionarioService,
   setorService,
   userService,
@@ -40,6 +41,9 @@ import {
   Trash2,
   X,
   AlertTriangle,
+  Eye,
+  ShieldCheck,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -118,6 +122,33 @@ export default function PreSelecionados() {
   const [modalExcluirOpen, setModalExcluirOpen] = useState(false)
   const [candidatoParaExcluir, setCandidatoParaExcluir] = useState<CandidatoModel | null>(null)
   const [excluindo, setExcluindo] = useState(false)
+
+  // Modal Ver Gabarito (Admin, Gestor e RH)
+  const [modalGabaritoOpen, setModalGabaritoOpen] = useState(false)
+  const [candidatoGabarito, setCandidatoGabarito] = useState<CandidatoModel | null>(null)
+  const [tentativaGabarito, setTentativaGabarito] = useState<
+    import('@/types/onboarding').TesteTentativa | null
+  >(null)
+  const [carregandoGabarito, setCarregandoGabarito] = useState(false)
+
+  // Abrir Gabarito (Admin, Gestor, RH)
+  const abrirGabarito = async (candidato: CandidatoModel) => {
+    setCandidatoGabarito(candidato)
+    setTentativaGabarito(null)
+    setModalGabaritoOpen(true)
+    setCarregandoGabarito(true)
+
+    try {
+      const res = await candidatoProvaPublicaService.getTentativaGabarito(candidato.id)
+      setTentativaGabarito(res.tentativa)
+    } catch (err: unknown) {
+      console.error('Erro ao carregar gabarito do candidato:', err)
+      const msg = err instanceof Error ? err.message : 'Falha ao buscar gabarito da tentativa.'
+      toast.error(msg)
+    } finally {
+      setCarregandoGabarito(false)
+    }
+  }
 
   // Carregar dados principais
   const carregarDados = useCallback(async () => {
@@ -860,6 +891,22 @@ export default function PreSelecionados() {
                             : '-'}
                         </span>
                       </div>
+
+                      {/* Botão Ver Gabarito no Bloco de Resultado (Admin, Gestor e RH) */}
+                      {(isAdmin || isGestao || isRH) && (
+                        <div className="pt-1.5">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => abrirGabarito(item)}
+                            className="w-full h-7 text-[11px] font-semibold bg-white hover:bg-purple-50 text-purple-700 border-purple-200 flex items-center justify-center gap-1.5 shadow-2xs"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Ver Gabarito & Respostas</span>
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   ) : item.status === 'prova_enviada' ? (
                     <div className="p-2.5 rounded-lg bg-blue-50/70 border border-blue-200 text-xs text-blue-900 flex items-center gap-2">
@@ -1304,7 +1351,7 @@ export default function PreSelecionados() {
               {getSetorVisual(candidatoDecisao?.setor).nome}).
             </p>
 
-            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-1">
+            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-gray-500">Desempenho no teste:</span>
                 <span className="font-bold text-gray-800">
@@ -1318,6 +1365,22 @@ export default function PreSelecionados() {
                   {user?.name || user?.email} (Gestor da Área)
                 </span>
               </div>
+
+              {/* Botão Ver Gabarito no Modal de Decisão do Gestor */}
+              {candidatoDecisao && (
+                <div className="pt-1 border-t border-gray-200">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => abrirGabarito(candidatoDecisao)}
+                    className="w-full h-7 text-xs font-semibold text-purple-700 border-purple-200 hover:bg-purple-50 flex items-center justify-center gap-1.5"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>Consultar Gabarito e Respostas Dissertativas</span>
+                  </Button>
+                </div>
+              )}
             </div>
 
             {tipoDecisao === 'reprovado' && (
@@ -1651,6 +1714,232 @@ export default function PreSelecionados() {
               className="bg-red-600 hover:bg-red-700 text-white font-semibold"
             >
               {excluindo ? 'Excluindo...' : 'Sim, Excluir'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL 5: Gabarito e Auditoria de Respostas (Admin, Gestor e RH)             */}
+      {/* ========================================================================= */}
+      <Dialog open={modalGabaritoOpen} onOpenChange={setModalGabaritoOpen}>
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-purple-600" />
+              <span>Auditoria de Gabarito — Prova Técnica do Pré-selecionado</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          {carregandoGabarito ? (
+            <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-500">
+              <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+              <span className="text-xs font-medium">
+                Buscando gabarito e respostas do candidato...
+              </span>
+            </div>
+          ) : tentativaGabarito ? (
+            <div className="py-2 space-y-4">
+              <div className="p-3.5 bg-purple-50 border border-purple-200 rounded-xl flex items-center justify-between text-xs">
+                <div>
+                  <span className="font-bold text-purple-950 block">
+                    Candidato: {candidatoGabarito?.nome}
+                  </span>
+                  <span className="text-purple-800">
+                    Cargo: {candidatoGabarito?.cargo_pretendido || 'TI'} • Setor:{' '}
+                    {getSetorVisual(candidatoGabarito?.setor).nome}
+                  </span>
+                  <span className="text-purple-700 text-[11px] block mt-0.5">
+                    Data:{' '}
+                    {formatDateTime(tentativaGabarito.data_submissao || tentativaGabarito.created)}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <div className="font-bold text-sm text-purple-950">
+                    {tentativaGabarito.acertos}/{tentativaGabarito.total_questoes} (
+                    {tentativaGabarito.percentual}%)
+                  </div>
+                  <Badge
+                    className={
+                      tentativaGabarito.aprovado
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-red-100 text-red-800'
+                    }
+                  >
+                    {tentativaGabarito.aprovado ? 'Atingiu a Régua' : 'Abaixo da Régua'}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Informação sobre critério de avaliação das dissertativas */}
+              <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-lg text-xs text-amber-900 leading-relaxed">
+                <strong>Atenção do Gestor / RH:</strong> As questões dissertativas não compõem a
+                nota automática. Elas constituem critério qualitativo do Gestor da Área para a
+                tomada de decisão final sobre o perfil.
+              </div>
+
+              {/* Detalhe de cada questão */}
+              <div className="space-y-4">
+                {tentativaGabarito.respostas_detalhe &&
+                tentativaGabarito.respostas_detalhe.length > 0 ? (
+                  tentativaGabarito.respostas_detalhe.map((item, idx) => {
+                    const isDissertativa = item.tipo === 'dissertativa'
+                    const acertou = item.correta
+                    const letras = ['A', 'B', 'C', 'D']
+
+                    if (isDissertativa) {
+                      return (
+                        <div
+                          key={idx}
+                          className="p-4 rounded-xl border border-purple-200 bg-purple-50/30 text-xs space-y-3"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="w-6 h-6 rounded-md font-bold text-xs flex items-center justify-center shrink-0 bg-purple-600 text-white">
+                                {item.ordem || idx + 1}
+                              </span>
+                              <span className="font-bold text-slate-900">
+                                Questão {item.ordem || idx + 1} (Dissertativa)
+                                {item.tema ? ` • ${item.tema}` : ''}
+                              </span>
+                            </div>
+                            <Badge className="bg-purple-100 text-purple-800 border-purple-200 text-[10px]">
+                              Avaliação Qualitativa
+                            </Badge>
+                          </div>
+
+                          <p className="text-slate-800 font-medium leading-relaxed">
+                            {item.enunciado}
+                          </p>
+
+                          {/* Resposta do candidato */}
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 block">
+                              Resposta do Candidato:
+                            </label>
+                            <div className="p-3 bg-white rounded-md border border-slate-300 text-slate-900 text-xs whitespace-pre-wrap leading-relaxed shadow-2xs font-mono">
+                              {item.texto_respondido || (
+                                <span className="italic text-slate-400">
+                                  (Nenhuma resposta preenchida)
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Expectativa do gabarito / Comentário */}
+                          {item.gabarito_comentario && (
+                            <div className="p-2.5 rounded-lg bg-purple-100/70 border border-purple-300 text-[11px] text-purple-950 leading-relaxed">
+                              <strong>Expectativa do Gabarito:</strong> {item.gabarito_comentario}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }
+
+                    // Questão Objetiva
+                    return (
+                      <div
+                        key={idx}
+                        className={`p-4 rounded-xl border text-xs space-y-2.5 ${
+                          acertou
+                            ? 'bg-emerald-50/20 border-emerald-200'
+                            : 'bg-red-50/20 border-red-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`w-6 h-6 rounded-md font-bold text-xs flex items-center justify-center shrink-0 ${
+                                acertou ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                              }`}
+                            >
+                              {item.ordem || idx + 1}
+                            </span>
+                            <span className="font-bold text-slate-900">
+                              Questão {item.ordem || idx + 1}
+                              {item.tema ? ` • ${item.tema}` : ''}
+                            </span>
+                          </div>
+                          <Badge
+                            className={
+                              acertou
+                                ? 'bg-emerald-100 text-emerald-800 border-emerald-200 text-[10px]'
+                                : 'bg-red-100 text-red-800 border-red-200 text-[10px]'
+                            }
+                          >
+                            {acertou ? 'Correta' : 'Incorreta'}
+                          </Badge>
+                        </div>
+
+                        <p className="text-slate-800 font-medium leading-relaxed">
+                          {item.enunciado}
+                        </p>
+
+                        {/* Comparativo de alternativas */}
+                        <div className="space-y-1.5 pt-1">
+                          {item.alternativas?.map((alt, aIdx) => {
+                            const l = letras[aIdx]
+                            const foiEscolhida = item.resposta_escolhida === aIdx
+                            const eCorreta = item.correta_index === aIdx
+
+                            return (
+                              <div
+                                key={aIdx}
+                                className={`p-2 rounded border text-[11px] flex items-start gap-2 ${
+                                  eCorreta
+                                    ? 'bg-emerald-100/70 border-emerald-300 font-bold text-emerald-950'
+                                    : foiEscolhida
+                                      ? 'bg-red-100/70 border-red-300 font-bold text-red-950'
+                                      : 'bg-white border-slate-200 text-slate-600'
+                                }`}
+                              >
+                                <span className="shrink-0">{l})</span>
+                                <span className="flex-1">{alt}</span>
+                                {foiEscolhida && (
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-white shrink-0">
+                                    Marcada pelo Candidato
+                                  </span>
+                                )}
+                                {eCorreta && (
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-700 text-white shrink-0">
+                                    Gabarito Correto
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+
+                        {/* Comentário explicativo do gabarito */}
+                        {item.gabarito_comentario && (
+                          <div className="p-2.5 rounded-lg bg-purple-50 border border-purple-200 text-[11px] text-purple-900 leading-relaxed">
+                            <strong>Comentário do Gabarito:</strong> {item.gabarito_comentario}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })
+                ) : (
+                  <div className="p-4 text-center text-xs text-slate-500">
+                    Mapa de respostas detalhado não disponível para esta tentativa.
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="py-8 text-center text-xs text-slate-500">
+              Nenhuma tentativa registrada para este candidato.
+            </div>
+          )}
+
+          <DialogFooter className="border-t pt-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setModalGabaritoOpen(false)}
+            >
+              Fechar Gabarito
             </Button>
           </DialogFooter>
         </DialogContent>

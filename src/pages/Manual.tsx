@@ -431,6 +431,35 @@ export default function Manual() {
                 <strong>Restrição:</strong> somente o gestor responsável (ou Admin) conclui fases da
                 Etapa 2 — o RH visualiza com o aviso &quot;Conclusão restrita ao gestor&quot;.
               </div>
+              <div className="p-3 bg-purple-50/80 border border-purple-200 rounded-lg text-xs sm:text-sm text-purple-950 space-y-1.5">
+                <strong className="block text-purple-900 font-bold">
+                  Relato Obrigatório da Fase e Fluxo de Solicitação de Refação (Teto de 2 Refações):
+                </strong>
+                <p>
+                  <strong>1. Relato Dissertativo Obrigatório do Colaborador:</strong> Ao finalizar
+                  as atividades de qualquer fase da Etapa 2, o colaborador abre modal obrigatório no
+                  portal público para relatar com suas palavras o que entendeu e praticou (mínimo de
+                  10 caracteres). Sem preencher o relato, a fase não é sinalizada.
+                </p>
+                <p>
+                  <strong>2. Análise do Gestor / RH:</strong> O relato fica visível diretamente no
+                  cabeçalho da fase no detalhe do onboarding e gravado na trilha de auditoria.
+                </p>
+                <p>
+                  <strong>3. Solicitação de Refação da Fase:</strong> Se o gestor ou RH
+                  identificarem que o conteúdo prático não foi absorvido adequadamente, podem
+                  acionar o botão <em>&quot;Solicitar Refação&quot;</em> preenchendo justificativa
+                  obrigatória. A fase é automaticamente reaberta no portal do colaborador com aviso
+                  do motivo, status de conclusão cancelado e exigência de nova prática e novo
+                  relato.
+                </p>
+                <p>
+                  <strong>4. Teto Máximo de 2 Refações:</strong> Cada fase admite no máximo 2
+                  solicitações de refação. Ao atingir o teto de 2 ciclos, o botão é bloqueado
+                  exibindo <em>&quot;Limite atingido (2/2 refações)&quot;</em>, exigindo decisão
+                  conclusiva da gestão.
+                </p>
+              </div>
               <p>
                 <strong>Destaque Fase 2 (Mapeamento de Ambientes):</strong> painel &quot;Clientes de
                 Referência&quot;, onde o gestor digita os 3 clientes que o técnico deve estudar no
@@ -867,18 +896,38 @@ export default function Manual() {
                   para <em>&quot;Prova enviada&quot;</em> e aguarda o preenchimento.
                 </p>
                 <p>
-                  <strong>4. Tentativa Única e Correção no Servidor (Sem Reteste):</strong> A prova
-                  de contratação não possui reteste. O candidato preenche as questões de múltipla
-                  escolha e, ao enviar, o servidor corrige imediatamente e grava a tentativa única.
-                  O candidato NUNCA visualiza sua nota ou gabarito (apenas a tela de confirmação).
+                  <strong>4. Cronômetro Servidor de 60 Minutos:</strong> A prova possui contagem
+                  regressiva oficial controlada pelo servidor a partir do momento em que o candidato
+                  acessa a prova (campo <code>data_inicio_prova</code>). O tempo restante é validado
+                  no backend a cada requisição: exibe contagem regressiva e aviso ao restar 5
+                  minutos; caso o tempo esgote, há autoenvio com a flag{' '}
+                  <code>porExpiracaoTempo: true</code>; tentativas de submissão fora do prazo de 60
+                  minutos são terminantemente recusadas com HTTP 403.
                 </p>
                 <p>
-                  <strong>5. Notificação por E-mail ao Gestor:</strong> Quando a prova é concluída,
+                  <strong>5. Questões Dissertativas & Avaliação Qualitativa:</strong> A prova de
+                  contratação inclui questões dissertativas de vivência técnica. As dissertativas{' '}
+                  <strong>NÃO possuem peso na nota automática</strong> (a nota objetiva reflete
+                  exclusivamente os acertos das questões de múltipla escolha); elas constituem
+                  insumo qualitativo fundamental para o Gestor e o RH avaliarem a postura,
+                  raciocínio e maturidade do candidato.
+                </p>
+                <p>
+                  <strong>6. Gabarito do Pré-candidato Visível para Admin, Gestor e RH:</strong>{' '}
+                  Diferente da prova de onboarding (onde o gabarito é restrito ao Admin), no módulo
+                  de Pré-selecionados tanto o <strong>Administrador</strong>, quanto o{' '}
+                  <strong>Gestor da Área</strong> e o <strong>RH</strong> possuem acesso total ao
+                  botão <em>&quot;Ver Gabarito & Respostas&quot;</em> (no card do candidato e no
+                  modal de decisão), inspecionando cada alternativa assinalada e os textos
+                  dissertativos redigidos pelo candidato lado a lado com a expectativa do gabarito.
+                </p>
+                <p>
+                  <strong>7. Notificação por E-mail ao Gestor:</strong> Quando a prova é concluída,
                   o sistema envia e-mail automático via SMTP aos Gestores e Admins da área com o
                   resumo dos acertos, percentual e sinalização da régua.
                 </p>
                 <p>
-                  <strong>6. Avaliação Técnica do Gestor da Área (Aprovar / Reprovar):</strong> A
+                  <strong>8. Avaliação Técnica do Gestor da Área (Aprovar / Reprovar):</strong> A
                   decisão técnica de perfil cabe exclusivamente ao <strong>Gestor da Área</strong>.
                   Ao clicar em <em>&quot;Aprovar Perfil&quot;</em>, o candidato <strong>NÃO</strong>{' '}
                   é convertido direto em colaborador: seu status avança para a fase intermediária{' '}
@@ -889,7 +938,7 @@ export default function Manual() {
                   link morre.
                 </p>
                 <p>
-                  <strong>7. Fase Intermediária de Validação e Contato pelo RH:</strong> Nesta
+                  <strong>9. Fase Intermediária de Validação e Contato pelo RH:</strong> Nesta
                   etapa, o candidato é destacado na fila do RH para contato prévio (alinhamento
                   salarial, disponibilidade e data de início). As ações são{' '}
                   <strong>exclusivas de RH e Admin</strong> (gestores visualizam apenas o status de
@@ -916,12 +965,12 @@ export default function Manual() {
                   </li>
                 </ul>
                 <p>
-                  <strong>8. Regra de Encerramento do Link Público:</strong> O link público da prova
-                  morre (token bloqueado com HTTP 403) em qualquer desfecho terminal que não seja a
-                  conversão (reprovação pelo gestor, reprovação pelo RH ou desistência).
+                  <strong>10. Regra de Encerramento do Link Público:</strong> O link público da
+                  prova morre (token bloqueado com HTTP 403) em qualquer desfecho terminal que não
+                  seja a conversão (reprovação pelo gestor, reprovação pelo RH ou desistência).
                 </p>
                 <p>
-                  <strong>9. Rastro Completo & Auditoria:</strong> Todas as decisões (aprovação
+                  <strong>11. Rastro Completo & Auditoria:</strong> Todas as decisões (aprovação
                   técnica do gestor, formalização do RH, desistência e reprovações) geram registros
                   permanentes no <em>Histórico & Auditoria</em> com autor, papel, horário e motivos.
                 </p>
@@ -956,8 +1005,10 @@ export default function Manual() {
               'Conferir painel "Clientes de Referência" exibido em modo aguardando desde a Etapa 1;',
               'Gestor define Técnico Responsável no topo da Etapa 2 → conferir destaque no portal público;',
               'Gestor indica os 3 clientes na Fase 2 → conferir no portal do colaborador;',
-              'Colaborador confirma todos os itens da fase no portal público e clica em "Finalizei minhas atividades desta fase" → verificar badge na tela interna, registro na auditoria e e-mail ao responsável;',
-              'Confirmar que a sinalização do colaborador NÃO conclui a fase (conclusão permanece botão exclusivo do gestor/RH);',
+              'Colaborador confirma todos os itens da fase no portal público e clica em "Finalizei minhas atividades desta fase" → preenchimento obrigatório do relato dissertativo;',
+              'Confirmar que a sinalização com relato NÃO conclui a fase (conclusão permanece botão exclusivo do gestor); relato visível na tela interna e na auditoria;',
+              'Gestor ou RH clicam em "Solicitar Refação da Fase" com justificativa obrigatória → fase reabre no portal com aviso ao colaborador e status de conclusão cancelado;',
+              'Verificar teto de 2 refações: botão é bloqueado na segunda refação e exibe limite atingido;',
               'Concluir uma fase fora do prazo de propósito → ver o destaque nos Logs;',
               'Registrar "Não apto" → escolher fase de retorno e conferir o status "Em acompanhamento";',
               'Exportar logs em CSV;',
@@ -970,8 +1021,9 @@ export default function Manual() {
               'Exclusão de colaborador: conferir que gestor não vê o botão, RH/Admin abrem modal com resumo, exigem nome, aceitam motivo opcional e apagam em cascata sem deixar órfãos;',
               'Módulo Pré-selecionados: cadastrar candidato com nome, e-mail, cargo e setor → verificar questionário pré-selecionado;',
               'Copiar link público da prova (/candidato/prova/:token) → status muda para "Prova enviada";',
-              'Candidato responde as questões e submete → verificar bloqueio de segunda tentativa (sem reteste) e mensagem sem nota;',
-              'Conferir notificação de conclusão da prova e insumo no cartão do candidato;',
+              'Abrir prova do candidato com token → cronômetro oficial de 60 minutos ativo no servidor (segundosRestantes decrescendo);',
+              'Candidato responde questões objetivas e dissertativas e submete → nota gerada exclusivamente sobre objetivas (dissertativas como insumo qualitativo);',
+              'Admin, Gestor e RH visualizam botão "Ver Gabarito & Respostas" no cartão e no modal de decisão → conferem objetivas corrigidas e texto dissertativo redigido;',
               'Gestor da área decide "Aprovar Perfil" ou "Reprovar" com motivo opcional;',
               'Aprovação do gestor muda status para "Aprovado pelo Gestor — Aguardando RH" sem abrir conversão direta;',
               'Gestor NÃO visualiza os botões de formalização do RH;',
