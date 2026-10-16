@@ -646,6 +646,24 @@ export interface AvaliacaoColaborador {
   }
 }
 
+export interface CertificadoColaborador {
+  id: string
+  colaborador: string
+  titulo: string
+  emissor: string
+  data_emissao: string
+  data_validade?: string
+  arquivo?: string
+  registrado_por?: string
+  observacoes?: string
+  created: string
+  updated: string
+  expand?: {
+    colaborador?: Onboarding
+    registrado_por?: User
+  }
+}
+
 export const STATUS_INFO: Record<
   OnboardingStatus,
   {

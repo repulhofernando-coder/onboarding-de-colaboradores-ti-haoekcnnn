@@ -448,6 +448,25 @@ export const onboardingService = {
     })
   },
 
+  async listByColaborador(nome: string, email?: string): Promise<Onboarding[]> {
+    if (!nome) return []
+    try {
+      const nomeLimpo = nome.trim()
+      let filter = `colaborador_nome ~ '${nomeLimpo}'`
+      if (email && email.trim()) {
+        filter = `(${filter} || colaborador_email = '${email.trim()}')`
+      }
+      return await pb.collection('onboardings').getFullList<Onboarding>({
+        filter,
+        sort: '-created',
+        expand: 'gestor_id,etapa1_concluida_por,etapa2_concluida_por,setor_ref,questionario_id',
+      })
+    } catch (err) {
+      console.error('[onboardingService] listByColaborador erro:', err)
+      return []
+    }
+  },
+
   async getById(id: string): Promise<Onboarding> {
     return pb.collection('onboardings').getOne<Onboarding>(id, {
       expand: 'gestor_id,etapa1_concluida_por,etapa2_concluida_por,setor_ref,questionario_id',
@@ -1961,7 +1980,7 @@ export const auditoriaService = {
   },
 }
 
-import type { AvaliacaoColaborador } from '@/types/onboarding'
+import type { AvaliacaoColaborador, CertificadoColaborador } from '@/types/onboarding'
 
 export const avaliacaoColaboradorService = {
   async listByColaborador(colaboradorId: string): Promise<AvaliacaoColaborador[]> {
@@ -2016,5 +2035,176 @@ export const avaliacaoColaboradorService = {
     await pb.collection('avaliacoes_colaborador').update(id, {
       status: 'cancelada',
     })
+  },
+}
+
+export const certificadoService = {
+  async listByColaborador(colaboradorId: string): Promise<CertificadoColaborador[]> {
+    if (!colaboradorId) return []
+    try {
+      return await pb.collection('certificados').getFullList<CertificadoColaborador>({
+        filter: `colaborador = '${colaboradorId}'`,
+        sort: '-data_emissao',
+        expand: 'colaborador,registrado_por',
+      })
+    } catch (err) {
+      console.error('[certificadoService] listByColaborador erro:', err)
+      return []
+    }
+  },
+
+  async listByColaboradorIds(colaboradorIds: string[]): Promise<CertificadoColaborador[]> {
+    if (!colaboradorIds || colaboradorIds.length === 0) return []
+    try {
+      const filter = colaboradorIds.map((id) => `colaborador = '${id}'`).join(' || ')
+      return await pb.collection('certificados').getFullList<CertificadoColaborador>({
+        filter,
+        sort: '-data_emissao',
+        expand: 'colaborador,registrado_por',
+      })
+    } catch (err) {
+      console.error('[certificadoService] listByColaboradorIds erro:', err)
+      return []
+    }
+  },
+
+  async create(dados: {
+    colaboradorId: string
+    colaboradorNome: string
+    titulo: string
+    emissor: string
+    dataEmissao: string
+    dataValidade?: string
+    observacoes?: string
+    arquivo?: File | null
+    autor: { id: string; nome: string; role: string }
+  }): Promise<CertificadoColaborador> {
+    const formData = new FormData()
+    formData.append('colaborador', dados.colaboradorId)
+    formData.append('titulo', dados.titulo.trim())
+    formData.append('emissor', dados.emissor.trim())
+    formData.append('data_emissao', dados.dataEmissao)
+    if (dados.dataValidade) {
+      formData.append('data_validade', dados.dataValidade)
+    }
+    if (dados.observacoes) {
+      formData.append('observacoes', dados.observacoes.trim())
+    }
+    if (dados.autor.id) {
+      formData.append('registrado_por', dados.autor.id)
+    }
+    if (dados.arquivo) {
+      formData.append('arquivo', dados.arquivo)
+    }
+
+    const record = await pb.collection('certificados').create<CertificadoColaborador>(formData, {
+      expand: 'colaborador,registrado_por',
+    })
+
+    // Registrar na auditoria existente
+    await auditoriaService.registrar({
+      onboardingId: dados.colaboradorId,
+      colaboradorNome: dados.colaboradorNome,
+      usuarioId: dados.autor.id,
+      usuarioNome: dados.autor.nome,
+      usuarioRole: dados.autor.role,
+      acao: 'Inclusão de Certificado',
+      detalhes: `Certificado "${dados.titulo.trim()}" (Emissor: ${dados.emissor.trim()}, Emissão: ${dados.dataEmissao}${dados.dataValidade ? `, Validade: ${dados.dataValidade}` : ''}${dados.arquivo ? ', com anexo' : ''}) anexado ao perfil por ${dados.autor.nome}.`,
+      metadata: {
+        certificado_id: record.id,
+        titulo: dados.titulo.trim(),
+        emissor: dados.emissor.trim(),
+        data_emissao: dados.dataEmissao,
+        data_validade: dados.dataValidade || null,
+        tem_arquivo: Boolean(dados.arquivo),
+      },
+    })
+
+    return record
+  },
+
+  async update(
+    id: string,
+    dados: {
+      colaboradorId: string
+      colaboradorNome: string
+      titulo: string
+      emissor: string
+      dataEmissao: string
+      dataValidade?: string
+      observacoes?: string
+      arquivo?: File | null
+      removerArquivo?: boolean
+      autor: { id: string; nome: string; role: string }
+      antigo?: Partial<CertificadoColaborador>
+    },
+  ): Promise<CertificadoColaborador> {
+    const formData = new FormData()
+    formData.append('titulo', dados.titulo.trim())
+    formData.append('emissor', dados.emissor.trim())
+    formData.append('data_emissao', dados.dataEmissao)
+    formData.append('data_validade', dados.dataValidade || '')
+    formData.append('observacoes', dados.observacoes ? dados.observacoes.trim() : '')
+    if (dados.arquivo) {
+      formData.append('arquivo', dados.arquivo)
+    } else if (dados.removerArquivo) {
+      formData.append('arquivo', '')
+    }
+
+    const record = await pb
+      .collection('certificados')
+      .update<CertificadoColaborador>(id, formData, {
+        expand: 'colaborador,registrado_por',
+      })
+
+    await auditoriaService.registrar({
+      onboardingId: dados.colaboradorId,
+      colaboradorNome: dados.colaboradorNome,
+      usuarioId: dados.autor.id,
+      usuarioNome: dados.autor.nome,
+      usuarioRole: dados.autor.role,
+      acao: 'Edição de Certificado',
+      detalhes: `Certificado "${dados.titulo.trim()}" atualizado por ${dados.autor.nome}.`,
+      metadata: {
+        certificado_id: id,
+        titulo: dados.titulo.trim(),
+        emissor: dados.emissor.trim(),
+        data_emissao: dados.dataEmissao,
+        data_validade: dados.dataValidade || null,
+      },
+    })
+
+    return record
+  },
+
+  async delete(dados: {
+    id: string
+    colaboradorId: string
+    colaboradorNome: string
+    titulo: string
+    emissor: string
+    autor: { id: string; nome: string; role: string }
+  }): Promise<void> {
+    await pb.collection('certificados').delete(dados.id)
+
+    await auditoriaService.registrar({
+      onboardingId: dados.colaboradorId,
+      colaboradorNome: dados.colaboradorNome,
+      usuarioId: dados.autor.id,
+      usuarioNome: dados.autor.nome,
+      usuarioRole: dados.autor.role,
+      acao: 'Exclusão de Certificado',
+      detalhes: `Certificado "${dados.titulo}" (Emissor: ${dados.emissor}) removido do perfil por ${dados.autor.nome}.`,
+      metadata: {
+        certificado_id: dados.id,
+        titulo: dados.titulo,
+        emissor: dados.emissor,
+      },
+    })
+  },
+
+  getUrlArquivo(certificado: CertificadoColaborador): string | null {
+    if (!certificado.arquivo) return null
+    return `${import.meta.env.VITE_POCKETBASE_URL}/api/files/certificados/${certificado.id}/${certificado.arquivo}`
   },
 }

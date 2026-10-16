@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-16T16:52:26.120Z",
+  "generatedAt": "2026-10-16T17:56:11.864Z",
   "collections": [
     {
       "name": "users",
@@ -1658,6 +1658,88 @@
         "CREATE INDEX idx_avaliacoes_colab_colaborador ON avaliacoes_colaborador (colaborador_id)",
         "CREATE INDEX idx_avaliacoes_colab_questionario ON avaliacoes_colaborador (questionario_id)",
         "CREATE INDEX idx_avaliacoes_colab_status ON avaliacoes_colaborador (status)"
+      ]
+    },
+    {
+      "name": "certificados",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh')",
+        "view": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh')",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh')",
+        "delete": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh')"
+      },
+      "fields": [
+        {
+          "name": "colaborador",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "onboardings"
+        },
+        {
+          "name": "titulo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "emissor",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_emissao",
+          "type": "date",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_validade",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "arquivo",
+          "type": "file",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "registrado_por",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_certificados_colaborador ON certificados (colaborador)",
+        "CREATE INDEX idx_certificados_data_emissao ON certificados (data_emissao)",
+        "CREATE INDEX idx_certificados_data_validade ON certificados (data_validade)"
       ]
     }
   ]

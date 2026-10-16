@@ -65,12 +65,16 @@ import {
   User as UserIcon,
   RotateCcw,
   AlertTriangle,
+  Award,
+  GraduationCap,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ModalExcluirColaborador } from '@/components/ModalExcluirColaborador'
 import { ModalEditarColaborador } from '@/components/ModalEditarColaborador'
 import { ModalSugestaoMudancaArea } from '@/components/ModalSugestaoMudancaArea'
 import { SecaoAvaliacoesColaborador } from '@/components/SecaoAvaliacoesColaborador'
+import { SecaoTrajetoria } from '@/components/SecaoTrajetoria'
+import { SecaoCertificados } from '@/components/SecaoCertificados'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
@@ -83,6 +87,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
+import type { AvaliacaoColaborador, CertificadoColaborador } from '@/types/onboarding'
+import { avaliacaoColaboradorService, certificadoService } from '@/services/onboarding'
 
 export default function DetalheOnboarding() {
   const { id } = useParams<{ id: string }>()
@@ -90,10 +96,13 @@ export default function DetalheOnboarding() {
   const navigate = useNavigate()
 
   const [onboarding, setOnboarding] = useState<Onboarding | null>(null)
+  const [todosOnboardings, setTodosOnboardings] = useState<Onboarding[]>([])
   const [tarefas, setTarefas] = useState<TarefaOnboarding[]>([])
   const [fasesSetor, setFasesSetor] = useState<FaseModelo[]>([])
   const [avaliacao, setAvaliacao] = useState<Avaliacao | null>(null)
   const [loading, setLoading] = useState(true)
+  const [avaliacoesDossie, setAvaliacoesDossie] = useState<AvaliacaoColaborador[]>([])
+  const [certificadosList, setCertificadosList] = useState<CertificadoColaborador[]>([])
   const [confirmacoes, setConfirmacoes] = useState<Record<string, ConfirmacaoColaborador>>({})
   const [linkColaborador, setLinkColaborador] = useState<string>('')
   const [linkCopiado, setLinkCopiado] = useState(false)
@@ -122,10 +131,28 @@ export default function DetalheOnboarding() {
   const [obsTemp, setObsTemp] = useState('')
   const [salvandoObs, setSalvandoObs] = useState(false)
 
-  // Aba ativa: 'etapas' ou 'auditoria'
-  const [abaAtiva, setAbaAtiva] = useState<'etapas' | 'auditoria'>('etapas')
+  // Abas do Perfil do Colaborador: 'trajetoria', 'onboarding', 'certificados', 'avaliacoes', 'auditoria'
+  const [abaAtiva, setAbaAtiva] = useState<
+    'trajetoria' | 'onboarding' | 'certificados' | 'avaliacoes' | 'auditoria'
+  >('trajetoria')
   const [logsAuditoria, setLogsAuditoria] = useState<LogAuditoria[]>([])
   const [loadingLogs, setLoadingLogs] = useState(false)
+  const [carregandoCertificadosAba, setCarregandoCertificadosAba] = useState(false)
+
+  const recarregarCertificadosPerfil = async () => {
+    if (!onboarding || (!isAdmin && !isRH)) return
+    try {
+      setCarregandoCertificadosAba(true)
+      const certs = await certificadoService.listByColaborador(onboarding.id)
+      setCertificadosList(certs)
+      // Recarregar logs de auditoria para refletir os eventos atualizados imediatamente
+      carregarLogs()
+    } catch (e) {
+      console.warn('Erro ao atualizar lista de certificados no perfil:', e)
+    } finally {
+      setCarregandoCertificadosAba(false)
+    }
+  }
 
   // Modal de exclusão do colaborador
   const [modalExcluirOpen, setModalExcluirOpen] = useState(false)
@@ -249,10 +276,39 @@ export default function DetalheOnboarding() {
 
       if (onb) {
         onboardingService.getOrGeneratePublicLink(onb).then(setLinkColaborador)
+
+        // Buscar todos os onboardings da mesma pessoa (para perfil do colaborador & histórico de vida)
+        try {
+          const todosOnbs = await onboardingService.listByColaborador(
+            onb.colaborador_nome,
+            onb.colaborador_email,
+          )
+          setTodosOnboardings(todosOnbs.length > 0 ? todosOnbs : [onb])
+        } catch {
+          setTodosOnboardings([onb])
+        }
+
+        // Buscar avaliações do dossiê (reciclagem, mudança de área, etc.)
+        try {
+          const avs = await avaliacaoColaboradorService.listByColaborador(onb.id)
+          setAvaliacoesDossie(avs)
+        } catch {
+          setAvaliacoesDossie([])
+        }
+
+        // Buscar certificados (se RH ou Admin)
+        if (isAdmin || isRH) {
+          try {
+            const certs = await certificadoService.listByColaborador(onb.id)
+            setCertificadosList(certs)
+          } catch {
+            setCertificadosList([])
+          }
+        }
       }
     } catch (err) {
       console.error(err)
-      toast.error('Erro ao carregar detalhes do onboarding.')
+      toast.error('Erro ao carregar detalhes do perfil do colaborador.')
     } finally {
       setLoading(false)
     }
@@ -276,7 +332,8 @@ export default function DetalheOnboarding() {
   }, [id])
 
   useEffect(() => {
-    if (abaAtiva === 'auditoria') {
+    // Carregar logs também quando abrir auditoria ou trajetória
+    if (abaAtiva === 'auditoria' || abaAtiva === 'trajetoria') {
       carregarLogs()
     }
   }, [abaAtiva, id])
@@ -1268,7 +1325,7 @@ export default function DetalheOnboarding() {
               title="Editar cargo, setor ou gestor responsável do colaborador"
             >
               <Pencil className="w-3.5 h-3.5 text-brand-600" />
-              <span>Editar Colaborador</span>
+              <span>Editar Perfil</span>
             </Button>
           )}
 
@@ -1283,7 +1340,7 @@ export default function DetalheOnboarding() {
               title="Excluir este colaborador e todos os registros vinculados"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              <span>Excluir Colaborador</span>
+              <span>Excluir Perfil</span>
             </Button>
           )}
         </div>
@@ -1359,84 +1416,172 @@ export default function DetalheOnboarding() {
         )}
       </div>
 
-      {/* Header do Colaborador */}
-      <div className="bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h2 className="text-2xl font-bold tracking-tight text-[#1A2233]">
-                {onboarding.colaborador_nome}
-              </h2>
-              <span className="text-xs px-2.5 py-0.5 rounded-full border font-semibold bg-brand-50 text-brand-700 border-brand-200 inline-flex items-center gap-1.5">
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: setorInfo.cor }}
-                />
-                Área: {setorInfo.nome}
-              </span>
-              <span
-                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${statusInfo.corBg}`}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.corDot}`} />
-                {statusInfo.nome}
-              </span>
+      {/* Header Consolidado do Perfil do Colaborador (Ficha Única da Pessoa) */}
+      <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+          <div className="flex items-start sm:items-center gap-4">
+            {/* Avatar com Iniciais */}
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-600 via-indigo-600 to-purple-700 text-white flex items-center justify-center font-bold text-xl shadow-md shrink-0 ring-4 ring-brand-50">
+              {(() => {
+                const nomes = (onboarding.colaborador_nome || 'Colaborador').trim().split(/\s+/)
+                if (nomes.length === 1) return nomes[0].slice(0, 2).toUpperCase()
+                return (nomes[0][0] + nomes[nomes.length - 1][0]).toUpperCase()
+              })()}
             </div>
 
-            <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 flex-wrap">
-              <span>{onboarding.colaborador_email}</span>
-              {onboarding.cargo && (
-                <>
-                  <span>•</span>
-                  <span>{onboarding.cargo}</span>
-                </>
-              )}
-              <span>•</span>
-              <span>Início: {formatShortDate(onboarding.data_inicio)}</span>
-              <span>•</span>
-              <span className="font-semibold text-gray-700">
-                Prazo final (15 dias): {formatShortDate(onboarding.data_fim)}
-              </span>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="text-2xl font-bold tracking-tight text-[#1A2233]">
+                  {onboarding.colaborador_nome}
+                </h2>
+                <span className="text-xs px-2.5 py-0.5 rounded-full border font-semibold bg-brand-50 text-brand-700 border-brand-200 inline-flex items-center gap-1.5">
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: setorInfo.cor }}
+                  />
+                  Área: {setorInfo.nome}
+                </span>
+                <span
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${statusInfo.corBg}`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.corDot}`} />
+                  {statusInfo.nome}
+                </span>
+                {todosOnboardings.length > 1 && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] bg-purple-50 text-purple-700 border-purple-200 font-semibold"
+                  >
+                    {todosOnboardings.length} onboardings registrados
+                  </Badge>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3 sm:gap-4 text-xs text-gray-500 flex-wrap pt-0.5">
+                <span className="text-gray-700 font-medium">{onboarding.colaborador_email}</span>
+                {onboarding.cargo && (
+                  <>
+                    <span>•</span>
+                    <span className="font-semibold text-gray-800">{onboarding.cargo}</span>
+                  </>
+                )}
+                <span>•</span>
+                <span>Contratação/Início: {formatShortDate(onboarding.data_inicio)}</span>
+                <span>•</span>
+                <span className="font-semibold text-gray-700">
+                  Prazo Onboarding: {formatShortDate(onboarding.data_fim)}
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="text-right shrink-0">
-            <span className="text-xs text-gray-400 font-medium block">Gestor Responsável:</span>
-            <span className="text-xs font-bold text-gray-800">
+          <div className="flex flex-row md:flex-col items-start md:items-end justify-between border-t md:border-t-0 pt-3 md:pt-0 border-gray-100 gap-1 shrink-0">
+            <span className="text-xs text-gray-400 font-medium">Gestor Responsável:</span>
+            <span className="text-sm font-bold text-gray-900">
               {onboarding.expand?.gestor_id?.name || 'Gestão TI'}
             </span>
           </div>
         </div>
 
-        {/* Barra de Progresso Geral */}
-        <div className="pt-2">
+        {/* Barra de Progresso Geral do Onboarding Ativo */}
+        <div className="pt-1">
           <div className="flex items-center justify-between text-xs font-semibold text-gray-600 mb-1.5">
-            <span>Progresso Geral do Treinamento</span>
+            <span>Progresso Geral do Onboarding Vigente</span>
             <span>{progressoPercent}% Concluído</span>
           </div>
-          <Progress value={progressoPercent} className="h-2.5 rounded-full" />
+          <Progress value={progressoPercent} className="h-2 rounded-full" />
         </div>
 
-        {/* Abas Superiores: Etapas & Treinamento / Histórico & Auditoria */}
-        <div className="pt-3 border-t border-gray-100 flex items-center gap-2">
+        {/* Abas Consolidadas do Perfil do Colaborador */}
+        <div className="pt-2 border-t border-gray-100 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+          {/* Aba 1: Trajetória Unificada */}
           <button
             type="button"
-            onClick={() => setAbaAtiva('etapas')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-              abaAtiva === 'etapas'
+            onClick={() => setAbaAtiva('trajetoria')}
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
+              abaAtiva === 'trajetoria'
+                ? 'bg-purple-600 text-white shadow-xs'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Trajetória</span>
+          </button>
+
+          {/* Aba 2: Onboarding (3 Etapas) */}
+          <button
+            type="button"
+            onClick={() => setAbaAtiva('onboarding')}
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
+              abaAtiva === 'onboarding'
                 ? 'bg-brand-600 text-white shadow-xs'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Etapas & Fases do Treinamento</span>
+            <span>Onboarding ({progressoPercent}%)</span>
           </button>
 
+          {/* Aba 3: Certificados (RH / Admin) */}
+          {(isAdmin || isRH) && (
+            <button
+              type="button"
+              onClick={() => {
+                setAbaAtiva('certificados')
+                recarregarCertificadosPerfil()
+              }}
+              className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
+                abaAtiva === 'certificados'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <Award className="w-3.5 h-3.5" />
+              <span>Certificados</span>
+              {certificadosList.length > 0 && (
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    abaAtiva === 'certificados'
+                      ? 'bg-white/20 text-white'
+                      : 'bg-gray-200 text-gray-700'
+                  }`}
+                >
+                  {certificadosList.length}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* Aba 4: Dossiê de Avaliações */}
+          <button
+            type="button"
+            onClick={() => setAbaAtiva('avaliacoes')}
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
+              abaAtiva === 'avaliacoes'
+                ? 'bg-teal-600 text-white shadow-xs'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <GraduationCap className="w-3.5 h-3.5" />
+            <span>Dossiê de Avaliações</span>
+            {avaliacoesDossie.length > 0 && (
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  abaAtiva === 'avaliacoes' ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'
+                }`}
+              >
+                {avaliacoesDossie.length}
+              </span>
+            )}
+          </button>
+
+          {/* Aba 5: Histórico & Auditoria */}
           <button
             type="button"
             onClick={() => setAbaAtiva('auditoria')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
               abaAtiva === 'auditoria'
-                ? 'bg-brand-600 text-white shadow-xs'
+                ? 'bg-slate-800 text-white shadow-xs'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
@@ -1455,8 +1600,46 @@ export default function DetalheOnboarding() {
         </div>
       </div>
 
-      {/* Exibição condicional da Aba Histórico & Auditoria */}
-      {abaAtiva === 'auditoria' ? (
+      {/* ABA 1: Trajetória Unificada */}
+      {abaAtiva === 'trajetoria' && (
+        <div className="space-y-6">
+          <SecaoTrajetoria
+            colaboradorAtual={onboarding}
+            todosOnboardings={todosOnboardings}
+            logsAuditoria={logsAuditoria}
+            avaliacoes={avaliacoesDossie}
+            certificados={certificadosList}
+          />
+        </div>
+      )}
+
+      {/* ABA 3: Certificados do Colaborador (RH/Admin) */}
+      {abaAtiva === 'certificados' && (
+        <div className="space-y-6">
+          <SecaoCertificados
+            onboarding={onboarding}
+            todosOnboardings={todosOnboardings}
+            onCertificadoAlterado={() => {
+              recarregarCertificadosPerfil()
+            }}
+          />
+        </div>
+      )}
+
+      {/* ABA 4: Dossiê de Avaliações */}
+      {abaAtiva === 'avaliacoes' && (
+        <div className="space-y-6">
+          <SecaoAvaliacoesColaborador
+            onboarding={onboarding}
+            onAvaliacaoAdicionada={() => {
+              fetchData()
+            }}
+          />
+        </div>
+      )}
+
+      {/* ABA 5: Histórico & Auditoria */}
+      {abaAtiva === 'auditoria' && (
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
             <div>
@@ -1465,8 +1648,8 @@ export default function DetalheOnboarding() {
                 <span>Trilha de Auditoria & Histórico de Conclusões</span>
               </h3>
               <p className="text-xs text-gray-500 mt-0.5">
-                Registro imutável de todas as etapas, fases concluídas, decisões de avaliação e
-                conformidade de prazo.
+                Registro imutável de todas as etapas, fases concluídas, alterações funcionais,
+                certificações e decisões de avaliação.
               </p>
             </div>
             <div className="text-xs text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 flex items-center gap-1.5">
@@ -1530,8 +1713,10 @@ export default function DetalheOnboarding() {
             </div>
           )}
         </div>
-      ) : (
-        /* Layout Principal: 3 Etapas Conectadas (2 colunas) + Timeline Lateral (1 coluna) */
+      )}
+
+      {/* ABA 2: Onboarding Vigente (3 Etapas Conectadas + Timeline Lateral) */}
+      {abaAtiva === 'onboarding' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Coluna das 3 Etapas */}
           <div className="lg:col-span-2 space-y-6">
@@ -3756,17 +3941,9 @@ export default function DetalheOnboarding() {
                 </div>
               )}
             </div>
-
-            {/* ITEM 5: Seção de Avaliações do Colaborador (Reciclagem, Mudança de Área, Avaliação Periódica) */}
-            <SecaoAvaliacoesColaborador
-              onboarding={onboarding}
-              onAvaliacaoAdicionada={() => {
-                fetchData()
-              }}
-            />
           </div>
 
-          {/* Linha do Tempo / Timeline Lateral */}
+          {/* Linha do Tempo / Timeline Lateral do Onboarding Vigente */}
           <div className="space-y-6">
             <div className="bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm">
               <h3 className="text-sm font-bold text-[#1A2233] mb-4 flex items-center gap-2">

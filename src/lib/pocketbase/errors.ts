@@ -25,9 +25,12 @@ export function isNetworkError(error: unknown): boolean {
     return error.status === 0
   }
   if (error instanceof Error) {
+    const msg = error.message.toLowerCase()
     return (
-      error.message.toLowerCase().includes('network') ||
-      error.message.toLowerCase().includes('failed to fetch')
+      msg.includes('failed to fetch') ||
+      msg.includes('networkerror') ||
+      msg.includes('network error') ||
+      msg.includes('load failed')
     )
   }
   return false

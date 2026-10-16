@@ -69,7 +69,7 @@ export default function Layout() {
     if (p.startsWith('/pre-selecionados')) return 'Pré-selecionados & Contratação'
     if (p.startsWith('/onboardings/nova')) return 'Novo Onboarding'
     if (p.startsWith('/onboardings')) return 'Lista de Onboardings'
-    if (p.startsWith('/colaboradores/')) return 'Detalhes do Onboarding'
+    if (p.startsWith('/colaboradores/')) return 'Perfil do Colaborador'
     if (p.startsWith('/colaboradores')) return 'Colaboradores em Onboarding'
     if (p.startsWith('/modelos')) return 'Modelos de Tarefas por Setor'
     if (p.startsWith('/avaliacoes')) return 'Avaliações Finais dos Gestores'
