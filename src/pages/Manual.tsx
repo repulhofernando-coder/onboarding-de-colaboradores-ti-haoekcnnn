@@ -18,6 +18,11 @@ import {
   Clock,
   ArrowRight,
   Info,
+  Award,
+  UserCheck,
+  FileCheck,
+  GraduationCap,
+  ShieldAlert,
 } from 'lucide-react'
 
 export default function Manual() {
@@ -86,8 +91,9 @@ export default function Manual() {
             para Gestores e RH
           </h1>
           <p className="text-sm text-gray-600 mt-2 font-medium">
-            Diretrizes operacionais, fluxo detalhado em 3 etapas, cronograma de 15 dias, matriz de
-            papéis e homologação do sistema.
+            Diretrizes operacionais, fluxo detalhado em 3 etapas, cronograma de 15 dias, Perfil
+            Consolidado do Colaborador, Acervo de Certificados, matriz de papéis e homologação do
+            sistema.
           </p>
         </div>
 
@@ -211,9 +217,17 @@ export default function Manual() {
           </div>
 
           {/* Visibilidade */}
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-700">
-            <strong>Visibilidade:</strong> gestores visualizam onboardings de todas as áreas, mas só
-            podem agir naqueles em que são o gestor responsável (ou Admin).
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-700 space-y-1">
+            <p>
+              <strong>Visibilidade dos Processos:</strong> gestores visualizam onboardings e o
+              Perfil do Colaborador de todas as áreas, mas só podem agir naqueles em que são o
+              gestor responsável (ou Admin).
+            </p>
+            <p className="text-xs text-slate-500">
+              * Ações cadastrais (edição de cargo/setor/gestor e exclusão do perfil) e a aba de
+              Certificados com documentos comprobatórios são de acesso exclusivo de RH e Admin (ver
+              matriz detalhada na Seção 11).
+            </p>
           </div>
         </section>
 
@@ -980,15 +994,372 @@ export default function Manual() {
         </section>
 
         {/* ========================================================= */}
-        {/* SEÇÃO 11 — Checklist rápido de homologação */}
+        {/* SEÇÃO 11 — Perfil do Colaborador & Acervo de Certificados */}
+        {/* ========================================================= */}
+        <section className="mb-10 avoid-break page-break-before">
+          <div className="flex items-center gap-2.5 mb-4 border-b border-gray-200 pb-2">
+            <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+              11
+            </div>
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+              SEÇÃO 11 — Perfil do Colaborador & Acervo de Certificados (Versão 0.0.46)
+            </h2>
+          </div>
+
+          <p className="text-sm sm:text-base text-gray-700 leading-relaxed mb-4">
+            Na versão 0.0.46, o sistema evoluiu de uma visão centrada em processos isolados para a{' '}
+            <strong>Ficha Única do Colaborador</strong> (<code>/colaboradores/:id</code>),
+            estruturada em torno da trajetória integral da pessoa na Mundo Open (admissão,
+            onboardings vigentes e históricos, capacitações, mudanças funcionais e avaliações
+            contínuas).
+          </p>
+
+          {/* 11.1 Cabeçalho Consolidado */}
+          <div className="mb-6 border-l-4 border-indigo-600 pl-4 py-1">
+            <h3 className="text-base font-bold text-gray-900 mb-2">
+              11.1 Cabeçalho Consolidado do Colaborador:
+            </h3>
+            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed mb-3">
+              Acessado ao clicar no card de qualquer técnico na listagem geral (
+              <code>/colaboradores</code>), o cabeçalho consolida a identidade funcional e o status
+              global da pessoa:
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 text-xs sm:text-sm text-gray-700">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                <p>
+                  <strong>Identidade & Setor:</strong> Nome completo, cargo oficial, setor com badge
+                  e identificador visual de cor padronizado (Windows, Linux, Redes, etc.) e avatar
+                  com as iniciais em degradê.
+                </p>
+                <p>
+                  <strong>Gestão & Ciclos:</strong> Gestor responsável direto, data de
+                  contratação/início, prazo geral do processo e contador dinâmico de onboardings da
+                  pessoa (ex.: <em>&quot;2 onboardings registrados&quot;</em>).
+                </p>
+              </div>
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                <p>
+                  <strong>Progresso & Status:</strong> Status consolidado (Em andamento, Concluído,
+                  Não Apto, Em Acompanhamento) e barra de progresso visual percentual do ciclo
+                  vigente.
+                </p>
+                <p>
+                  <strong>Ações Restritas de Gestão Cadastral:</strong> Botões{' '}
+                  <em>&quot;Editar Perfil&quot;</em> (alterar cargo, setor com sugestão automática
+                  de prova, ou gestor responsável) e <em>&quot;Excluir Perfil&quot;</em> (remoção
+                  forte em cascata com confirmação de nome), restritos exclusivamente a{' '}
+                  <strong>RH</strong> e <strong>Admin</strong>.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 11.2 As 5 Abas do Perfil */}
+          <div className="mb-6 border-l-4 border-purple-600 pl-4 py-1">
+            <h3 className="text-base font-bold text-gray-900 mb-2">
+              11.2 As 5 Abas Estruturais do Perfil:
+            </h3>
+            <div className="space-y-3 text-xs sm:text-sm text-gray-700 leading-relaxed">
+              {/* Aba 1: Trajetória */}
+              <div className="p-3.5 bg-purple-50/70 border border-purple-200 rounded-xl space-y-2">
+                <div className="flex items-center gap-2 text-purple-950 font-bold text-xs uppercase tracking-wide">
+                  <Clock className="w-4 h-4 text-purple-700" />
+                  <span>Aba 1 — Trajetória Unificada (Fio Condutor de Vida Funcional):</span>
+                </div>
+                <p>
+                  Linha do tempo cronológica integrada (ordenada do marco{' '}
+                  <strong>mais recente para o mais antigo</strong>), consolidando todos os fatos
+                  relevantes da carreira do técnico na organização:
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-xs text-purple-900 pl-1">
+                  <li>
+                    <strong>Contratação e Formalização pelo RH:</strong> Registro formal de
+                    conversão do candidato em colaborador com data/hora e usuário responsável.
+                  </li>
+                  <li>
+                    <strong>Inícios e Marcos de Onboarding:</strong> Evento de início de cada
+                    onboarding e conclusões formais das Etapas 1 (RH), 2 (Técnica) e 3 (Avaliação
+                    Final), com badges temáticos e{' '}
+                    <strong>links de navegação direta entre onboardings</strong> quando a pessoa
+                    possui múltiplos ciclos de formação registrados.
+                  </li>
+                  <li>
+                    <strong>Mudanças Funcionais:</strong> Registros automáticos de alteração de
+                    área, cargo ou gestor responsável, detalhando a transição (
+                    <em>antigo → novo</em>), autor e horário.
+                  </li>
+                  <li>
+                    <strong>Dossiê de Avaliações Técnicas:</strong> Resultados de reciclagens,
+                    provas de mudança de setor e avaliações periódicas com aproveitamento
+                    percentual, acertos e sinalização da nota de corte.
+                  </li>
+                  <li>
+                    <strong>Certificados Obtidos:</strong> Marco visual de cada certificação
+                    conquistada, emissor e validade.
+                  </li>
+                </ul>
+              </div>
+
+              {/* Aba 2: Onboarding */}
+              <div className="p-3.5 bg-brand-50/70 border border-brand-200 rounded-xl space-y-1.5 text-brand-950">
+                <div className="flex items-center gap-2 text-brand-950 font-bold text-xs uppercase tracking-wide">
+                  <Layers className="w-4 h-4 text-brand-700" />
+                  <span>Aba 2 — Onboarding (As 3 Etapas Operacionais):</span>
+                </div>
+                <p>
+                  Mantém a execução integral do ciclo de integração de 15 dias: Etapa 1 com
+                  Checklist Obrigatório de Integração pelo RH; Etapa 2 com indicação de Técnico
+                  Responsável, trilha de 6 fases com relatos dissertativos do colaborador e opção de
+                  refação (teto de 2); e Etapa 3 com Teste de Conhecimento corrigido no servidor e
+                  decisão avaliativa do gestor.
+                </p>
+              </div>
+
+              {/* Aba 3: Certificados */}
+              <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl space-y-2 text-blue-950">
+                <div className="flex items-center gap-2 text-blue-950 font-bold text-xs uppercase tracking-wide">
+                  <Award className="w-4 h-4 text-blue-700" />
+                  <span>Aba 3 — Certificados (Acervo de Qualificações & LGPD):</span>
+                </div>
+                <p>
+                  Módulo dedicado à guarda e comprovação de diplomas, certificações de fabricantes
+                  (Microsoft, Cisco, Linux, ITIL, etc.) e cursos técnicos:
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-xs text-blue-900 pl-1">
+                  <li>
+                    <strong>Alimentação Exclusiva por RH e Admin:</strong> Cadastro completo com{' '}
+                    <em>Título da Certificação</em>, <em>Instituição Emissora</em>,{' '}
+                    <em>Data de Emissão</em>, <em>Data de Validade (opcional)</em>, observações
+                    complementares e upload de arquivo comprobatório (PDF ou imagens JPG/PNG/WEBP
+                    com limite de até <strong>50 MB</strong>).
+                  </li>
+                  <li>
+                    <strong>Visualizador Interno & Download:</strong> Permite inspecionar o arquivo
+                    anexado em modal com visualizador interativo em tela cheia sem sair da página ou
+                    efetuar download direto seguro.
+                  </li>
+                  <li>
+                    <strong>Monitoramento Inteligente de Validade (Régua de 90 Dias):</strong>
+                    <ul className="list-circle list-inside pl-4 mt-1 space-y-0.5">
+                      <li>
+                        <span className="font-bold text-red-700">Vermelho (Vencido):</span> Data de
+                        validade já ultrapassada (exibe quantidade exata de dias de atraso).
+                      </li>
+                      <li>
+                        <span className="font-bold text-amber-700">Âmbar (Alerta ≤ 90 dias):</span>{' '}
+                        Faltam 90 dias ou menos para a expiração do certificado.
+                      </li>
+                      <li>
+                        <span className="font-bold text-emerald-700">Verde (Válido):</span>{' '}
+                        Certificação regular com mais de 90 dias de vigência.
+                      </li>
+                      <li>
+                        <span className="font-bold text-gray-600">Cinza (Sem expiração):</span>{' '}
+                        Cursos sem data limite estabelecida pelo emissor.
+                      </li>
+                    </ul>
+                  </li>
+                  <li>
+                    <strong>Edição e Exclusão Segura:</strong> RH e Admin podem retificar dados,
+                    substituir anexos ou remover certificados obsoletos mediante diálogo de
+                    confirmação.
+                  </li>
+                </ul>
+              </div>
+
+              {/* Aba 4: Dossiê de Avaliações */}
+              <div className="p-3.5 bg-teal-50/70 border border-teal-200 rounded-xl space-y-1.5 text-teal-950">
+                <div className="flex items-center gap-2 text-teal-950 font-bold text-xs uppercase tracking-wide">
+                  <GraduationCap className="w-4 h-4 text-teal-700" />
+                  <span>Aba 4 — Dossiê de Avaliações:</span>
+                </div>
+                <p>
+                  Centraliza o histórico de todas as provas e avaliações aplicadas ao longo do tempo
+                  (provas de reciclagem técnica periódica, provas decorrentes de mudança de
+                  área/promoção e avaliações de desempenho). Exibe nota, aproveitamento percentual,
+                  régua de aprovação e situação.
+                </p>
+              </div>
+
+              {/* Aba 5: Histórico & Auditoria */}
+              <div className="p-3.5 bg-slate-100 border border-slate-300 rounded-xl space-y-1.5 text-slate-900">
+                <div className="flex items-center gap-2 text-slate-900 font-bold text-xs uppercase tracking-wide">
+                  <ShieldCheck className="w-4 h-4 text-slate-800" />
+                  <span>Aba 5 — Histórico & Auditoria Completa:</span>
+                </div>
+                <p>
+                  Registro imutável retido pelo período regulamentar de 180 dias (6 meses). Cada
+                  inclusão, edição ou exclusão de certificados, alterações de cargo/setor/gestor,
+                  conclusões de etapas e aplicação de provas grava automaticamente autor, papel,
+                  carimbo de data/hora e resumo da operação.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 11.3 Matriz de Visibilidade por Papel */}
+          <div className="mb-2 border-l-4 border-slate-800 pl-4 py-1">
+            <h3 className="text-base font-bold text-gray-900 mb-2">
+              11.3 Matriz de Visibilidade & Permissões por Papel (Perfil & Certificados):
+            </h3>
+            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed mb-3">
+              Em consonância com as boas práticas de segurança da informação e privacidade (LGPD), o
+              acesso às funcionalidades do Perfil e Certificados obedece à seguinte matriz de
+              controle:
+            </p>
+
+            <div className="overflow-x-auto rounded-xl border border-gray-200 mb-3">
+              <table className="w-full text-left text-xs sm:text-sm">
+                <thead className="bg-slate-100 text-slate-900 font-bold border-b border-gray-200">
+                  <tr>
+                    <th className="py-2.5 px-3">Funcionalidade / Ação</th>
+                    <th className="py-2.5 px-3 text-center">Administrador</th>
+                    <th className="py-2.5 px-3 text-center">RH (Recursos Humanos)</th>
+                    <th className="py-2.5 px-3 text-center">Gestão (Gestor da Área)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  <tr className="hover:bg-slate-50/70">
+                    <td className="py-2.5 px-3 font-semibold text-gray-900">
+                      Visualizar Perfil do Colaborador (Ficha Única)
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Sim (Total)
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Sim (Total)
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Sim (Acompanhamento)
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/70">
+                    <td className="py-2.5 px-3 font-semibold text-gray-900">
+                      Editar Cargo, Setor ou Gestor Responsável
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">Sim</td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">Sim</td>
+                    <td className="py-2.5 px-3 text-center text-red-600 font-bold">
+                      Não (Somente Leitura)
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/70">
+                    <td className="py-2.5 px-3 font-semibold text-gray-900">
+                      Excluir Colaborador (Cascata Atômica)
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">Sim</td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">Sim</td>
+                    <td className="py-2.5 px-3 text-center text-red-600 font-bold">
+                      Não (Sem permissão)
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/70">
+                    <td className="py-2.5 px-3 font-semibold text-gray-900">
+                      Visualizar Aba Trajetória Unificada
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">Sim</td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">Sim</td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">Sim</td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/70 bg-amber-50/40">
+                    <td className="py-2.5 px-3 font-bold text-amber-950">
+                      Aba Certificados (Visualização & Download) — Regra LGPD
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Sim (Acesso Total)
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Sim (Acesso Total)
+                    </td>
+                    <td className="py-2.5 px-3 text-center text-red-700 font-bold">
+                      Bloqueado (Não visualiza aba)
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/70 bg-amber-50/40">
+                    <td className="py-2.5 px-3 font-bold text-amber-950">
+                      Cadastrar / Editar / Excluir Certificados
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">Sim</td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">Sim</td>
+                    <td className="py-2.5 px-3 text-center text-red-700 font-bold">
+                      Bloqueado (Não visualiza)
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/70">
+                    <td className="py-2.5 px-3 font-semibold text-gray-900">
+                      Auditoria de Eventos e Certificados (Logs)
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Sim (Completa)
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Sim (Completa)
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-slate-600">
+                      Eventos de Onboarding
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Resumo Consolidado da Matriz de Visibilidade */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 text-xs sm:text-sm">
+              <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl text-indigo-950 space-y-1">
+                <strong className="block font-bold text-indigo-900 text-xs uppercase tracking-wide">
+                  1. Perfil do Colaborador (Regra Geral):
+                </strong>
+                <p>
+                  Visível aos <strong>3 papéis</strong> (Admin, RH e Gestão). O Gestor da área pode
+                  acompanhar a trajetória, histórico de onboardings e dossiê de avaliações do
+                  técnico. No entanto, as ações de <strong>edição de dados funcionais</strong>{' '}
+                  (cargo, setor, gestor) e <strong>exclusão do perfil</strong> são restritas e
+                  exclusivas a <strong>RH e Admin</strong>.
+                </p>
+              </div>
+
+              <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-blue-950 space-y-1">
+                <strong className="block font-bold text-blue-900 text-xs uppercase tracking-wide">
+                  2. Certificados (Regra Restrita de Privacidade & LGPD):
+                </strong>
+                <p>
+                  Visível e gerenciável <strong>apenas por Admin e RH</strong>. O papel{' '}
+                  <strong>Gestão NÃO visualiza</strong> nem acessa os certificados do colaborador
+                  (aba bloqueada/não renderizada). Toda a inclusão, edição ou exclusão gera log com
+                  autor, papel, carimbo de data/hora e detalhes.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs sm:text-sm text-amber-950 space-y-1">
+              {' '}
+              <strong className="block font-bold text-amber-900">
+                Ponto de Atenção — Contraste com o Módulo de Pré-selecionados & Contratação:
+              </strong>
+              <p>
+                Não confundir as permissões do Perfil do Colaborador com as do módulo de
+                Contratação: <em>(1)</em> Em Pré-selecionados, o Gestor da Área{' '}
+                <strong>tem acesso integral ao gabarito comentado</strong> da prova técnica do
+                candidato para avaliar perfil, enquanto na prova de onboarding o gabarito detalhado
+                é restrito ao Admin; <em>(2)</em> Já no Perfil do Colaborador, os{' '}
+                <strong>Certificados e Diplomas</strong> são de guarda e sigilo estrito de{' '}
+                <strong>RH e Admin</strong> sob critérios de conformidade da LGPD, ficando o papel
+                Gestão terminantemente impedido de visualizar essa aba.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* ========================================================= */}
+        {/* SEÇÃO 12 — Checklist rápido de homologação */}
         {/* ========================================================= */}
         <section className="mb-10 avoid-break page-break-before">
           <div className="flex items-center gap-2.5 mb-4 border-b border-gray-200 pb-2">
             <div className="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
-              11
+              12
             </div>
             <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
-              SEÇÃO 11 — Checklist rápido de homologação
+              SEÇÃO 12 — Checklist rápido de homologação
             </h2>
           </div>
 
@@ -1029,7 +1400,16 @@ export default function Manual() {
               'Gestor NÃO visualiza os botões de formalização do RH;',
               'RH visualiza o cartão destacado na fila "Aguardando RH" com ações exclusivas;',
               'RH formaliza contratação com data de início e gestor → cria colaborador e onboarding completo;',
-              'RH registra desistência ou reprovação própria com motivo → link público é invalidado e auditoria gravada.',
+              'RH registra desistência ou reprovação própria com motivo → link público é invalidado e auditoria gravada;',
+              'Perfil do Colaborador (/colaboradores/:id): acessar via card de /colaboradores e validar o cabeçalho consolidado com avatar, setor, gestor, datas e contador de onboardings;',
+              'Validar as 5 abas do Perfil: Trajetória, Onboarding, Certificados (RH/Admin), Dossiê de Avaliações e Histórico & Auditoria;',
+              'Aba Trajetória: validar ordenação decrescente (do mais recente ao mais antigo) unificando contratação, onboardings (com links entre processos), mudanças de área, avaliações e certificações;',
+              'Edição de dados funcionais: RH/Admin alteram cargo/setor/gestor pelo botão "Editar Perfil" → registro em auditoria com detalhe de transição (antigo → novo); Gestão não visualiza o botão;',
+              'Certificados (RH/Admin): adicionar certificado com título, emissor, data de emissão, validade e anexo (PDF/imagem até 50MB);',
+              'Visualizador de Certificado: abrir modal de visualização interna e testar download do documento anexo;',
+              'Monitoramento de Validade: conferir badge vermelha quando vencido, âmbar quando ≤ 90 dias e verde quando válido;',
+              'Restrição LGPD Certificados: logar com perfil Gestão e confirmar que a aba Certificados NÃO é exibida / exibe aviso restrito;',
+              'Auditoria de Certificados: validar que cada inclusão, edição e exclusão de certificado registra log com autor, papel, horário e detalhes.',
             ].map((item, idx) => (
               <div
                 key={idx}
