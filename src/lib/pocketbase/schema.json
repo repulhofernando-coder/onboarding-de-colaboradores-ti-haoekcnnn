@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-16T18:40:20.851Z",
+  "generatedAt": "2026-10-16T20:14:33.605Z",
   "collections": [
     {
       "name": "users",
@@ -438,6 +438,12 @@
         {
           "name": "setor",
           "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "questoes_sorteadas",
+          "type": "json",
           "required": false,
           "system": false
         }
@@ -1271,6 +1277,12 @@
           "required": false,
           "system": false,
           "collectionRef": "candidatos"
+        },
+        {
+          "name": "questoes_sorteadas",
+          "type": "json",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -1338,6 +1350,12 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "questoes_por_prova",
+          "type": "number",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -1524,6 +1542,12 @@
           "type": "text",
           "required": false,
           "system": false
+        },
+        {
+          "name": "questoes_sorteadas",
+          "type": "json",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -1651,6 +1675,12 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "questoes_sorteadas",
+          "type": "json",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [

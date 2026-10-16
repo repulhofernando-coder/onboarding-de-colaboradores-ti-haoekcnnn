@@ -1,14 +1,14 @@
 /// <reference path="../pb_data/types.d.ts" />
 
 /**
- * Endpoints pb_hooks para o Módulo de Pré-selecionados e Contratação.
- *
- * NOTA: Cada callback routerAdd encapsula seus próprios helpers inline
- * para evitar "Hook scoping error" do goja/PocketBase.
+ * Endpoints pb_hooks para o Módulo de Pré-selecionados (Candidatos).
+ * Implementa Prova Técnica com Banco de Questões e Sorteio de Objetivas,
+ * cronômetro de 60 min, dissertativas fora do sorteio e régua 95% arredondada para cima.
  */
 
 // --------------------------------------------------------------------------------------
 // 1. GET /backend/v1/candidato/prova/publico
+//    Retorna os dados públicos da prova técnica para o candidato realizar
 // --------------------------------------------------------------------------------------
 routerAdd('GET', '/backend/v1/candidato/prova/publico', (e) => {
   try {
@@ -16,7 +16,7 @@ routerAdd('GET', '/backend/v1/candidato/prova/publico', (e) => {
     const token = (e.request.url.query().get('token') || '').trim()
 
     if (!token) {
-      return e.json(400, { error: 'Token da prova do candidato é obrigatório.' })
+      return e.json(400, { error: 'Token de acesso do candidato é obrigatório.' })
     }
 
     let candidato = null
@@ -25,52 +25,49 @@ routerAdd('GET', '/backend/v1/candidato/prova/publico', (e) => {
     } catch (_) {}
 
     if (!candidato) {
-      return e.json(404, { error: 'Link de prova inválido ou candidato não encontrado.' })
+      return e.json(404, { error: 'Candidato não encontrado para o token fornecido.' })
     }
 
-    const statusCandidato = candidato.getString('status') || 'pre_selecionado'
-
-    // O link público morre em qualquer desfecho negativo ou terminal que não seja a realização da prova
-    if (statusCandidato === 'reprovado' || statusCandidato === 'desistiu') {
+    const candStatus = candidato.getString('status')
+    // Link morre se candidato for reprovado ou se desistir
+    if (candStatus === 'reprovado' || candStatus === 'desistiu') {
       return e.json(403, {
-        error:
-          statusCandidato === 'desistiu'
-            ? 'Processo seletivo encerrado (desistência registrada). Este link de avaliação não está mais ativo.'
-            : 'Este link de avaliação não está mais ativo.',
-        reprovado: true,
-        desistiu: statusCandidato === 'desistiu',
+        error: 'Este link de avaliação não está mais ativo.',
+        motivo:
+          candStatus === 'desistiu'
+            ? 'Processo encerrado por desistência'
+            : 'Candidato não aprovado no processo',
       })
     }
 
-    // Se já respondeu a prova: rejeitar com mensagem clara e amigável (sem reteste)
+    // REGRA DE OURO: SEM RETESTE — o pré-candidato tem APENAS UMA tentativa
     if (
-      statusCandidato === 'prova_concluida' ||
-      statusCandidato === 'aprovado' ||
-      statusCandidato === 'aprovado_aguardando_rh' ||
-      statusCandidato === 'convertido' ||
-      candidato.getString('data_conclusao_prova')
+      candidato.getString('data_conclusao_prova') ||
+      candStatus === 'prova_concluida' ||
+      candStatus === 'aprovado' ||
+      candStatus === 'aprovado_aguardando_rh' ||
+      candStatus === 'convertido'
     ) {
       return e.json(200, {
         liberado: false,
         jaSubmetido: true,
-        candidatoNome: candidato.getString('nome'),
-        cargoPretendido: candidato.getString('cargo_pretendido'),
         dataConclusao: candidato.getString('data_conclusao_prova'),
         mensagem:
-          'Esta prova já foi respondida. Suas respostas foram salvas com sucesso e a equipe de gestão da área fará a avaliação do seu perfil.',
+          'Sua prova de conhecimento já foi enviada com sucesso. Agradecemos sua participação! A equipe de RH e Gestão entrará em contato.',
+        candidatoNome: candidato.getString('nome'),
       })
     }
 
-    // Buscar o questionário vinculado ao candidato
-    const qid = candidato.getString('questionario_id')
+    // Resolver o questionário vinculado ao candidato
     let questRecord = null
+    const qid = candidato.getString('questionario_id')
     if (qid) {
       try {
         questRecord = app.findRecordById('questionarios', qid)
       } catch (_) {}
     }
 
-    // Fallback: se não tiver questionário fixado, buscar um compatível com o setor
+    // Se o candidato ainda não tiver questionário amarrado, busca o primeiro compatível com o setor
     if (!questRecord) {
       const setorCand = candidato.getString('setor') || ''
       if (setorCand) {
@@ -100,17 +97,85 @@ routerAdd('GET', '/backend/v1/candidato/prova/publico', (e) => {
     }
 
     // Carregar questões do questionário
-    let questoesRecords = app.findRecordsByFilter(
+    let todasQuestoes = app.findRecordsByFilter(
       'teste_questoes',
       `ativo = true && questionario_id = '${questRecord.id}'`,
       'ordem',
-      100,
+      500,
       0,
     )
 
-    if (!questoesRecords || questoesRecords.length === 0) {
-      questoesRecords = app.findRecordsByFilter('teste_questoes', 'ativo = true', 'ordem', 100, 0)
+    if (!todasQuestoes || todasQuestoes.length === 0) {
+      todasQuestoes = app.findRecordsByFilter('teste_questoes', 'ativo = true', 'ordem', 500, 0)
     }
+
+    // Separar objetivas e dissertativas
+    const objetivas = todasQuestoes.filter(
+      (q) => (q.getString('tipo') || 'objetiva') !== 'dissertativa',
+    )
+    const dissertativas = todasQuestoes.filter(
+      (q) => (q.getString('tipo') || 'objetiva') === 'dissertativa',
+    )
+
+    // Quantidade configurável por questionário (padrão 20, mínimo 1)
+    let questoesPorProva = questRecord.getInt('questoes_por_prova') || 20
+    if (questoesPorProva < 1) questoesPorProva = 20
+
+    // MOTOR DE SORTEIO NO SERVIDOR:
+    // Persistência em candidato.questoes_sorteadas para manter as mesmas questões ao recarregar a página
+    let idsSorteadasPersistidas = []
+    try {
+      const rawPersist = candidato.getString('questoes_sorteadas')
+      if (rawPersist) {
+        const parsed = JSON.parse(rawPersist)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          idsSorteadasPersistidas = parsed
+        }
+      }
+    } catch (_) {}
+
+    let objetivasFinais = []
+    if (idsSorteadasPersistidas.length > 0) {
+      // Reconstituir exatamente as questões sorteadas na primeira abertura
+      const mapaObjetivas = {}
+      for (const obj of objetivas) {
+        mapaObjetivas[obj.id] = obj
+      }
+      for (const id of idsSorteadasPersistidas) {
+        if (mapaObjetivas[id]) {
+          objetivasFinais.push(mapaObjetivas[id])
+        }
+      }
+      if (objetivasFinais.length === 0) {
+        objetivasFinais = objetivas.slice(0, questoesPorProva)
+      }
+    } else {
+      // Sorteio aleatório sem repetição (Fisher-Yates)
+      const shuffled = objetivas.slice()
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        const temp = shuffled[i]
+        shuffled[i] = shuffled[j]
+        shuffled[j] = temp
+      }
+      const qtdParaSortear = Math.min(questoesPorProva, shuffled.length)
+      objetivasFinais = shuffled.slice(0, qtdParaSortear)
+
+      // Persistir imediatamente na ficha do candidato
+      const idsSorteadas = objetivasFinais.map((q) => q.id)
+      try {
+        candidato.set('questoes_sorteadas', idsSorteadas)
+        app.save(candidato)
+      } catch (errSortPersist) {
+        console.warn(
+          '[Candidatos Hook] Erro ao persistir questoes_sorteadas no candidato:',
+          errSortPersist,
+        )
+      }
+    }
+
+    // REGRA DECIDIDA: DISSERTATIVAS SEMPRE PRESENTES FORA DO SORTEIO
+    const questoesEntregues = [...objetivasFinais, ...dissertativas]
 
     // REGRA DE CRONÔMETRO DE 60 MINUTOS (Somente na prova do pré-candidato):
     // O tempo começa a contar no servidor na PRIMEIRA abertura do link público (data_inicio_prova).
@@ -131,7 +196,7 @@ routerAdd('GET', '/backend/v1/candidato/prova/publico', (e) => {
     const segundosRestantes = Math.max(0, duracaoTotalSegundos - decorridoSegundos)
 
     // Sanitizar questões para o portal público: NUNCA enviar correta_index nem gabarito_comentario
-    const questoesSanitizadas = questoesRecords.map((q) => {
+    const questoesSanitizadas = questoesEntregues.map((q, idx) => {
       let alternativas = []
       try {
         const raw = q.getString('alternativas')
@@ -145,7 +210,7 @@ routerAdd('GET', '/backend/v1/candidato/prova/publico', (e) => {
       return {
         id: q.id,
         tipo: tipoQuestao,
-        ordem: q.getInt('ordem'),
+        ordem: idx + 1,
         tema: q.getString('tema'),
         enunciado: q.getString('enunciado'),
         alternativas: tipoQuestao === 'dissertativa' ? [] : alternativas,
@@ -161,6 +226,10 @@ routerAdd('GET', '/backend/v1/candidato/prova/publico', (e) => {
       questionarioNome: questRecord.getString('nome'),
       questionarioDescricao: questRecord.getString('descricao'),
       totalQuestoes: questoesSanitizadas.length,
+      totalObjetivas: objetivasFinais.length,
+      totalDissertativas: dissertativas.length,
+      bancoTotalObjetivas: objetivas.length,
+      questoesPorProvaConfigurada: questoesPorProva,
       questoes: questoesSanitizadas,
       // Dados do cronômetro de 60 min (servidor)
       duracaoMinutos: 60,
@@ -249,26 +318,59 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
       return e.json(500, { error: 'Nenhum questionário cadastrado para esta prova.' })
     }
 
-    // Buscar questões
-    let questoesRecords = app.findRecordsByFilter(
+    // Obter as questões sorteadas persistidas no candidato
+    let idsSorteadas = []
+    try {
+      const rawPersist = candidato.getString('questoes_sorteadas')
+      if (rawPersist) {
+        const parsed = JSON.parse(rawPersist)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          idsSorteadas = parsed
+        }
+      }
+    } catch (_) {}
+
+    // Buscar questões do questionário
+    let todasQuestoes = app.findRecordsByFilter(
       'teste_questoes',
       `ativo = true && questionario_id = '${questRecord.id}'`,
       'ordem',
-      100,
+      500,
       0,
     )
 
-    if (!questoesRecords || questoesRecords.length === 0) {
-      questoesRecords = app.findRecordsByFilter('teste_questoes', 'ativo = true', 'ordem', 100, 0)
+    if (!todasQuestoes || todasQuestoes.length === 0) {
+      todasQuestoes = app.findRecordsByFilter('teste_questoes', 'ativo = true', 'ordem', 500, 0)
     }
 
-    if (!questoesRecords || questoesRecords.length === 0) {
+    if (!todasQuestoes || todasQuestoes.length === 0) {
       return e.json(500, { error: 'Nenhuma questão cadastrada para esta prova.' })
     }
 
+    const mapaTodas = {}
+    for (const q of todasQuestoes) {
+      mapaTodas[q.id] = q
+    }
+
+    let questoesDaProva = []
+    if (idsSorteadas.length > 0) {
+      for (const id of idsSorteadas) {
+        if (mapaTodas[id]) questoesDaProva.push(mapaTodas[id])
+      }
+      // Dissertativas sempre fora do sorteio
+      const dissertativas = todasQuestoes.filter(
+        (q) => (q.getString('tipo') || 'objetiva') === 'dissertativa',
+      )
+      for (const d of dissertativas) {
+        if (!idsSorteadas.includes(d.id)) {
+          questoesDaProva.push(d)
+        }
+      }
+    } else {
+      questoesDaProva = todasQuestoes
+    }
+
     // CHECAGEM DO CRONÔMETRO (60 MINUTOS):
-    // Se o prazo expirou há mais de 2 minutos de tolerância para envio em trânsito e NÃO é o autoenvio que acabou de acionar,
-    // recusar novas submissões
     const agoraIso = new Date().toISOString()
     const dataInicioProvaStr = candidato.getString('data_inicio_prova')
     if (dataInicioProvaStr) {
@@ -286,20 +388,20 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
 
     // Identificar questões objetivas e dissertativas
     const faltantes = []
-    for (const q of questoesRecords) {
+    questoesDaProva.forEach((q, idx) => {
       const tipoQ = q.getString('tipo') || 'objetiva'
       if (tipoQ === 'dissertativa') {
         const txt = dissertativasEnviadas[q.id]
         if (!porExpiracaoTempo && (!txt || typeof txt !== 'string' || txt.trim().length === 0)) {
-          faltantes.push(q.getInt('ordem'))
+          faltantes.push(idx + 1)
         }
       } else {
         const resp = respostasEnviadas[q.id]
         if (!porExpiracaoTempo && (resp === undefined || resp === null || resp === '')) {
-          faltantes.push(q.getInt('ordem'))
+          faltantes.push(idx + 1)
         }
       }
-    }
+    })
 
     if (faltantes.length > 0 && !porExpiracaoTempo) {
       return e.json(400, {
@@ -309,16 +411,15 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
     }
 
     // Correção no servidor:
-    // REGRA DECIDIDA PELO USUÁRIO:
-    // Dissertativas NÃO têm peso na nota automática. A nota continua vindo SOMENTE das objetivas
-    // (percentual sobre o total de objetivas, régua do questionário).
+    // Dissertativas NÃO têm peso na nota automática. A nota vem SOMENTE das objetivas sorteadas.
     let acertos = 0
     let totalObjetivas = 0
     let totalDissertativas = 0
-    const totalQuestoes = questoesRecords.length
+    const totalQuestoes = questoesDaProva.length
     const mapaRespostas = []
+    const idsEfetivamenteSorteadas = []
 
-    for (const q of questoesRecords) {
+    questoesDaProva.forEach((q, idx) => {
       const tipoQ = q.getString('tipo') || 'objetiva'
 
       if (tipoQ === 'dissertativa') {
@@ -328,7 +429,7 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
         mapaRespostas.push({
           questao_id: q.id,
           tipo: 'dissertativa',
-          ordem: q.getInt('ordem'),
+          ordem: idx + 1,
           tema: q.getString('tema'),
           enunciado: q.getString('enunciado'),
           texto_respondido: textoRespondido,
@@ -337,6 +438,7 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
         })
       } else {
         totalObjetivas++
+        idsEfetivamenteSorteadas.push(q.id)
         const respRaw = respostasEnviadas[q.id]
         const temResposta = respRaw !== undefined && respRaw !== null && respRaw !== ''
         const respostaEscolhida = temResposta ? Number(respRaw) : -1
@@ -355,7 +457,7 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
         mapaRespostas.push({
           questao_id: q.id,
           tipo: 'objetiva',
-          ordem: q.getInt('ordem'),
+          ordem: idx + 1,
           tema: q.getString('tema'),
           enunciado: q.getString('enunciado'),
           alternativas: alternativas,
@@ -365,13 +467,15 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
           gabarito_comentario: q.getString('gabarito_comentario'),
         })
       }
-    }
+    })
 
-    // Nota percentual calculada SOBRE O TOTAL DE OBJETIVAS (se houver objetivas)
+    // RÉGUA 95% ARREDONDADA PARA CIMA:
+    // minimo_acertos = ceil(0.95 * total_objetivas_sorteadas)
     const divisor = totalObjetivas > 0 ? totalObjetivas : totalQuestoes
     const percentual = Number(((acertos / divisor) * 100).toFixed(1))
-    const reguaAprovacao = questRecord.getFloat('percentual_aprovacao') || 80.0
-    const aprovadoTeste = percentual >= reguaAprovacao
+    const reguaAprovacao = questRecord.getFloat('percentual_aprovacao') || 95.0
+    const minimoAcertosExigido = Math.ceil((reguaAprovacao / 100.0) * divisor)
+    const aprovadoTeste = acertos >= minimoAcertosExigido
 
     let ipOrigem = ''
     try {
@@ -379,7 +483,6 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
     } catch (_) {}
 
     // Validação defensiva: garantir que a coleção teste_tentativas não exija onboarding_id
-    // para submissões de pré-candidatos que ainda não possuem onboarding
     const tentativasCol = app.findCollectionByNameOrId('teste_tentativas')
     try {
       const obField = tentativasCol.fields.getByName('onboarding_id')
@@ -392,7 +495,6 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
     }
 
     // Gravar tentativa em teste_tentativas com privilégio de sistema
-    // Vinculada ao candidato pelo campo candidato_id, sem onboarding_id
     const tentativaRec = new Record(tentativasCol)
     tentativaRec.set('candidato_id', candidato.id)
     tentativaRec.set('onboarding_id', null)
@@ -405,6 +507,7 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
     tentativaRec.set('data_submissao', agoraIso)
     tentativaRec.set('ip', ipOrigem)
     tentativaRec.set('reteste_liberado', false)
+    tentativaRec.set('questoes_sorteadas', idsEfetivamenteSorteadas)
     tentativaRec.set('questionario_id', questRecord.id)
     app.save(tentativaRec)
 
@@ -439,7 +542,7 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
       logRecord.set('acao', 'Conclusão de Prova Técnica (Pré-selecionado)')
       logRecord.set(
         'detalhes',
-        `Candidato concluiu a prova "${qNome}"${porExpiracaoTempo ? ' (Envio automático por término do tempo de 60 min)' : ''}. Resultado: ${acertos}/${totalObjetivas} objetivas (${percentual}%). ${totalDissertativas} questão(ões) dissertativa(s) respondida(s) para análise qualitativa do gestor. Status no teste: ${aprovadoTeste ? `Atingiu a régua (>=${reguaAprovacao}%)` : `Abaixo da régua (<${reguaAprovacao}%)`}. Decisão final do Gestor pendente.`,
+        `Candidato concluiu a prova "${qNome}"${porExpiracaoTempo ? ' (Envio automático por término do tempo de 60 min)' : ''}. Resultado: ${acertos}/${totalObjetivas} objetivas sorteadas (${percentual}%). Mínimo exigido (${reguaAprovacao}%): ${minimoAcertosExigido} acertos. ${totalDissertativas} questão(ões) dissertativa(s) respondida(s) para análise qualitativa do gestor. Status no teste: ${aprovadoTeste ? `Atingiu a régua` : `Abaixo da régua`}. Decisão final do Gestor pendente.`,
       )
       logRecord.set('fora_prazo', false)
       logRecord.set('destaque_prazo', '')
@@ -452,9 +555,12 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
         questionario_nome: qNome,
         acertos: acertos,
         total_questoes: totalQuestoes,
+        total_objetivas: totalObjetivas,
+        minimo_acertos_exigido: minimoAcertosExigido,
         percentual: percentual,
         regua_aprovacao: reguaAprovacao,
         aprovado_teste: aprovadoTeste,
+        questoes_sorteadas: idsEfetivamenteSorteadas,
         data_conclusao: agoraIso,
       })
       app.save(logRecord)
@@ -476,8 +582,8 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
       const preSelUrl = `${appUrl}/pre-selecionados`
 
       const statusBadge = aprovadoTeste
-        ? `<span style="color: #16a34a; font-weight: bold;">Acima da régua (${percentual}% &gt;= ${reguaAprovacao}%)</span>`
-        : `<span style="color: #dc2626; font-weight: bold;">Abaixo da régua (${percentual}% &lt; ${reguaAprovacao}%)</span>`
+        ? `<span style="color: #16a34a; font-weight: bold;">Acima da régua (${acertos}/${divisor} &gt;= ${minimoAcertosExigido} acertos, ${percentual}%)</span>`
+        : `<span style="color: #dc2626; font-weight: bold;">Abaixo da régua (${acertos}/${divisor} &lt; ${minimoAcertosExigido} acertos, ${percentual}%)</span>`
 
       const emailHtml = `
         <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"></head><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; padding: 24px;">
@@ -494,9 +600,9 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
                 <p style="margin: 0 0 6px;"><strong>Cargo Pretendido:</strong> ${cargoCand}</p>
                 <p style="margin: 0 0 6px;"><strong>Área / Setor:</strong> ${setorCand}</p>
                 <p style="margin: 0 0 6px;"><strong>Prova:</strong> ${qNome}</p>
-                <p style="margin: 0 0 6px;"><strong>Nota / Desempenho:</strong> ${acertos} de ${totalQuestoes} acertos (${percentual}%)</p>
+                <p style="margin: 0 0 6px;"><strong>Nota / Desempenho:</strong> ${acertos} de ${totalObjetivas} objetivas sorteadas (${percentual}%)</p>
                 <p style="margin: 0 0 6px;"><strong>Resultado do Teste:</strong> ${statusBadge}</p>
-                <p style="margin: 0;"><strong>Régua de Referência:</strong> ${reguaAprovacao}%</p>
+                <p style="margin: 0;"><strong>Régua de Referência:</strong> ${reguaAprovacao}% (mínimo exigido: ${minimoAcertosExigido} acertos)</p>
               </div>
               <p style="color: #475569; font-size: 13px;">
                 Lembramos que a <strong>decisão final de aprovação ou reprovação para a vaga cabe a você, Gestor da Área</strong>. A nota acima serve como insumo da 2ª etapa.
@@ -594,7 +700,6 @@ routerAdd('POST', '/backend/v1/candidatos/decidir', (e) => {
     }
 
     const agoraIso = new Date().toISOString()
-    // Quando o gestor aprova, o status vira "aprovado_aguardando_rh"
     const novoStatus = decisao === 'aprovado' ? 'aprovado_aguardando_rh' : 'reprovado'
     candidato.set('status', novoStatus)
     candidato.set('decidido_por', usuarioId || null)
@@ -692,7 +797,6 @@ routerAdd('POST', '/backend/v1/candidatos/desistencia', (e) => {
       return e.json(400, { error: 'ID do candidato é obrigatório.' })
     }
 
-    // Ação exclusiva de RH e Admin
     if (usuarioRole !== 'rh' && usuarioRole !== 'admin') {
       return e.json(403, { error: 'Apenas RH ou Administrador podem registrar desistência.' })
     }
@@ -795,7 +899,6 @@ routerAdd('POST', '/backend/v1/candidatos/reprovar-rh', (e) => {
       return e.json(400, { error: 'ID do candidato é obrigatório.' })
     }
 
-    // Ação exclusiva de RH e Admin
     if (usuarioRole !== 'rh' && usuarioRole !== 'admin') {
       return e.json(403, { error: 'Apenas RH ou Administrador podem reprovar nesta etapa.' })
     }
@@ -925,6 +1028,14 @@ routerAdd('GET', '/backend/v1/candidato/tentativa/{candidatoId}', (e) => {
       respostas = tentativa.get('respostas') || []
     }
 
+    let questoesSorteadas = []
+    try {
+      const rawSort = tentativa.getString('questoes_sorteadas')
+      if (rawSort) questoesSorteadas = JSON.parse(rawSort)
+    } catch (_) {
+      questoesSorteadas = tentativa.get('questoes_sorteadas') || []
+    }
+
     let questionarioNome = ''
     const qid = tentativa.getString('questionario_id') || candidato.getString('questionario_id')
     if (qid) {
@@ -949,6 +1060,7 @@ routerAdd('GET', '/backend/v1/candidato/tentativa/{candidatoId}', (e) => {
         data_submissao: tentativa.getString('data_submissao'),
         questionario_id: qid || '',
         questionario_nome: questionarioNome,
+        questoes_sorteadas: questoesSorteadas,
         respostas_detalhe: respostas,
       },
     })
@@ -994,7 +1106,6 @@ routerAdd('POST', '/backend/v1/candidatos/converter', (e) => {
       return e.json(400, { error: 'Gestor responsável é obrigatório.' })
     }
 
-    // Validação de permissão: apenas RH e Admin podem formalizar contratação e converter
     if (usuarioRole !== 'rh' && usuarioRole !== 'admin') {
       return e.json(403, {
         error: 'Apenas o RH ou Administrador podem formalizar a contratação de candidatos.',
@@ -1019,7 +1130,6 @@ routerAdd('POST', '/backend/v1/candidatos/converter', (e) => {
     const candCargo = candidato.getString('cargo_pretendido') || ''
     const candSetor = candidato.getString('setor') || 'windows'
 
-    // Buscar setor_ref se existir na tabela setores
     let setorRefId = ''
     try {
       const setoresRecords = app.findRecordsByFilter(
@@ -1034,7 +1144,6 @@ routerAdd('POST', '/backend/v1/candidatos/converter', (e) => {
       }
     } catch (_) {}
 
-    // Buscar questionário de onboarding compatível para vincular ao novo onboarding
     let questionarioOnboardingId = ''
     try {
       const qs = app.findRecordsByFilter(
@@ -1058,7 +1167,6 @@ routerAdd('POST', '/backend/v1/candidatos/converter', (e) => {
       }
     } catch (_) {}
 
-    // Calcular data_fim padrão (data_inicio + 15 dias corridos, igual tela manual)
     let dataFimIso = ''
     try {
       const [ano, mes, dia] = dataInicio.split('-').map(Number)
@@ -1069,8 +1177,6 @@ routerAdd('POST', '/backend/v1/candidatos/converter', (e) => {
       dataFimIso = dataInicio
     }
 
-    // Carregar snapshot dos itens de integração ativos do modelo (Etapa 1 - Checklist)
-    // Exatamente como a tela de criação manual de onboarding faz
     const checklistSnapshot = []
     try {
       const itensModelo = app.findRecordsByFilter(
@@ -1094,7 +1200,6 @@ routerAdd('POST', '/backend/v1/candidatos/converter', (e) => {
     const tokenColaborador = $security.randomString(32)
     const agoraIso = new Date().toISOString()
 
-    // Criar o registro de onboarding em transação atômica
     let novoOnboarding = null
     app.runInTransaction((txApp) => {
       const onboardingsCol = txApp.findCollectionByNameOrId('onboardings')
@@ -1126,7 +1231,6 @@ routerAdd('POST', '/backend/v1/candidatos/converter', (e) => {
       txApp.save(rec)
       novoOnboarding = rec
 
-      // Atualizar status do candidato para 'convertido', gravar rastro do RH e amarrar colaborador_id
       candidato.set('status', 'convertido')
       candidato.set('colaborador_id', rec.id)
       candidato.set('rh_responsavel', usuarioId || null)
@@ -1134,9 +1238,6 @@ routerAdd('POST', '/backend/v1/candidatos/converter', (e) => {
       txApp.save(candidato)
     })
 
-    // Semear tarefas modelo idênticas à tela de criação manual:
-    // 1. Templates da Etapa 1 (Apresentação RH)
-    // 2. Templates do Setor (Etapa 2 - Vivência Técnica)
     const tarefasCol = app.findCollectionByNameOrId('tarefas_onboarding')
 
     // 1. Etapa 1
@@ -1167,7 +1268,7 @@ routerAdd('POST', '/backend/v1/candidatos/converter', (e) => {
       console.error('[Candidatos Hook] Erro ao semear tarefas modelo Etapa 1:', errEtapa1)
     }
 
-    // 2. Etapa 2 (por setor ou setor_ref)
+    // 2. Etapa 2
     try {
       const candSetorLower = candSetor.toLowerCase()
       let filterEtapa2 = `(setor = '${candSetorLower}' || setor = '${candSetor}' || setor ~ '${candSetor}'`
@@ -1203,7 +1304,6 @@ routerAdd('POST', '/backend/v1/candidatos/converter', (e) => {
       console.error('[Candidatos Hook] Erro ao semear tarefas modelo Etapa 2:', errEtapa2)
     }
 
-    // Registrar auditoria
     try {
       const logsCol = app.findCollectionByNameOrId('logs_auditoria')
       const logRecord = new Record(logsCol)

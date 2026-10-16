@@ -285,6 +285,7 @@ export interface QuestionarioModel extends RecordModel {
   setor?: string
   tipo_de_uso: TipoDeUsoQuestionario
   percentual_aprovacao: number // padrão 95
+  questoes_por_prova?: number // padrão 20
   ativo: boolean
 }
 
@@ -339,6 +340,7 @@ export interface TesteTentativa extends RecordModel {
   reteste_liberado?: boolean
   reteste_liberado_em?: string
   reteste_liberado_por?: string
+  questoes_sorteadas?: string[]
   respostas_detalhe?: TesteRespostaItem[]
 }
 
@@ -632,6 +634,7 @@ export interface AvaliacaoColaborador {
   percentual?: number
   aprovado?: boolean
   regua_aprovacao?: number
+  questoes_sorteadas?: string[]
   tentativa_id?: string
   aplicada_por?: string
   data_aplicacao?: string

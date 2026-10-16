@@ -23,6 +23,7 @@ import {
   FileCheck,
   GraduationCap,
   ShieldAlert,
+  HelpCircle,
 } from 'lucide-react'
 
 export default function Manual() {
@@ -758,10 +759,71 @@ export default function Manual() {
               Administrador gerencia questionários independentes por setor (Windows, Linux, Redes) e
               tipo de uso (&quot;onboarding&quot;, &quot;reciclagem&quot;, &quot;mudanca_area&quot;,
               &quot;avaliacao&quot;, &quot;contratacao&quot;). Cada questionário possui nome,
-              descrição, setor, nota mínima configurável (padrão 95%), status ativo/inativo e seu
-              respectivo banco de questões de múltipla escolha com alternativas, gabarito e
-              comentário explicativo de auditoria.
+              descrição, setor, nota mínima configurável (padrão 95%), quantidade de questões por
+              prova sorteada (padrão 20), status ativo/inativo e seu respectivo banco de questões
+              com alternativas, gabarito e comentário explicativo de auditoria.
             </p>
+
+            {/* Subseção: Banco de Questões com Sorteio */}
+            <div className="mt-3 p-3.5 bg-purple-50/70 border border-purple-200 rounded-xl space-y-2 text-xs text-purple-950">
+              <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wide text-purple-900">
+                <HelpCircle className="w-4 h-4 text-purple-700" />
+                <span>Banco de Questões com Sorteio de Objetivas (Regras do Motor):</span>
+              </div>
+              <p className="leading-relaxed">
+                O motor de avaliação opera com sorteio automático no servidor antes de renderizar a
+                prova, aplicando-se de forma unificada às <strong>3 categorias</strong> de provas do
+                sistema (Contratação do Pré-candidato, Etapa 3 do Onboarding e Avaliações Avulsas do
+                Dossiê):
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-purple-900 pl-1">
+                <li>
+                  <strong>Dissertativas FORA do sorteio:</strong> as questões dissertativas{' '}
+                  <em>nunca entram no sorteio</em> e estão sempre presentes em 100% das provas do
+                  pré-candidato. O sorteio aleatório ocorre exclusivamente entre as questões
+                  objetivas de múltipla escolha.
+                </li>
+                <li>
+                  <strong>Régua de 95% mantida com arredondamento para cima:</strong> na prova com
+                  20 questões objetivas sorteadas, permite-se no máximo 1 erro (19/20 acertos). Em
+                  provas com bancos menores (ex.: 10 questões), o arredondamento é para cima —{' '}
+                  <code className="bg-purple-100 px-1 py-0.5 rounded font-mono">
+                    minimo_acertos = ceil(0.95 * total_objetivas_sorteadas)
+                  </code>{' '}
+                  — ou seja, com 10 questões, exige-se 10/10 acertos (zero tolerância a erros).
+                </li>
+                <li>
+                  <strong>Reteste sorteia novamente entre todas:</strong> quando o gestor autoriza
+                  um Reteste na Etapa 3, o sistema resorteia aleatoriamente um novo conjunto a
+                  partir de todas as objetivas do banco, sem excluir questões vistas anteriormente.
+                </li>
+                <li>
+                  <strong>Quantidade configurável por questionário (Padrão 20):</strong> cada
+                  questionário possui o campo &quot;Questões por prova&quot; (mínimo 1, padrão 20).
+                </li>
+                <li>
+                  <strong>Cadastro com folga recomendado (40 para sortear 20):</strong> recomenda-se
+                  cadastrar um banco amplo de questões objetivas (ex.: 30 a 50 questões) para que
+                  cada tentativa ou reteste receba combinações distintas.
+                </li>
+                <li>
+                  <strong>Aviso de Banco Insuficiente:</strong> se o banco de objetivas ativas tiver
+                  menos questões que o configurado (ex.: banco tem 12 e o configurado é 20), o
+                  sistema entrega todas as 12 disponíveis e alerta o RH/Admin na aba Questionários
+                  sobre a necessidade de cadastrar mais questões.
+                </li>
+                <li>
+                  <strong>Persistência e Auditoria:</strong> ao iniciar a tentativa, o servidor
+                  sorteia e grava na tentativa a lista exata dos IDs sorteados (
+                  <code className="bg-purple-100 px-1 py-0.5 rounded font-mono">
+                    questoes_sorteadas
+                  </code>
+                  ). Ao recarregar a página (mesmo token), a prova mantém rigorosamente as mesmas
+                  questões; e a visualização do gabarito reconstitui apenas as questões efetivamente
+                  sorteadas para aquela pessoa.
+                </li>
+              </ul>
+            </div>
           </div>
 
           {/* SEÇÃO 7 */}
@@ -1002,7 +1064,7 @@ export default function Manual() {
               11
             </div>
             <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
-              SEÇÃO 11 — Perfil do Colaborador & Acervo de Certificados (Versão 0.0.46)
+              SEÇÃO 11 — Perfil do Colaborador & Acervo de Certificados (Versão 0.0.47){' '}
             </h2>
           </div>
 

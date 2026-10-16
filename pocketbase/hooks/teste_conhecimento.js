@@ -2,7 +2,8 @@
 
 /**
  * Endpoints pb_hooks para o Teste de Conhecimento da Etapa 3.
- * Suporta a fundação de questionários independentes vinculados ao onboarding.
+ * Suporta questionários independentes vinculados ao onboarding e
+ * Banco de Questões com Sorteio de Objetivas (persistência na tentativa/onboarding).
  */
 
 // 1. GET /backend/v1/teste-conhecimento/publico
@@ -132,24 +133,94 @@ routerAdd('GET', '/backend/v1/teste-conhecimento/publico', (e) => {
       } catch (_) {}
     }
 
-    let questoesRecords = []
+    let todasQuestoes = []
     if (questRecord) {
-      questoesRecords = app.findRecordsByFilter(
+      todasQuestoes = app.findRecordsByFilter(
         'teste_questoes',
         `ativo = true && questionario_id = '${questRecord.id}'`,
         'ordem',
-        100,
+        500,
         0,
       )
     }
 
-    // Fallback de segurança se nenhuma questão foi encontrada com questionario_id
-    if (!questoesRecords || questoesRecords.length === 0) {
-      questoesRecords = app.findRecordsByFilter('teste_questoes', 'ativo = true', 'ordem', 100, 0)
+    if (!todasQuestoes || todasQuestoes.length === 0) {
+      todasQuestoes = app.findRecordsByFilter('teste_questoes', 'ativo = true', 'ordem', 500, 0)
     }
 
+    // Separar objetivas e dissertativas
+    const objetivas = todasQuestoes.filter(
+      (q) => (q.getString('tipo') || 'objetiva') !== 'dissertativa',
+    )
+    const dissertativas = todasQuestoes.filter(
+      (q) => (q.getString('tipo') || 'objetiva') === 'dissertativa',
+    )
+
+    // Quantidade configurável por questionário (padrão 20, mínimo 1)
+    let questoesPorProva = questRecord ? questRecord.getInt('questoes_por_prova') : 20
+    if (!questoesPorProva || questoesPorProva < 1) questoesPorProva = 20
+
+    // MOTOR DE SORTEIO NO SERVIDOR:
+    // Se a tentativa em andamento já tiver questões sorteadas persistidas no onboarding
+    // E não for um novo reteste liberado (reteste resorteia entre todas), usar as persistidas!
+    let idsSorteadasPersistidas = []
+    try {
+      const rawPersist = onboarding.getString('questoes_sorteadas')
+      if (rawPersist) {
+        const parsed = JSON.parse(rawPersist)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          idsSorteadasPersistidas = parsed
+        }
+      }
+    } catch (_) {}
+
+    let objetivasFinais = []
+
+    if (idsSorteadasPersistidas.length > 0 && !retesteLiberado) {
+      // Reconstitui na mesma ordem persistida
+      const mapaObjetivas = {}
+      for (const obj of objetivas) {
+        mapaObjetivas[obj.id] = obj
+      }
+      for (const id of idsSorteadasPersistidas) {
+        if (mapaObjetivas[id]) {
+          objetivasFinais.push(mapaObjetivas[id])
+        }
+      }
+      // Se por algum motivo alguma não foi encontrada, fallback
+      if (objetivasFinais.length === 0) {
+        objetivasFinais = objetivas.slice(0, questoesPorProva)
+      }
+    } else {
+      // Realizar sorteio aleatório sem repetição (Fisher-Yates shuffle)
+      const shuffled = objetivas.slice()
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        const temp = shuffled[i]
+        shuffled[i] = shuffled[j]
+        shuffled[j] = temp
+      }
+      const qtdParaSortear = Math.min(questoesPorProva, shuffled.length)
+      objetivasFinais = shuffled.slice(0, qtdParaSortear)
+
+      // Persistir imediatamente os IDs sorteados no onboarding para retomadas consistentes
+      const idsSorteadas = objetivasFinais.map((q) => q.id)
+      try {
+        onboarding.set('questoes_sorteadas', idsSorteadas)
+        app.save(onboarding)
+      } catch (errSaveSort) {
+        console.warn(
+          '[Teste Hook] Aviso ao persistir questoes_sorteadas no onboarding:',
+          errSaveSort,
+        )
+      }
+    }
+
+    // As questões entregues na prova são as objetivas sorteadas + dissertativas (se houver, fora do sorteio)
+    const questoesEntregues = [...objetivasFinais, ...dissertativas]
+
     // Sanitizar questões para o portal público: NUNCA enviar correta_index nem gabarito_comentario
-    const questoesSanitizadas = questoesRecords.map((q) => {
+    const questoesSanitizadas = questoesEntregues.map((q, index) => {
       let alternativas = []
       try {
         const raw = q.getString('alternativas')
@@ -158,12 +229,15 @@ routerAdd('GET', '/backend/v1/teste-conhecimento/publico', (e) => {
         alternativas = q.get('alternativas') || []
       }
 
+      const tipoQ = q.getString('tipo') || 'objetiva'
+
       return {
         id: q.id,
-        ordem: q.getInt('ordem'),
+        tipo: tipoQ,
+        ordem: index + 1,
         tema: q.getString('tema'),
         enunciado: q.getString('enunciado'),
-        alternativas: alternativas,
+        alternativas: tipoQ === 'dissertativa' ? [] : alternativas,
       }
     })
 
@@ -173,12 +247,16 @@ routerAdd('GET', '/backend/v1/teste-conhecimento/publico', (e) => {
       reteste: retesteLiberado,
       tentativaNumero: (tentativas.length || 0) + 1,
       totalQuestoes: questoesSanitizadas.length,
+      totalObjetivas: objetivasFinais.length,
+      totalDissertativas: dissertativas.length,
       questoes: questoesSanitizadas,
       colaboradorNome: onboarding.getString('colaborador_nome'),
       cargo: onboarding.getString('cargo'),
       questionarioNome: questRecord ? questRecord.getString('nome') : 'Teste de Conhecimento',
       questionarioId: questRecord ? questRecord.id : null,
       percentualAprovacao: questRecord ? questRecord.getFloat('percentual_aprovacao') || 95 : 95,
+      bancoTotalObjetivas: objetivas.length,
+      questoesPorProvaConfigurada: questoesPorProva,
     })
   } catch (err) {
     console.error('[Teste Hook /publico] Erro:', err)
@@ -247,7 +325,7 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/submeter', (e) => {
       })
     }
 
-    // Resolver o questionário vinculado (reteste usa SEMPRE o mesmo questionário da tentativa anterior)
+    // Resolver questionário
     let questRecord = null
     if (ultimaTentativa) {
       const qid = ultimaTentativa.getString('questionario_id')
@@ -317,78 +395,144 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/submeter', (e) => {
       } catch (_) {}
     }
 
-    // Carregar questões ativas do questionário
-    let questoesRecords = []
+    // Obter as questões sorteadas que foram fixadas no onboarding para esta prova
+    let idsSorteadas = []
+    try {
+      const rawPersist = onboarding.getString('questoes_sorteadas')
+      if (rawPersist) {
+        const parsed = JSON.parse(rawPersist)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          idsSorteadas = parsed
+        }
+      }
+    } catch (_) {}
+
+    // Buscar questões do questionário
+    let todasQuestoes = []
     if (questRecord) {
-      questoesRecords = app.findRecordsByFilter(
+      todasQuestoes = app.findRecordsByFilter(
         'teste_questoes',
         `ativo = true && questionario_id = '${questRecord.id}'`,
         'ordem',
-        100,
+        500,
         0,
       )
     }
 
-    if (!questoesRecords || questoesRecords.length === 0) {
-      questoesRecords = app.findRecordsByFilter('teste_questoes', 'ativo = true', 'ordem', 100, 0)
+    if (!todasQuestoes || todasQuestoes.length === 0) {
+      todasQuestoes = app.findRecordsByFilter('teste_questoes', 'ativo = true', 'ordem', 500, 0)
     }
 
-    if (!questoesRecords || questoesRecords.length === 0) {
+    if (!todasQuestoes || todasQuestoes.length === 0) {
       return e.json(500, { error: 'Nenhuma questão cadastrada para este questionário.' })
     }
 
-    // Validação: todas as questões devem estar respondidas
+    const mapaTodas = {}
+    for (const q of todasQuestoes) {
+      mapaTodas[q.id] = q
+    }
+
+    // Reconstituir exatamente as questões sorteadas + dissertativas
+    let questoesDaProva = []
+    if (idsSorteadas.length > 0) {
+      for (const id of idsSorteadas) {
+        if (mapaTodas[id]) questoesDaProva.push(mapaTodas[id])
+      }
+      // Dissertativas sempre fora do sorteio
+      const dissertativas = todasQuestoes.filter(
+        (q) => (q.getString('tipo') || 'objetiva') === 'dissertativa',
+      )
+      for (const d of dissertativas) {
+        if (!idsSorteadas.includes(d.id)) {
+          questoesDaProva.push(d)
+        }
+      }
+    } else {
+      // Fallback de segurança se não havia sorteio persistido
+      questoesDaProva = todasQuestoes
+    }
+
+    // Validação: todas as questões da prova sorteada devem estar respondidas
     const faltantes = []
-    for (const q of questoesRecords) {
+    questoesDaProva.forEach((q, idx) => {
       const resp = respostasEnviadas[q.id]
       if (resp === undefined || resp === null || resp === '') {
-        faltantes.push(q.getInt('ordem'))
+        faltantes.push(idx + 1)
       }
-    }
+    })
 
     if (faltantes.length > 0) {
       return e.json(400, {
-        error: `Existem ${faltantes.length} questão(ões) não respondida(s): Questão(ões) ${faltantes.join(', ')}. Responda todas as ${questoesRecords.length} questões para enviar.`,
+        error: `Existem ${faltantes.length} questão(ões) não respondida(s): Questão(ões) ${faltantes.join(', ')}. Responda todas as ${questoesDaProva.length} questões para enviar.`,
         faltantes: faltantes,
       })
     }
 
     // Correção automática segura no servidor
     let acertos = 0
-    const totalQuestoes = questoesRecords.length
+    let totalObjetivas = 0
+    let totalDissertativas = 0
+    const totalQuestoes = questoesDaProva.length
     const mapaRespostas = []
+    const idsEfetivamenteSorteadas = []
 
-    for (const q of questoesRecords) {
-      const respostaEscolhida = Number(respostasEnviadas[q.id])
-      const corretaIndex = q.getInt('correta_index')
-      const acertou = respostaEscolhida === corretaIndex
-      if (acertou) acertos++
+    questoesDaProva.forEach((q, idx) => {
+      const tipoQ = q.getString('tipo') || 'objetiva'
 
-      let alternativas = []
-      try {
-        const raw = q.getString('alternativas')
-        if (raw) alternativas = JSON.parse(raw)
-      } catch (_) {
-        alternativas = q.get('alternativas') || []
+      if (tipoQ === 'dissertativa') {
+        totalDissertativas++
+        mapaRespostas.push({
+          questao_id: q.id,
+          tipo: 'dissertativa',
+          ordem: idx + 1,
+          tema: q.getString('tema'),
+          enunciado: q.getString('enunciado'),
+          texto_respondido: String(respostasEnviadas[q.id] || ''),
+          gabarito_comentario: q.getString('gabarito_comentario'),
+          correta: null,
+        })
+      } else {
+        totalObjetivas++
+        idsEfetivamenteSorteadas.push(q.id)
+        const respostaEscolhida = Number(respostasEnviadas[q.id])
+        const corretaIndex = q.getInt('correta_index')
+        const acertou = respostaEscolhida === corretaIndex
+        if (acertou) acertos++
+
+        let alternativas = []
+        try {
+          const raw = q.getString('alternativas')
+          if (raw) alternativas = JSON.parse(raw)
+        } catch (_) {
+          alternativas = q.get('alternativas') || []
+        }
+
+        mapaRespostas.push({
+          questao_id: q.id,
+          tipo: 'objetiva',
+          ordem: idx + 1,
+          tema: q.getString('tema'),
+          enunciado: q.getString('enunciado'),
+          alternativas: alternativas,
+          resposta_escolhida: respostaEscolhida,
+          correta_index: corretaIndex,
+          correta: acertou,
+          gabarito_comentario: q.getString('gabarito_comentario'),
+        })
       }
+    })
 
-      mapaRespostas.push({
-        questao_id: q.id,
-        ordem: q.getInt('ordem'),
-        tema: q.getString('tema'),
-        enunciado: q.getString('enunciado'),
-        alternativas: alternativas,
-        resposta_escolhida: respostaEscolhida,
-        correta_index: corretaIndex,
-        correta: acertou,
-        gabarito_comentario: q.getString('gabarito_comentario'),
-      })
-    }
-
-    const percentual = Number(((acertos / totalQuestoes) * 100).toFixed(1))
-    // Régua oficial do questionário (padrão 95%)
-    const reguaAprovacao = questRecord ? questRecord.getFloat('percentual_aprovacao') || 95.0 : 95.0
-    const aprovado = percentual >= reguaAprovacao
+    // RÉGUA DE APROVAÇÃO COM ARREDONDAMENTO PARA CIMA:
+    // minimo_acertos = ceil(0.95 * total_objetivas_sorteadas)
+    // Se a prova tiver 20 questões: ceil(0.95 * 20) = ceil(19) = 19 (1 erro permitido).
+    // Se a prova tiver 10 questões: ceil(0.95 * 10) = ceil(9.5) = 10 (nenhum erro permitido).
+    const divisor = totalObjetivas > 0 ? totalObjetivas : totalQuestoes
+    const percentual = Number(((acertos / divisor) * 100).toFixed(1))
+    const reguaConfigurada = questRecord
+      ? questRecord.getFloat('percentual_aprovacao') || 95.0
+      : 95.0
+    const minimoAcertosExigido = Math.ceil((reguaConfigurada / 100.0) * divisor)
+    const aprovado = acertos >= minimoAcertosExigido
 
     const novaTentativaNumero = tentativasAnteriores.length + 1
     const agoraIso = new Date().toISOString()
@@ -410,6 +554,7 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/submeter', (e) => {
     tentativaRec.set('data_submissao', agoraIso)
     tentativaRec.set('ip', ipOrigem)
     tentativaRec.set('reteste_liberado', false)
+    tentativaRec.set('questoes_sorteadas', idsEfetivamenteSorteadas)
     if (questRecord) {
       tentativaRec.set('questionario_id', questRecord.id)
     }
@@ -458,7 +603,7 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/submeter', (e) => {
       )
       logRecord.set(
         'detalhes',
-        `Colaborador enviou o questionário "${qNome}" (${totalQuestoes} questões). Resultado: ${acertos}/${totalQuestoes} (${percentual}%). Status: ${aprovado ? `APROVADO (>=${reguaAprovacao}%)` : `REPROVADO (<${reguaAprovacao}%)`}.`,
+        `Colaborador enviou o questionário "${qNome}" (${totalObjetivas} objetivas sorteadas). Resultado: ${acertos}/${totalObjetivas} (${percentual}%). Mínimo exigido pela régua (${reguaConfigurada}%): ${minimoAcertosExigido} acertos. Status: ${aprovado ? 'APROVADO' : 'REPROVADO'}.`,
       )
       logRecord.set('fora_prazo', false)
       logRecord.set('destaque_prazo', '')
@@ -468,16 +613,16 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/submeter', (e) => {
         tentativa_numero: novaTentativaNumero,
         acertos: acertos,
         total_questoes: totalQuestoes,
+        total_objetivas: totalObjetivas,
+        minimo_acertos_exigido: minimoAcertosExigido,
         percentual: percentual,
-        regua_aprovacao: reguaAprovacao,
+        regua_aprovacao: reguaConfigurada,
         aprovado: aprovado,
+        questoes_sorteadas: idsEfetivamenteSorteadas,
         data_submissao: agoraIso,
         ip: ipOrigem,
       })
       app.save(logRecord)
-      console.log(
-        `[Teste Hook] Tentativa ${novaTentativaNumero} salva para onboarding ${onboarding.id} (${qNome}): ${acertos}/${totalQuestoes} (${percentual}%)`,
-      )
     } catch (errLog) {
       console.error('[Teste Hook] Erro ao registrar log de auditoria:', errLog)
     }
@@ -488,8 +633,8 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/submeter', (e) => {
         const appUrl = 'https://onboarding-de-colaboradores-ti-8af12.goskip.app'
         const onboardingUrl = `${appUrl}/colaboradores/${onboarding.id}`
         const statusBadge = aprovado
-          ? `<span style="color: #16a34a; font-weight: bold;">APROVADO (&gt;=${reguaAprovacao}%)</span>`
-          : `<span style="color: #dc2626; font-weight: bold;">REPROVADO (&lt;${reguaAprovacao}%)</span>`
+          ? `<span style="color: #16a34a; font-weight: bold;">APROVADO (${acertos}/${divisor} &gt;= ${minimoAcertosExigido})</span>`
+          : `<span style="color: #dc2626; font-weight: bold;">REPROVADO (${acertos}/${divisor} &lt; ${minimoAcertosExigido})</span>`
 
         const emailHtml = `
           <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"></head><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; padding: 24px;">
@@ -505,9 +650,9 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/submeter', (e) => {
                   <p style="margin: 0 0 6px;"><strong>Colaborador:</strong> ${colabNome}</p>
                   <p style="margin: 0 0 6px;"><strong>Questionário:</strong> ${qNome}</p>
                   <p style="margin: 0 0 6px;"><strong>Tentativa:</strong> #${novaTentativaNumero}</p>
-                  <p style="margin: 0 0 6px;"><strong>Nota:</strong> ${acertos} de ${totalQuestoes} questões (${percentual}%)</p>
+                  <p style="margin: 0 0 6px;"><strong>Nota:</strong> ${acertos} de ${totalObjetivas} objetivas sorteadas (${percentual}%)</p>
                   <p style="margin: 0 0 6px;"><strong>Resultado:</strong> ${statusBadge}</p>
-                  <p style="margin: 0;"><strong>Régua de Aprovação:</strong> ${reguaAprovacao}% (mínimo de ${Math.ceil((totalQuestoes * reguaAprovacao) / 100)} acertos)</p>
+                  <p style="margin: 0;"><strong>Régua de Aprovação:</strong> ${reguaConfigurada}% (mínimo exigido: ${minimoAcertosExigido} acertos)</p>
                 </div>
                 ${
                   !aprovado
@@ -534,7 +679,6 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/submeter', (e) => {
             html: emailHtml,
           })
           app.newMailClient().send(msg)
-          console.log('[Teste Hook] E-mail enviado para:', gestorEmail, '| Assunto:', mailSubject)
         } catch (mailSendErr) {
           console.error('[Teste Hook] Falha no envio de e-mail ao gestor:', mailSendErr)
         }
@@ -600,6 +744,9 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/liberar-reteste', (e) => {
 
     const agoraIso = new Date().toISOString()
     onboarding.set('teste_conhecimento_status', 'reteste_liberado')
+    // DECISÃO 3: RETESTE SORTEIA NOVAMENTE ENTRE TODAS (sem excluir vistas).
+    // Limpamos o campo questoes_sorteadas para forçar novo sorteio ao abrir o teste
+    onboarding.set('questoes_sorteadas', [])
     app.save(onboarding)
 
     const colabNome = onboarding.getString('colaborador_nome') || 'Colaborador'
@@ -612,7 +759,7 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/liberar-reteste', (e) => {
       } catch (_) {}
     }
 
-    // Atualizar última tentativa se houver (preserva o questionário amarrado)
+    // Atualizar última tentativa se houver
     let questionarioIdReteste = onboarding.getString('questionario_id')
     try {
       const tentativas = app.findRecordsByFilter(
@@ -646,7 +793,7 @@ routerAdd('POST', '/backend/v1/teste-conhecimento/liberar-reteste', (e) => {
       logRecord.set('acao', 'Liberação de Reteste do Teste de Conhecimento')
       logRecord.set(
         'detalhes',
-        `Reteste autorizado por ${usuarioNome} (${usuarioRole}). Motivo: ${motivo || 'Revisão com o colaborador antes da reavaliação'}. O portal público foi liberado para nova tentativa mantendo o mesmo questionário original.`,
+        `Reteste autorizado por ${usuarioNome} (${usuarioRole}). Motivo: ${motivo || 'Revisão com o colaborador antes da reavaliação'}. O portal público foi liberado para nova tentativa com novo sorteio aleatório de questões objetivas do banco.`,
       )
       logRecord.set('fora_prazo', false)
       logRecord.set('destaque_prazo', '')
@@ -683,7 +830,6 @@ routerAdd('GET', '/backend/v1/teste-conhecimento/tentativas/{onboardingId}', (e)
       return e.json(400, { error: 'ID do onboarding é obrigatório.' })
     }
 
-    // Buscar tentativas do onboarding
     let tentativas = []
     try {
       tentativas = app.findRecordsByFilter(
@@ -697,9 +843,6 @@ routerAdd('GET', '/backend/v1/teste-conhecimento/tentativas/{onboardingId}', (e)
 
     const isAdmin = roleParam === 'admin'
 
-    // Formatar retorno respeitando a regra de negócio estrita:
-    // ADMIN: vê gabarito completo + respostas do colaborador vs gabarito + comentários explicativos
-    // GESTÃO e RH: veem APENAS nota, percentual, total e aprovação (sem gabarito, sem comentários, sem mapa de respostas por questão)
     const formatadas = tentativas.map((t) => {
       let respostas = []
       try {
@@ -709,7 +852,14 @@ routerAdd('GET', '/backend/v1/teste-conhecimento/tentativas/{onboardingId}', (e)
         respostas = t.get('respostas') || []
       }
 
-      // Buscar nome do questionário da tentativa
+      let questoesSorteadas = []
+      try {
+        const rawSort = t.getString('questoes_sorteadas')
+        if (rawSort) questoesSorteadas = JSON.parse(rawSort)
+      } catch (_) {
+        questoesSorteadas = t.get('questoes_sorteadas') || []
+      }
+
       let questionarioNome = ''
       const qid = t.getString('questionario_id')
       if (qid) {
@@ -730,11 +880,12 @@ routerAdd('GET', '/backend/v1/teste-conhecimento/tentativas/{onboardingId}', (e)
         reteste_liberado: t.getBool('reteste_liberado'),
         questionario_id: qid || '',
         questionario_nome: questionarioNome,
+        questoes_sorteadas: questoesSorteadas,
         created: t.getString('created'),
       }
 
       if (isAdmin) {
-        // Admin vê mapa completo
+        // Admin vê mapa completo das questões sorteadas e respondidas na tentativa
         base.respostas_detalhe = respostas
       }
 

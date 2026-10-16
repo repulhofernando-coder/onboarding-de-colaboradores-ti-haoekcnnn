@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { questionarioService, setorService } from '@/services/onboarding'
+import pb from '@/lib/pocketbase/client'
 import type {
   QuestionarioModel,
   TesteQuestaoModel,
@@ -20,6 +21,7 @@ import {
   Check,
   FileQuestion,
   Info,
+  AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -83,8 +85,12 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
   const [formQSetor, setFormQSetor] = useState('windows')
   const [formQTipoUso, setFormQTipoUso] = useState<TipoDeUsoQuestionario>('onboarding')
   const [formQPercentual, setFormQPercentual] = useState(95)
+  const [formQQuestoesPorProva, setFormQQuestoesPorProva] = useState(20)
   const [formQAtivo, setFormQAtivo] = useState(true)
   const [submittingQ, setSubmittingQ] = useState(false)
+  const [contagemQuestoes, setContagemQuestoes] = useState<
+    Record<string, { total: number; objetivas: number }>
+  >({})
 
   // Modal Questão
   const [modalQuestaoOpen, setModalQuestaoOpen] = useState(false)
@@ -107,6 +113,25 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
       setLoading(true)
       const list = await questionarioService.listAll()
       setQuestionarios(list)
+
+      // Carregar contagem de questões para cada questionário (para alertar banco insuficiente)
+      try {
+        const todas = await pb.collection('teste_questoes').getFullList<TesteQuestaoModel>({
+          filter: 'ativo = true',
+        })
+        const counts: Record<string, { total: number; objetivas: number }> = {}
+        todas.forEach((q) => {
+          const qid = q.questionario_id || 'sem_id'
+          if (!counts[qid]) counts[qid] = { total: 0, objetivas: 0 }
+          counts[qid].total++
+          if (q.tipo !== 'dissertativa') {
+            counts[qid].objetivas++
+          }
+        })
+        setContagemQuestoes(counts)
+      } catch (errCount) {
+        console.warn('Aviso ao carregar contagem de questões:', errCount)
+      }
     } catch (err) {
       console.error(err)
       toast.error('Erro ao carregar questionários.')
@@ -148,6 +173,7 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
     setFormQSetor(setoresList[0]?.chave || setoresList[0]?.id || 'windows')
     setFormQTipoUso('onboarding')
     setFormQPercentual(95)
+    setFormQQuestoesPorProva(20)
     setFormQAtivo(true)
     setModalQOpen(true)
   }
@@ -159,6 +185,7 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
     setFormQSetor(q.setor || 'windows')
     setFormQTipoUso(q.tipo_de_uso || 'onboarding')
     setFormQPercentual(q.percentual_aprovacao || 95)
+    setFormQQuestoesPorProva(q.questoes_por_prova || 20)
     setFormQAtivo(q.ativo !== false)
     setModalQOpen(true)
   }
@@ -179,6 +206,7 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
           setor: formQSetor,
           tipo_de_uso: formQTipoUso,
           percentual_aprovacao: formQPercentual,
+          questoes_por_prova: formQQuestoesPorProva,
           ativo: formQAtivo,
         })
         setQuestionarios((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
@@ -193,6 +221,7 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
           setor: formQSetor,
           tipo_de_uso: formQTipoUso,
           percentual_aprovacao: formQPercentual,
+          questoes_por_prova: formQQuestoesPorProva,
           ativo: formQAtivo,
         })
         setQuestionarios((prev) => [created, ...prev])
@@ -402,10 +431,56 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs text-gray-500 font-medium px-1">
-              <span>{questoes.length} questão(ões) cadastrada(s)</span>
-              <span>Aprovação: {selectedQuestionario.percentual_aprovacao}%</span>
-            </div>
+            {/* Aviso de Sorteio e Folga de Banco */}
+            {(() => {
+              const objetivasCount = questoes.filter((q) => q.tipo !== 'dissertativa').length
+              const dissertativasCount = questoes.filter((q) => q.tipo === 'dissertativa').length
+              const configurado = selectedQuestionario.questoes_por_prova || 20
+              const falta = configurado - objetivasCount
+
+              return (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs text-gray-500 font-medium px-1 flex-wrap gap-2">
+                    <span className="flex items-center gap-2">
+                      <strong>{questoes.length}</strong> questão(ões) cadastrada(s) (
+                      {objetivasCount} objetivas, {dissertativasCount} dissertativas)
+                      <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                        Sorteio da prova: <strong>{configurado}</strong> objetivas
+                      </span>
+                    </span>
+                    <span>
+                      Régua: <strong>{selectedQuestionario.percentual_aprovacao || 95}%</strong>
+                    </span>
+                  </div>
+
+                  {objetivasCount < configurado ? (
+                    <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold">
+                          Banco com menos questões que a prova configurada
+                        </p>
+                        <p className="text-[11px] text-amber-800 mt-0.5">
+                          O banco tem <strong>{objetivasCount}</strong> objetivas ativas. A prova
+                          entregará todas as {objetivasCount} em vez de {configurado} configuradas.
+                          Cadastre mais {falta} questão(ões) para atingir o sorteio pretendido e
+                          mais questões ainda para garantir variedade entre as tentativas (ex:
+                          recomendados 40 para sortear 20).
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-2.5 rounded-lg bg-purple-50/60 border border-purple-200 text-purple-900 text-xs flex items-center justify-between">
+                      <span className="text-[11px]">
+                        Banco com <strong>{objetivasCount}</strong> objetivas cadastradas. Cada nova
+                        prova sorteará <strong>{configurado}</strong> sem repetição (
+                        {objetivasCount - configurado} de folga).
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
             <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden bg-gray-50/20">
               {questoes.map((q, idx) => (
@@ -757,14 +832,42 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
                     {q.descricao || 'Questionário de conhecimento técnico.'}
                   </p>
 
-                  <div className="flex items-center gap-2 text-[11px] text-gray-600 mb-4 flex-wrap">
+                  <div className="flex items-center gap-2 text-[11px] text-gray-600 mb-3 flex-wrap">
                     <span className="bg-gray-100 px-2 py-0.5 rounded font-medium">
                       Setor: <strong>{q.setor?.toUpperCase() || 'TODOS'}</strong>
                     </span>
                     <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded font-medium flex items-center gap-1">
                       <Percent className="w-3 h-3" /> Min: {q.percentual_aprovacao || 95}%
                     </span>
+                    <span className="bg-purple-50 text-purple-800 border border-purple-200 px-2 py-0.5 rounded font-medium">
+                      Sorteio: <strong>{q.questoes_por_prova || 20}</strong> q.
+                    </span>
                   </div>
+
+                  {/* Alerta de Banco de Questões vs. Sorteio */}
+                  {(() => {
+                    const stats = contagemQuestoes[q.id] || { total: 0, objetivas: 0 }
+                    const configurado = q.questoes_por_prova || 20
+                    const falta = configurado - stats.objetivas
+                    if (stats.objetivas < configurado) {
+                      return (
+                        <div className="mb-3 p-2 rounded bg-amber-50 border border-amber-200 text-amber-900 text-[11px] leading-tight flex items-start gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                          <span>
+                            Banco tem <strong>{stats.objetivas}</strong> objetivas — a prova
+                            entregará todas as {stats.objetivas} em vez de {configurado} (faltam{' '}
+                            {falta} para atingir a meta).
+                          </span>
+                        </div>
+                      )
+                    }
+                    return (
+                      <div className="mb-3 text-[11px] text-gray-500">
+                        Banco: <strong>{stats.objetivas}</strong> objetivas disponíveis (
+                        {stats.objetivas - configurado} de folga para sorteio aleatório).
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
@@ -889,21 +992,41 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
               </div>
             </div>
 
-            <div>
-              <label className="text-xs font-semibold text-gray-700 block mb-1">
-                Nota Mínima de Aprovação (%) *
-              </label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  min={50}
-                  max={100}
-                  value={formQPercentual}
-                  onChange={(e) => setFormQPercentual(Number(e.target.value))}
-                  className="text-xs h-9 w-28"
-                  required
-                />
-                <span className="text-xs text-gray-500">Padrão da empresa: 95%</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-gray-700 block mb-1">
+                  Nota Mínima de Aprovação (%) *
+                </label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={50}
+                    max={100}
+                    value={formQPercentual}
+                    onChange={(e) => setFormQPercentual(Number(e.target.value))}
+                    className="text-xs h-9 w-24"
+                    required
+                  />
+                  <span className="text-xs text-gray-500">Padrão: 95%</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-700 block mb-1">
+                  Questões por Prova (Sorteio) *
+                </label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={formQQuestoesPorProva}
+                    onChange={(e) => setFormQQuestoesPorProva(Math.max(1, Number(e.target.value)))}
+                    className="text-xs h-9 w-24"
+                    required
+                  />
+                  <span className="text-xs text-gray-500">Padrão: 20 questões</span>
+                </div>
               </div>
             </div>
 

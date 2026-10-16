@@ -1381,6 +1381,7 @@ export const questionarioService = {
     setor?: string
     tipo_de_uso: import('@/types/onboarding').TipoDeUsoQuestionario
     percentual_aprovacao?: number
+    questoes_por_prova?: number
     ativo?: boolean
   }): Promise<QuestionarioModel> {
     return pb.collection('questionarios').create<QuestionarioModel>({
@@ -1390,6 +1391,8 @@ export const questionarioService = {
       tipo_de_uso: data.tipo_de_uso,
       percentual_aprovacao:
         data.percentual_aprovacao !== undefined ? Number(data.percentual_aprovacao) : 95,
+      questoes_por_prova:
+        data.questoes_por_prova !== undefined ? Math.max(1, Number(data.questoes_por_prova)) : 20,
       ativo: data.ativo !== false,
     })
   },
@@ -1402,6 +1405,7 @@ export const questionarioService = {
       setor: string
       tipo_de_uso: import('@/types/onboarding').TipoDeUsoQuestionario
       percentual_aprovacao: number
+      questoes_por_prova: number
       ativo: boolean
     }>,
   ): Promise<QuestionarioModel> {
@@ -1412,6 +1416,8 @@ export const questionarioService = {
     if (data.tipo_de_uso !== undefined) payload.tipo_de_uso = data.tipo_de_uso
     if (data.percentual_aprovacao !== undefined)
       payload.percentual_aprovacao = Number(data.percentual_aprovacao)
+    if (data.questoes_por_prova !== undefined)
+      payload.questoes_por_prova = Math.max(1, Number(data.questoes_por_prova))
     if (data.ativo !== undefined) payload.ativo = Boolean(data.ativo)
     return pb.collection('questionarios').update<QuestionarioModel>(id, payload)
   },
