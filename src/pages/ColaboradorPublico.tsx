@@ -167,26 +167,57 @@ export default function ColaboradorPublico() {
     onboarding?.etapa1_concluida || (onboarding && onboarding.etapa_atual >= 2),
   )
 
-  // Estado das fases da Etapa 2 para o colaborador:
-  // Fase N só é desbloqueada se a fase anterior N-1 tiver TODOS os seus itens confirmados pelo colaborador
+  // Conjunto de IDs das fases já concluídas pelo Gestor/Admin
+  const fasesConcluidasPeloGestor = useMemo(() => {
+    const raw = onboarding?.fases_concluidas
+    if (!raw) return new Set<string>()
+    if (Array.isArray(raw)) {
+      return new Set<string>(
+        raw
+          .map((item) => {
+            if (!item) return ''
+            if (typeof item === 'string') return item
+            return item.fase_id || ''
+          })
+          .filter(Boolean),
+      )
+    }
+    return new Set<string>()
+  }, [onboarding?.fases_concluidas])
+
+  // Estado das fases da Etapa 2 para o colaborador (FONTE DA VERDADE UNIFICADA):
+  // Uma fase N só libera para o colaborador após a CONCLUSÃO PELO GESTOR da fase anterior (N-1)
+  // A primeira fase (index 0) é liberada assim que a Etapa 2 é liberada pelo RH.
   const fasesStatusColaborador = useMemo(() => {
     if (fasesSetor.length === 0) return []
-
-    let faseAnteriorCompleta = true
 
     return fasesSetor.map((fase, index) => {
       const itensDaFase = tarefasEtapa2.filter((t) => t.fase === fase.id)
       const totalItens = itensDaFase.length
       const confirmados = itensDaFase.filter((t) => Boolean(confirmacoes[t.id])).length
 
-      // Uma fase é considerada completa pelo colaborador quando todos os itens dela foram confirmados
-      const estaCompleta = totalItens > 0 && confirmados === totalItens
+      // Sinalização e relato do colaborador nesta fase
+      const sinalizacao = onboarding?.fases_sinalizadas?.find((s) => s.fase_id === fase.id)
+      const temRelatoValido = Boolean(
+        sinalizacao &&
+        sinalizacao.status_sinalizacao !== 'refacao_solicitada' &&
+        sinalizacao.relato &&
+        sinalizacao.relato.trim().length >= 10,
+      )
 
-      const estaDesbloqueada = faseAnteriorCompleta
+      // O colaborador cumpriu os requisitos do seu lado na fase quando:
+      // Se há itens: confirmou todos e enviou relato válido
+      // Se não há itens: enviou relato válido
+      const estaCompleta =
+        totalItens > 0 ? confirmados === totalItens && temRelatoValido : temRelatoValido
 
-      if (!estaCompleta && totalItens > 0) {
-        faseAnteriorCompleta = false
-      }
+      // Fase anterior concluída pelo GESTOR (ou é a primeira fase)
+      const faseAnterior = index > 0 ? fasesSetor[index - 1] : null
+      const estaDesbloqueada =
+        index === 0 || (faseAnterior ? fasesConcluidasPeloGestor.has(faseAnterior.id) : true)
+
+      // Se a própria fase já foi concluída pelo gestor
+      const concluidaPeloGestor = fasesConcluidasPeloGestor.has(fase.id)
 
       return {
         fase,
@@ -196,9 +227,16 @@ export default function ColaboradorPublico() {
         confirmados,
         estaCompleta,
         estaDesbloqueada,
+        concluidaPeloGestor,
       }
     })
-  }, [fasesSetor, tarefasEtapa2, confirmacoes])
+  }, [
+    fasesSetor,
+    tarefasEtapa2,
+    confirmacoes,
+    fasesConcluidasPeloGestor,
+    onboarding?.fases_sinalizadas,
+  ])
 
   // Fase em andamento do colaborador para badge
   const faseAtualColabInfo = useMemo(() => {
@@ -373,7 +411,7 @@ export default function ColaboradorPublico() {
     }
   }
 
-  // Abrir modal de sinalização da fase (Etapa 2 requer relato dissertativo)
+  // Abrir modal de sinalização da fase (Etapa 1 e Etapa 2 agora requerem relato dissertativo obrigatório)
   const iniciarSinalizacaoFase = (params: {
     faseId: string
     faseTitulo: string
@@ -381,17 +419,12 @@ export default function ColaboradorPublico() {
   }) => {
     if (!onboarding) return
 
-    // Para Etapa 1, não há relato obrigatório, envia direto
-    if (params.etapa === 1) {
-      executarSinalizacaoFase({
-        ...params,
-        relato: '',
-      })
-      return
-    }
-
-    // Para Etapa 2, checa se a fase já teve refação solicitada
-    const sinalizacaoFase = onboarding.fases_sinalizadas?.find((s) => s.fase_id === params.faseId)
+    // Checa se a fase já teve sinalização / refação solicitada
+    const sinalizacaoFase = onboarding.fases_sinalizadas?.find(
+      (s) =>
+        s.fase_id === params.faseId ||
+        (params.etapa === 1 && (s.fase_id === 'etapa1' || s.etapa === 1)),
+    )
     const isRefacao = sinalizacaoFase?.status_sinalizacao === 'refacao_solicitada'
     const motivoRefacao = sinalizacaoFase?.motivo_refacao_atual || ''
     const cicloRefacao = sinalizacaoFase?.refacoes_count || 0
@@ -402,7 +435,7 @@ export default function ColaboradorPublico() {
       motivoRefacao,
       cicloRefacao,
     })
-    setRelatoTexto('')
+    setRelatoTexto(sinalizacaoFase?.relato || '')
     setRelatoErro(null)
     setModalRelatoOpen(true)
   }
@@ -1128,18 +1161,30 @@ export default function ColaboradorPublico() {
                             </h4>
                             {!estaDesbloqueada ? (
                               <span className="text-[10px] font-semibold bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                                <Lock className="w-3 h-3" /> Aguardando Liberação
+                                <Lock className="w-3 h-3" /> Aguardando Conclusão da Fase Anterior
+                                pelo Gestor
+                              </span>
+                            ) : faseStatus.concluidaPeloGestor ? (
+                              <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" /> Concluída e Validada pelo
+                                Gestor
                               </span>
                             ) : estaCompleta ? (
-                              <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                                <CheckCircle2 className="w-3 h-3" /> Fase Concluída ({confirmados}/
-                                {totalItens})
+                              <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" />{' '}
+                                {totalItens > 0
+                                  ? `Itens Confirmados (${confirmados}/${totalItens}) — Aguardando Gestor`
+                                  : 'Atividades Sinalizadas — Aguardando Gestor'}
+                              </span>
+                            ) : totalItens === 0 ? (
+                              <span className="text-[10px] font-semibold bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+                                Vivência Prática (Aguardando Sinalização)
                               </span>
                             ) : (
-                              <span className="text-[10px] font-semibold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                              <span className="text-[10px] font-semibold bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
                                 Em Andamento ({confirmados}/{totalItens} confirmados)
                               </span>
-                            )}
+                            )}{' '}
                           </div>
                           {fase.descricao && (
                             <p className="text-xs text-slate-600 mt-1 leading-relaxed">
@@ -1210,8 +1255,8 @@ export default function ColaboradorPublico() {
                       <div className="p-4 bg-slate-50/70 flex items-center gap-2 text-xs text-slate-500 italic">
                         <Lock className="w-4 h-4 text-slate-400 shrink-0" />
                         <span>
-                          Conclua a confirmação de todos os itens da fase anterior para liberar o
-                          conteúdo e as ações desta fase.
+                          Esta fase será liberada automaticamente assim que o seu Gestor Responsável
+                          concluir e aprovar a fase anterior.
                         </span>
                       </div>
                     ) : (
@@ -1339,9 +1384,17 @@ export default function ColaboradorPublico() {
 
                     {/* Botão de Sinalização de Conclusão da Fase (Etapa 2) */}
                     {(() => {
-                      // Regra: visível SOMENTE quando a fase possui itens e TODOS foram confirmados pelo colaborador.
-                      // Em fases SEM itens o botão NÃO aparece.
-                      if (!estaDesbloqueada || totalItens === 0 || !estaCompleta) {
+                      // Regra unificada:
+                      // - Em fase bloqueada, o botão não aparece.
+                      // - Em fase já concluída formalmente pelo gestor, a fase já está finalizada.
+                      // - Quando a fase tem itens (totalItens > 0): exige confirmação de todos os itens pelo colaborador.
+                      // - Quando a fase NÃO tem itens (totalItens === 0): o colaborador pode sinalizar diretamente com o relato dissertativo.
+                      if (!estaDesbloqueada || faseStatus.concluidaPeloGestor) {
+                        return null
+                      }
+
+                      const todosItensConfirmados = totalItens === 0 || confirmados === totalItens
+                      if (!todosItensConfirmados) {
                         return null
                       }
 
@@ -1353,12 +1406,19 @@ export default function ColaboradorPublico() {
                       return (
                         <div className="p-3.5 border-t border-slate-100 bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <div className="text-xs text-slate-600">
-                            <span className="font-semibold text-slate-800 block">
-                              Você confirmou todos os {totalItens} itens desta fase!
-                            </span>
+                            {totalItens > 0 ? (
+                              <span className="font-semibold text-slate-800 block">
+                                Você confirmou todos os {totalItens} itens desta fase!
+                              </span>
+                            ) : (
+                              <span className="font-semibold text-slate-800 block">
+                                Esta fase não possui materiais para assistir — relate o que você
+                                vivenciou/aprendeu nela.
+                              </span>
+                            )}
                             <span className="text-[11px] text-slate-500">
                               {sinalizacaoFase
-                                ? 'Responsável notificado. Aguarde a conclusão da fase pelo seu gestor.'
+                                ? 'Responsável notificado. Aguarde a validação e conclusão da fase pelo seu gestor.'
                                 : 'Sinalize que finalizou as atividades para avisar seu gestor de que a fase está pronta para ser concluída.'}
                             </span>
                           </div>
@@ -1933,19 +1993,28 @@ export default function ColaboradorPublico() {
               </div>
             ) : (
               <p className="text-slate-600 leading-relaxed">
-                Parabéns por completar as leituras e atividades desta fase! Para que seu gestor
-                possa validar sua vivência prática, é necessário registrar o que você aprendeu.
+                {faseParaSinalizar?.etapa === 1
+                  ? 'Parabéns por completar os materiais da Apresentação da Empresa (Etapa 1)! Para que a equipe de RH valide sua integração, é obrigatório registrar o que você compreendeu.'
+                  : 'Parabéns por completar as leituras e atividades desta fase! Para que seu gestor possa validar sua vivência prática, é obrigatório registrar o que você aprendeu.'}
               </p>
             )}
 
             <div className="space-y-1.5">
               <label className="font-bold text-slate-800 flex items-center justify-between">
-                <span>Relato da Fase (Obrigatório) *</span>
+                <span>
+                  {faseParaSinalizar?.etapa === 1
+                    ? 'Relato da Etapa 1 (Obrigatório) *'
+                    : 'Relato da Fase (Obrigatório) *'}
+                </span>
                 <span className="text-[11px] font-normal text-slate-500">Mínimo 10 caracteres</span>
               </label>
               <Textarea
                 rows={5}
-                placeholder="Descreva com suas palavras o que você entendeu/aprendeu nesta fase, quais procedimentos praticou e quais dúvidas sanou..."
+                placeholder={
+                  faseParaSinalizar?.etapa === 1
+                    ? 'Descreva com suas palavras o que você entendeu sobre a empresa, cultura, missão, valores e regras apresentadas...'
+                    : 'Descreva com suas palavras o que você entendeu/aprendeu nesta fase, quais procedimentos praticou e quais dúvidas sanou...'
+                }
                 value={relatoTexto}
                 onChange={(e) => {
                   setRelatoTexto(e.target.value)
@@ -1957,9 +2026,10 @@ export default function ColaboradorPublico() {
             </div>
 
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-500 text-[11px] leading-relaxed">
-              <strong>Importante:</strong> Este relato será registrado no seu histórico e enviado
-              diretamente ao seu gestor para avaliação do seu aprendizado prático antes da conclusão
-              formal da fase.
+              <strong>Importante:</strong> Este relato será registrado no seu histórico e
+              disponibilizado para{' '}
+              {faseParaSinalizar?.etapa === 1 ? 'o RH e a Gestão' : 'o seu gestor'} avaliar seu
+              aprendizado antes da conclusão formal.
             </div>
           </div>
 

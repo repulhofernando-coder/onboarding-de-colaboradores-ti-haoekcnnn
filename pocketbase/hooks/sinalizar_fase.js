@@ -40,11 +40,11 @@ routerAdd('POST', '/backend/v1/sinalizar-fase', (e) => {
       return e.json(400, { error: 'Identificador da fase (faseId) é obrigatório.' })
     }
 
-    // REGRA ETAPA 2: Relato dissertativo obrigatório
-    if (etapa === 2 && !relato) {
+    // REGRA UNIFICADA: Relato dissertativo obrigatório em todas as etapas (Etapa 1 e Etapa 2)
+    if (!relato || relato.trim().length < 10) {
       return e.json(400, {
         error:
-          'O relato dissertativo é obrigatório para sinalizar a conclusão da fase. Descreva com suas palavras o que você entendeu/aprendeu.',
+          'O relato dissertativo é obrigatório para sinalizar a conclusão. Descreva detalhadamente com suas palavras (mínimo de 10 caracteres) o que você entendeu/aprendeu.',
       })
     }
 
@@ -492,7 +492,11 @@ routerAdd('POST', '/backend/v1/fase/solicitar-refacao', (e) => {
       }
     } catch (_) {}
     if (Array.isArray(fasesConcluidas)) {
-      const fcFiltradas = fasesConcluidas.filter((fid) => fid !== faseId)
+      const fcFiltradas = fasesConcluidas.filter((item) => {
+        if (!item) return false
+        if (typeof item === 'string') return item !== faseId
+        return item.fase_id !== faseId
+      })
       onboarding.set('fases_concluidas', fcFiltradas)
     }
 

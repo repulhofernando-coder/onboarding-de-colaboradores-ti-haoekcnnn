@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 import { MundoOpenLogo } from '@/components/MundoOpenLogo'
 import { toast } from '@/hooks/use-toast'
-import { pb } from '@/lib/pocketbase/client'
+import pb from '@/lib/pocketbase/client'
 
 interface QuestaoPublica {
   id: string

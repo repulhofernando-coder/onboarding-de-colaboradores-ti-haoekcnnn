@@ -357,14 +357,18 @@ export default function DetalheOnboarding() {
     return tarefasEtapa2.filter((t) => Boolean(confirmacoes[t.id])).length
   }, [tarefasEtapa2, confirmacoes])
 
-  // Determinar status de bloqueio sequencial de cada fase na Etapa 2:
-  // Fase N só está desbloqueada se todas as fases anteriores (0 .. N-1) tiverem todos os seus itens confirmados/concluídos
+  // Determinar status de bloqueio sequencial de cada fase na Etapa 2 (FONTE DA VERDADE UNIFICADA):
+  // Uma fase N só libera para atuação após a CONCLUSÃO FORMAL PELO GESTOR da fase anterior (0 .. N-1).
+  // A conclusão do Gestor exige:
+  // 1) Que o colaborador tenha confirmado TODOS os itens da fase ("assisti/li" no portal);
+  // 2) Que o colaborador tenha sinalizado o fim da fase com o RELATO OBRIGATÓRIO (não pendente de refação).
+  // Nem o toggle "concluída" da tarefa nem qualquer outro sinal conta para destravar fases.
   const fasesStatusEtapa2 = useMemo(() => {
     if (fasesSetor.length === 0) {
       return []
     }
 
-    let faseAnteriorCompleta = true
+    let faseAnteriorConcluidaPeloGestor = true
 
     return fasesSetor.map((fase, index) => {
       const itensDaFase = tarefasEtapa2.filter((t) => t.fase === fase.id)
@@ -372,19 +376,62 @@ export default function DetalheOnboarding() {
       const concluidos = itensDaFase.filter((t) => t.concluida).length
       const confirmadosColab = itensDaFase.filter((t) => Boolean(confirmacoes[t.id])).length
 
-      // Verificar se a fase já foi registrada como concluída em fases_concluidas
-      const registroConclusao = onboarding?.fases_concluidas?.find((f) => f.fase_id === fase.id)
+      // Verificar se a fase já foi registrada formalmente pelo Gestor em fases_concluidas
+      const registroConclusao = onboarding?.fases_concluidas?.find((f) => {
+        if (!f) return false
+        if (typeof f === 'string') return f === fase.id
+        return f.fase_id === fase.id
+      })
 
-      // Uma fase é considerada completa se foi registrada em fases_concluidas OU se tem itens e todos concluídos
-      const todosItensConcluidos = totalItens === 0 || concluidos === totalItens
-      const estaCompleta =
-        Boolean(registroConclusao) || (totalItens > 0 && concluidos === totalItens)
+      // Sinalização e relato do colaborador
+      const sinalizacao = onboarding?.fases_sinalizadas?.find((s) => s.fase_id === fase.id)
+      const temRelatoValido = Boolean(
+        sinalizacao &&
+        sinalizacao.status_sinalizacao !== 'refacao_solicitada' &&
+        sinalizacao.relato &&
+        sinalizacao.relato.trim().length >= 10,
+      )
 
-      const estaDesbloqueada = faseAnteriorCompleta
+      // Colaborador confirmou todos os itens da fase (se existirem)
+      const todosItensConfirmadosColab = totalItens === 0 || confirmadosColab === totalItens
 
-      // Para a próxima fase: ela só desbloqueia se esta fase estiver completa
+      // Uma fase está formalmente completa se o Gestor/Admin já a concluiu
+      const estaCompleta = Boolean(registroConclusao)
+
+      // A fase atual só está desbloqueada se a fase anterior já foi formalmente CONCLUÍDA PELO GESTOR
+      const estaDesbloqueada = faseAnteriorConcluidaPeloGestor
+
+      // Atualiza o acumulador para a próxima fase
       if (!estaCompleta) {
-        faseAnteriorCompleta = false
+        faseAnteriorConcluidaPeloGestor = false
+      }
+
+      // O gestor pode concluir a fase quando:
+      // - Fase está desbloqueada;
+      // - Ainda não foi concluída;
+      // - O colaborador confirmou todos os itens (se existirem);
+      // - O colaborador enviou a sinalização com relato dissertativo válido (sem refação pendente).
+      const podeConcluirFase =
+        estaDesbloqueada && !registroConclusao && todosItensConfirmadosColab && temRelatoValido
+
+      let podeConcluirFaseMotivo:
+        | 'bloqueada'
+        | 'ja_concluida'
+        | 'itens_pendentes'
+        | 'refacao_pendente'
+        | 'relato_pendente'
+        | null = null
+
+      if (!estaDesbloqueada) {
+        podeConcluirFaseMotivo = 'bloqueada'
+      } else if (registroConclusao) {
+        podeConcluirFaseMotivo = 'ja_concluida'
+      } else if (!todosItensConfirmadosColab) {
+        podeConcluirFaseMotivo = 'itens_pendentes'
+      } else if (sinalizacao?.status_sinalizacao === 'refacao_solicitada') {
+        podeConcluirFaseMotivo = 'refacao_pendente'
+      } else if (!temRelatoValido) {
+        podeConcluirFaseMotivo = 'relato_pendente'
       }
 
       return {
@@ -394,13 +441,23 @@ export default function DetalheOnboarding() {
         totalItens,
         concluidos,
         confirmadosColab,
+        todosItensConfirmadosColab,
+        temRelatoValido,
+        sinalizacao,
         estaCompleta,
         estaDesbloqueada,
         registroConclusao,
-        podeConcluirFase: estaDesbloqueada && !registroConclusao && todosItensConcluidos,
+        podeConcluirFase,
+        podeConcluirFaseMotivo,
       }
     })
-  }, [fasesSetor, tarefasEtapa2, confirmacoes, onboarding?.fases_concluidas])
+  }, [
+    fasesSetor,
+    tarefasEtapa2,
+    confirmacoes,
+    onboarding?.fases_concluidas,
+    onboarding?.fases_sinalizadas,
+  ])
 
   // Indicador da fase atual em andamento (ex: "Fase 2 de 5 — Shadowing Ativo")
   const faseAtualInfo = useMemo(() => {
@@ -436,12 +493,42 @@ export default function DetalheOnboarding() {
     }
   }
 
-  // Verificar se todas as tarefas da Etapa 1 estão marcadas
+  // Regra da Etapa 1 unificada: a conclusão pelo RH exige:
+  // 1) As CONFIRMAÇÕES DO COLABORADOR nos materiais/vídeos ("assisti/li" no portal);
+  // 2) O RELATO dissertativo obrigatório da Etapa 1 ("o que entendeu/aprendeu");
+  // 3) O checklist de integração físico 100% entregue.
+  // As marcações manuais do RH nos materiais NÃO contam nem travam a conclusão.
+  const confirmacoesEtapa1Colab = useMemo(() => {
+    return tarefasEtapa1.filter((t) => Boolean(confirmacoes[t.id])).length
+  }, [tarefasEtapa1, confirmacoes])
+
+  const todosMateriaisEtapa1ConfirmadosColab = useMemo(() => {
+    if (tarefasEtapa1.length === 0) return true
+    return confirmacoesEtapa1Colab === tarefasEtapa1.length
+  }, [tarefasEtapa1, confirmacoesEtapa1Colab])
+
+  const sinalizacaoEtapa1 = useMemo(() => {
+    return onboarding?.fases_sinalizadas?.find(
+      (s) => s.fase_id === 'etapa1' || (s.etapa === 1 && !s.fase_id),
+    )
+  }, [onboarding?.fases_sinalizadas])
+
+  const temRelatoEtapa1Valido = useMemo(() => {
+    return Boolean(
+      sinalizacaoEtapa1 && sinalizacaoEtapa1.relato && sinalizacaoEtapa1.relato.trim().length >= 10,
+    )
+  }, [sinalizacaoEtapa1])
+
   const allEtapa1Checked = useMemo(() => {
-    if (onboarding?.etapa1_concluida) return true
-    if (tarefasEtapa1.length === 0) return false
-    return tarefasEtapa1.every((t) => t.concluida)
-  }, [onboarding?.etapa1_concluida, tarefasEtapa1])
+    return todosMateriaisEtapa1ConfirmadosColab && temRelatoEtapa1Valido
+  }, [todosMateriaisEtapa1ConfirmadosColab, temRelatoEtapa1Valido])
+
+  const allEtapa2TarefasChecked = useMemo(() => {
+    if (fasesSetor.length > 0) {
+      return fasesStatusEtapa2.every((f) => f.estaCompleta)
+    }
+    return tarefasEtapa2.length === 0 || confirmacoesEtapa2 === tarefasEtapa2.length
+  }, [fasesSetor, fasesStatusEtapa2, tarefasEtapa2, confirmacoesEtapa2])
 
   // Regras de permissão específicas do Onboarding
   // Etapa 1: Ações de escrita (marcar vistos, upload de item, concluir etapa) exclusivas de Admin e RH
@@ -624,7 +711,7 @@ export default function DetalheOnboarding() {
   const allChecklistEntregue =
     totalItensChecklist === 0 || entreguesChecklist === totalItensChecklist
 
-  // Concluir Etapa 1
+  // Concluir Etapa 1 (RH)
   const handleConcluirEtapa1 = async () => {
     if (!onboarding || !user) return
     if (!podeGerenciarEtapa1) {
@@ -634,10 +721,27 @@ export default function DetalheOnboarding() {
       return
     }
 
-    // MELHORIA 3: Exigir todos os itens do checklist marcados como entregues
+    // Validações da Etapa 1 unificada:
+    // 1) Checklist de integração entregue
     if (!allChecklistEntregue) {
       toast.error(
         `Pendência no Checklist de Integração: ${totalItensChecklist - entreguesChecklist} item(ns) pendente(s) de entrega. Marque todos os itens para concluir a Etapa 1.`,
+      )
+      return
+    }
+
+    // 2) Confirmações do colaborador em todos os materiais
+    if (!todosMateriaisEtapa1ConfirmadosColab) {
+      toast.error(
+        `O colaborador ainda não confirmou todos os materiais no portal público (${confirmacoesEtapa1Colab}/${tarefasEtapa1.length} confirmados). Aguarde as confirmações.`,
+      )
+      return
+    }
+
+    // 3) Relato obrigatório da Etapa 1
+    if (!temRelatoEtapa1Valido) {
+      toast.error(
+        'O colaborador precisa sinalizar o término da Etapa 1 e preencher o relato dissertativo no portal antes da validação pelo RH.',
       )
       return
     }
@@ -823,10 +927,15 @@ export default function DetalheOnboarding() {
     }
   }
 
-  const allEtapa2TarefasChecked = useMemo(() => {
-    if (tarefasEtapa2.length === 0) return false
-    return tarefasEtapa2.every((t) => t.concluida)
-  }, [tarefasEtapa2])
+  // Todas as fases da Etapa 2 foram concluídas formalmente pelo gestor
+  const todasFasesEtapa2ConcluidasPeloGestor = useMemo(() => {
+    if (fasesSetor.length > 0) {
+      return fasesStatusEtapa2.every((f) => Boolean(f.registroConclusao))
+    }
+    // Setor sem fases modelo cadastradas: exige que todos os itens tenham sido confirmados pelo colaborador
+    if (tarefasEtapa2.length === 0) return true
+    return tarefasEtapa2.every((t) => Boolean(confirmacoes[t.id]))
+  }, [fasesSetor, fasesStatusEtapa2, tarefasEtapa2, confirmacoes])
 
   // Concluir Etapa 2
   const handleConcluirEtapa2 = async () => {
@@ -2406,9 +2515,17 @@ export default function DetalheOnboarding() {
                                         title={
                                           !faseStatus.estaDesbloqueada
                                             ? 'Conclua a fase anterior primeiro'
-                                            : !faseStatus.podeConcluirFase
-                                              ? 'Valide todos os itens da fase antes de concluir'
-                                              : 'Concluir esta fase e liberar a próxima'
+                                            : !faseStatus.podeConcluirFaseMotivo
+                                              ? 'Concluir esta fase e liberar a próxima'
+                                              : faseStatus.podeConcluirFaseMotivo === 'bloqueada'
+                                                ? 'Conclua a fase anterior primeiro'
+                                                : faseStatus.podeConcluirFaseMotivo ===
+                                                    'itens_pendentes'
+                                                  ? 'O colaborador ainda não confirmou todos os materiais desta fase'
+                                                  : faseStatus.podeConcluirFaseMotivo ===
+                                                      'refacao_pendente'
+                                                    ? 'Refação solicitada: aguardando novo relato do colaborador'
+                                                    : 'Aguardando o colaborador sinalizar a conclusão da fase e enviar o relato dissertativo'
                                         }
                                       >
                                         {concluindoFaseId === fase.id ? (
@@ -2715,16 +2832,25 @@ export default function DetalheOnboarding() {
                               /* Lista de itens da fase */
                               <div className="divide-y divide-gray-100 bg-white">
                                 {itens.length === 0 ? (
-                                  <div className="p-4 text-center text-xs text-gray-400">
-                                    Nenhum item nesta fase ainda.{' '}
-                                    {podeGerenciarEtapa2e3 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => openAddItemModal(2, fase.id)}
-                                        className="text-brand-600 font-semibold hover:underline ml-1"
-                                      >
-                                        Adicionar item
-                                      </button>
+                                  <div className="p-4 text-center text-xs text-slate-500 bg-slate-50/50 space-y-1">
+                                    <p className="font-medium text-slate-700">
+                                      Fase de Vivência Prática / Operacional
+                                    </p>
+                                    <p className="text-[11px] text-slate-500">
+                                      Esta fase não possui materiais/tarefas obrigatórias
+                                      cadastradas. O colaborador vivencia as atividades e envia o
+                                      relato dissertativo no portal para validação do gestor.
+                                    </p>
+                                    {podeGerenciarEtapa2e3 && !onboarding.etapa2_concluida && (
+                                      <div className="pt-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => openAddItemModal(2, fase.id)}
+                                          className="text-brand-600 font-semibold hover:underline text-xs"
+                                        >
+                                          + Adicionar material/tarefa opcional
+                                        </button>
+                                      </div>
                                     )}
                                   </div>
                                 ) : (
