@@ -66,6 +66,9 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ModalExcluirColaborador } from '@/components/ModalExcluirColaborador'
+import { ModalEditarColaborador } from '@/components/ModalEditarColaborador'
+import { ModalSugestaoMudancaArea } from '@/components/ModalSugestaoMudancaArea'
+import { SecaoAvaliacoesColaborador } from '@/components/SecaoAvaliacoesColaborador'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
@@ -124,6 +127,18 @@ export default function DetalheOnboarding() {
 
   // Modal de exclusão do colaborador
   const [modalExcluirOpen, setModalExcluirOpen] = useState(false)
+
+  // Modal de edição do colaborador (Cargo, Setor, Gestor) - RH e Admin
+  const [modalEditarOpen, setModalEditarOpen] = useState(false)
+
+  // Modal de sugestão de prova na mudança de área
+  const [modalSugestaoOpen, setModalSugestaoOpen] = useState(false)
+  const [dadosSugestao, setDadosSugestao] = useState<{
+    onboarding: Onboarding
+    setorAntigo: string
+    setorNovo: string
+    questionarioSugerido: any
+  } | null>(null)
 
   // Estado para fluxo "Não Apto" na Avaliação
   const [faseRetornoId, setFaseRetornoId] = useState<string>('')
@@ -1063,6 +1078,21 @@ export default function DetalheOnboarding() {
               <Flame className="w-3.5 h-3.5" />
               Atrasado ({Math.abs(prazoInfo.diasRestantes)} dias além do limite)
             </Badge>
+          )}
+
+          {/* Botão de Editar Colaborador (Exclusivo RH / Admin — Gestão não edita) */}
+          {(isAdmin || isRH) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setModalEditarOpen(true)}
+              className="border-gray-300 text-gray-700 hover:text-brand-700 hover:bg-brand-50 font-semibold text-xs h-8 gap-1.5"
+              title="Editar cargo, setor ou gestor responsável do colaborador"
+            >
+              <Pencil className="w-3.5 h-3.5 text-brand-600" />
+              <span>Editar Colaborador</span>
+            </Button>
           )}
 
           {/* Botão de Excluir Colaborador (Exclusivo RH / Admin) */}
@@ -3393,6 +3423,14 @@ export default function DetalheOnboarding() {
                 </div>
               )}
             </div>
+
+            {/* ITEM 5: Seção de Avaliações do Colaborador (Reciclagem, Mudança de Área, Avaliação Periódica) */}
+            <SecaoAvaliacoesColaborador
+              onboarding={onboarding}
+              onAvaliacaoAdicionada={() => {
+                fetchData()
+              }}
+            />
           </div>
 
           {/* Linha do Tempo / Timeline Lateral */}
@@ -3520,6 +3558,41 @@ export default function DetalheOnboarding() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Edição do Colaborador (Cargo, Setor, Gestor) */}
+      {onboarding && (
+        <ModalEditarColaborador
+          open={modalEditarOpen}
+          onOpenChange={setModalEditarOpen}
+          onboarding={onboarding}
+          onSucesso={(atualizado) => {
+            setOnboarding(atualizado)
+            fetchData()
+          }}
+          onSugerirProvaMudancaSetor={(info) => {
+            setDadosSugestao(info)
+            setModalSugestaoOpen(true)
+          }}
+        />
+      )}
+
+      {/* Modal de Sugestão de Prova na Mudança de Setor */}
+      {dadosSugestao && (
+        <ModalSugestaoMudancaArea
+          open={modalSugestaoOpen}
+          onOpenChange={(aberto) => {
+            setModalSugestaoOpen(aberto)
+            if (!aberto) setDadosSugestao(null)
+          }}
+          onboarding={dadosSugestao.onboarding}
+          setorAntigo={dadosSugestao.setorAntigo}
+          setorNovo={dadosSugestao.setorNovo}
+          questionarioSugerido={dadosSugestao.questionarioSugerido}
+          onAvaliacaoCriada={() => {
+            fetchData()
+          }}
+        />
       )}
 
       {/* Modal de Exclusão Forte em Cascata do Colaborador */}

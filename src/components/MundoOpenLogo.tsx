@@ -72,6 +72,7 @@ export function MundoOpenIcon({
 /**
  * Componente SVG/JSX completo da marca Mundo Open Tecnologia
  */
+export { MundoOpenLogo }
 export default function MundoOpenLogo({
   className = '',
   variant = 'full',

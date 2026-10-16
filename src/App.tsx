@@ -23,6 +23,7 @@ import Logs from './pages/Logs'
 import Manual from './pages/Manual'
 import ColaboradorPublico from './pages/ColaboradorPublico'
 import CandidatoProvaPublica from './pages/CandidatoProvaPublica'
+import { ColaboradorAvaliacaoPublica } from './pages/ColaboradorAvaliacaoPublica'
 import PreSelecionados from './pages/PreSelecionados'
 import LimpezaAmbiente from './pages/LimpezaAmbiente'
 import NotFound from './pages/NotFound'
@@ -41,6 +42,7 @@ const App = () => (
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/colaborador/:token" element={<ColaboradorPublico />} />
           <Route path="/candidato/prova/:token" element={<CandidatoProvaPublica />} />
+          <Route path="/avaliacao/:token" element={<ColaboradorAvaliacaoPublica />} />
 
           {/* Rotas Protegidas (Exigem Login) */}
           <Route

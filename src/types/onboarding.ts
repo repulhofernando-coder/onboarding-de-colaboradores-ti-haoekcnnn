@@ -271,6 +271,8 @@ export interface QuestionarioModel extends RecordModel {
   ativo: boolean
 }
 
+export type Questionario = QuestionarioModel
+
 export interface TesteQuestaoModel extends RecordModel {
   questionario_id?: string
   enunciado: string
@@ -589,6 +591,34 @@ export const CANDIDATO_STATUS_INFO: Record<
     corBg: 'bg-purple-50 text-purple-700 border-purple-200',
     corDot: 'bg-purple-500',
   },
+}
+
+export type AvaliacaoColaboradorStatus = 'pendente' | 'concluida' | 'cancelada'
+
+export interface AvaliacaoColaborador {
+  id: string
+  colaborador_id: string
+  questionario_id: string
+  token: string
+  status: AvaliacaoColaboradorStatus
+  tipo_avaliacao?: string
+  nota?: number
+  total_questoes?: number
+  percentual?: number
+  aprovado?: boolean
+  regua_aprovacao?: number
+  tentativa_id?: string
+  aplicada_por?: string
+  data_aplicacao?: string
+  data_conclusao?: string
+  observacoes?: string
+  created: string
+  updated: string
+  expand?: {
+    colaborador_id?: Onboarding
+    questionario_id?: Questionario
+    aplicada_por?: User
+  }
 }
 
 export const STATUS_INFO: Record<

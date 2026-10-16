@@ -1322,6 +1322,13 @@ export const questionarioService = {
     })
   },
 
+  async listAtivos(): Promise<QuestionarioModel[]> {
+    return pb.collection('questionarios').getFullList<QuestionarioModel>({
+      filter: 'ativo = true',
+      sort: 'nome',
+    })
+  },
+
   async getById(id: string): Promise<QuestionarioModel> {
     return pb.collection('questionarios').getOne<QuestionarioModel>(id)
   },
@@ -1887,5 +1894,63 @@ export const auditoriaService = {
     } catch (_) {
       return []
     }
+  },
+}
+
+import type { AvaliacaoColaborador } from '@/types/onboarding'
+
+export const avaliacaoColaboradorService = {
+  async listByColaborador(colaboradorId: string): Promise<AvaliacaoColaborador[]> {
+    try {
+      return await pb.collection('avaliacoes_colaborador').getFullList<AvaliacaoColaborador>({
+        filter: `colaborador_id = '${colaboradorId}'`,
+        sort: '-created',
+        expand: 'questionario_id,aplicada_por',
+      })
+    } catch (err) {
+      console.error('[avaliacaoColaboradorService] listByColaborador erro:', err)
+      return []
+    }
+  },
+
+  async aplicarAvaliacao(dados: {
+    colaboradorId: string
+    questionarioId: string
+    tipoAvaliacao: string
+    aplicadaPorId?: string
+    observacoes?: string
+  }): Promise<AvaliacaoColaborador> {
+    // Gerar token aleatório seguro de 32 chars
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+    let token = 'av_'
+    for (let i = 0; i < 28; i++) {
+      token += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
+
+    const agora = new Date().toISOString()
+    const payload = {
+      colaborador_id: dados.colaboradorId,
+      questionario_id: dados.questionarioId,
+      token: token,
+      status: 'pendente',
+      tipo_avaliacao: dados.tipoAvaliacao,
+      aplicada_por: dados.aplicadaPorId || null,
+      data_aplicacao: agora,
+      observacoes: dados.observacoes || '',
+    }
+
+    const record = await pb
+      .collection('avaliacoes_colaborador')
+      .create<AvaliacaoColaborador>(payload, {
+        expand: 'questionario_id,aplicada_por',
+      })
+
+    return record
+  },
+
+  async cancelarAvaliacao(id: string): Promise<void> {
+    await pb.collection('avaliacoes_colaborador').update(id, {
+      status: 'cancelada',
+    })
   },
 }

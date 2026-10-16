@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-16T13:11:53.785Z",
+  "generatedAt": "2026-10-16T13:56:09.880Z",
   "collections": [
     {
       "name": "users",
@@ -1518,6 +1518,133 @@
         "CREATE INDEX idx_candidatos_status ON candidatos (status)",
         "CREATE INDEX idx_candidatos_setor ON candidatos (setor)",
         "CREATE INDEX idx_candidatos_email ON candidatos (email)"
+      ]
+    },
+    {
+      "name": "avaliacoes_colaborador",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh')",
+        "delete": "@request.auth.id != '' && @request.auth.role = 'admin'"
+      },
+      "fields": [
+        {
+          "name": "colaborador_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "onboardings"
+        },
+        {
+          "name": "questionario_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "questionarios"
+        },
+        {
+          "name": "token",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["pendente", "concluida", "cancelada"]
+        },
+        {
+          "name": "tipo_avaliacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "nota",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "total_questoes",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "percentual",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "aprovado",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "regua_aprovacao",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tentativa_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "aplicada_por",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "data_aplicacao",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_conclusao",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_avaliacoes_colab_token ON avaliacoes_colaborador (token)",
+        "CREATE INDEX idx_avaliacoes_colab_colaborador ON avaliacoes_colaborador (colaborador_id)",
+        "CREATE INDEX idx_avaliacoes_colab_questionario ON avaliacoes_colaborador (questionario_id)",
+        "CREATE INDEX idx_avaliacoes_colab_status ON avaliacoes_colaborador (status)"
       ]
     }
   ]

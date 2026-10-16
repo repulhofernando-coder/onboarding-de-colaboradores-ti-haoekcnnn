@@ -22,7 +22,11 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { useAuth } from '@/contexts/AuthContext'
 import { ModalExcluirColaborador } from '@/components/ModalExcluirColaborador'
+import { ModalEditarColaborador } from '@/components/ModalEditarColaborador'
+import { ModalSugestaoMudancaArea } from '@/components/ModalSugestaoMudancaArea'
+import { Edit, UserCog } from 'lucide-react'
 import { toast } from 'sonner'
+import type { Questionario } from '@/types/onboarding'
 
 interface ColaboradorAgregado {
   nome: string
@@ -36,10 +40,24 @@ interface ColaboradorAgregado {
 export default function Colaboradores() {
   const { isAdmin, isRH } = useAuth()
   const podeExcluir = isAdmin || isRH
+  const podeEditar = isAdmin || isRH // Gestão não edita
 
   const [onboardings, setOnboardings] = useState<Onboarding[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+
+  // Estado do modal de edição
+  const [modalEditarOpen, setModalEditarOpen] = useState(false)
+  const [onboardingParaEditar, setOnboardingParaEditar] = useState<Onboarding | null>(null)
+
+  // Estado da sugestão de mudança de área
+  const [modalSugestaoOpen, setModalSugestaoOpen] = useState(false)
+  const [dadosSugestao, setDadosSugestao] = useState<{
+    onboarding: Onboarding
+    setorAntigo: string
+    setorNovo: string
+    questionarioSugerido: Questionario | null
+  } | null>(null)
 
   // Estado do modal de exclusão
   const [modalExcluirOpen, setModalExcluirOpen] = useState(false)
@@ -226,6 +244,23 @@ export default function Colaboradores() {
                   </span>
 
                   <div className="flex items-center gap-1.5">
+                    {podeEditar && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setOnboardingParaEditar(onb)
+                          setModalEditarOpen(true)
+                        }}
+                        className="h-8 px-2.5 text-xs font-semibold text-gray-700 hover:text-brand-700 hover:bg-brand-50 border-gray-200 rounded-lg transition-colors inline-flex items-center gap-1"
+                        title={`Editar cargo, setor ou gestor de ${item.nome}`}
+                      >
+                        <Edit className="w-3 h-3 text-brand-600" />
+                        <span>Editar</span>
+                      </Button>
+                    )}
+
                     {podeExcluir && (
                       <Button
                         type="button"
@@ -256,7 +291,7 @@ export default function Colaboradores() {
                         to={`/colaboradores/${onb.id}`}
                         className="inline-flex items-center gap-1"
                       >
-                        <span>Abrir Onboarding</span>
+                        <span>Abrir</span>
                         <ExternalLink className="w-3 h-3" />
                       </Link>
                     </Button>
@@ -267,6 +302,43 @@ export default function Colaboradores() {
           })
         )}
       </div>
+
+      {/* Modal de Edição do Colaborador (Cargo, Setor, Gestor) */}
+      {onboardingParaEditar && (
+        <ModalEditarColaborador
+          open={modalEditarOpen}
+          onOpenChange={(aberto) => {
+            setModalEditarOpen(aberto)
+            if (!aberto) setOnboardingParaEditar(null)
+          }}
+          onboarding={onboardingParaEditar}
+          onSucesso={(atualizado) => {
+            setOnboardings((prev) =>
+              prev.map((o) => (o.id === atualizado.id ? { ...o, ...atualizado } : o)),
+            )
+            fetchOnboardings()
+          }}
+          onSugerirProvaMudancaSetor={(info) => {
+            setDadosSugestao(info)
+            setModalSugestaoOpen(true)
+          }}
+        />
+      )}
+
+      {/* Modal de Sugestão Automática de Prova na Mudança de Área */}
+      {dadosSugestao && (
+        <ModalSugestaoMudancaArea
+          open={modalSugestaoOpen}
+          onOpenChange={(aberto) => {
+            setModalSugestaoOpen(aberto)
+            if (!aberto) setDadosSugestao(null)
+          }}
+          onboarding={dadosSugestao.onboarding}
+          setorAntigo={dadosSugestao.setorAntigo}
+          setorNovo={dadosSugestao.setorNovo}
+          questionarioSugerido={dadosSugestao.questionarioSugerido}
+        />
+      )}
 
       {/* Modal de Exclusão Forte em Cascata */}
       {colaboradorParaExcluir && (
