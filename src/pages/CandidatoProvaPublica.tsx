@@ -33,6 +33,7 @@ export default function CandidatoProvaPublica() {
     liberado: boolean
     jaSubmetido?: boolean
     reprovado?: boolean
+    desistiu?: boolean
     candidatoNome?: string
     cargoPretendido?: string
     setor?: string
@@ -43,11 +44,20 @@ export default function CandidatoProvaPublica() {
     dataConclusao?: string
     mensagem?: string
     error?: string
+    duracaoMinutos?: number
+    dataInicioProva?: string
+    segundosRestantes?: number
+    expirado?: boolean
   } | null>(null)
 
   const [respostas, setRespostas] = useState<Record<string, number>>({})
+  const [dissertativas, setDissertativas] = useState<Record<string, string>>({})
   const [submetendo, setSubmetendo] = useState(false)
   const [sucessoEnvio, setSucessoEnvio] = useState<string | null>(null)
+
+  // Cronômetro de 60 minutos
+  const [segundosRestantes, setSegundosRestantes] = useState<number | null>(null)
+  const [tempoEsgotado, setTempoEsgotado] = useState(false)
 
   const carregarProva = useCallback(async () => {
     if (!token) {
@@ -59,6 +69,12 @@ export default function CandidatoProvaPublica() {
       setLoading(true)
       const data = await candidatoProvaPublicaService.getProva(token)
       setProvaInfo(data)
+      if (typeof data.segundosRestantes === 'number') {
+        setSegundosRestantes(data.segundosRestantes)
+        if (data.segundosRestantes <= 0) {
+          setTempoEsgotado(true)
+        }
+      }
     } catch (err: unknown) {
       console.error('Erro ao carregar prova do candidato:', err)
       const msg = err instanceof Error ? err.message : 'Não foi possível carregar a prova.'
@@ -75,35 +91,96 @@ export default function CandidatoProvaPublica() {
     carregarProva()
   }, [carregarProva])
 
+  // Regra de contagem regressiva em segundo plano
+  useEffect(() => {
+    if (
+      segundosRestantes === null ||
+      segundosRestantes <= 0 ||
+      provaInfo?.jaSubmetido ||
+      sucessoEnvio
+    ) {
+      return
+    }
+
+    const timer = setInterval(() => {
+      setSegundosRestantes((prev) => {
+        if (prev === null || prev <= 1) {
+          clearInterval(timer)
+          setTempoEsgotado(true)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [segundosRestantes, provaInfo?.jaSubmetido, sucessoEnvio])
+
   const handleSelecionarAlternativa = (questaoId: string, index: number) => {
+    if (tempoEsgotado || submetendo) return
     setRespostas((prev) => ({
       ...prev,
       [questaoId]: index,
     }))
   }
 
-  const handleSubmeter = async () => {
-    if (!token || !provaInfo?.questoes) return
+  const handleDissertativaChange = (questaoId: string, texto: string) => {
+    if (tempoEsgotado || submetendo) return
+    setDissertativas((prev) => ({
+      ...prev,
+      [questaoId]: texto,
+    }))
+  }
 
-    const total = provaInfo.questoes.length
-    const respondidas = Object.keys(respostas).length
-    const faltantes = total - respondidas
+  const handleSubmeter = async (autoEnvioPorTempo = false) => {
+    if (!token || !provaInfo?.questoes || submetendo) return
 
-    if (faltantes > 0) {
-      toast.error(
-        `Faltam ${faltantes} questão(ões) para você responder. Responda todas as ${total} questões antes de submeter.`,
-      )
-      return
+    const questoesList = provaInfo.questoes
+
+    if (!autoEnvioPorTempo) {
+      // Validação completa manual
+      let faltantes = 0
+      for (const q of questoesList) {
+        if (q.tipo === 'dissertativa') {
+          const val = (dissertativas[q.id] || '').trim()
+          if (!val) faltantes++
+        } else {
+          if (respostas[q.id] === undefined) faltantes++
+        }
+      }
+
+      if (faltantes > 0) {
+        toast.error(
+          `Faltam ${faltantes} questão(ões) para você responder. Responda todas as ${questoesList.length} questões antes de submeter.`,
+        )
+        return
+      }
     }
 
     try {
       setSubmetendo(true)
-      const res = await candidatoProvaPublicaService.submeterProva(token, respostas)
+      if (autoEnvioPorTempo) {
+        toast.warning(
+          'Tempo limite de 60 minutos atingido. Enviando respostas registradas até o momento...',
+        )
+      }
+      const res = await candidatoProvaPublicaService.submeterProva(
+        token,
+        respostas,
+        dissertativas,
+        autoEnvioPorTempo,
+      )
       setSucessoEnvio(
         res.mensagem ||
-          'Sua prova foi enviada com sucesso! Suas respostas foram salvas e a equipe de gestão da área entrará em contato.',
+          (autoEnvioPorTempo
+            ? 'Tempo esgotado. Suas respostas respondidas até o momento foram salvas e enviadas automaticamente com sucesso.'
+            : 'Sua prova foi enviada com sucesso! Suas respostas foram salvas e a equipe de gestão da área entrará em contato.'),
       )
-      toast.success('Prova submetida com sucesso!')
+      toast.success(
+        autoEnvioPorTempo
+          ? 'Tempo limite esgotado: respostas submetidas automaticamente!'
+          : 'Prova submetida com sucesso!',
+      )
       // Recarregar status
       await carregarProva()
     } catch (err: unknown) {
@@ -114,6 +191,20 @@ export default function CandidatoProvaPublica() {
       setSubmetendo(false)
     }
   }
+
+  // Acionar envio automático quando o cronômetro zerar
+  useEffect(() => {
+    if (
+      tempoEsgotado &&
+      !provaInfo?.jaSubmetido &&
+      !sucessoEnvio &&
+      !submetendo &&
+      token &&
+      provaInfo?.questoes
+    ) {
+      handleSubmeter(true)
+    }
+  }, [tempoEsgotado])
 
   // Estado de carregamento
   if (loading) {
@@ -223,14 +314,28 @@ export default function CandidatoProvaPublica() {
     )
   }
 
+  // Cálculos de tempo formatado (mm:ss)
+  const formatarTempo = (totalSeg: number) => {
+    const mins = Math.floor(totalSeg / 60)
+    const segs = totalSeg % 60
+    return `${String(mins).padStart(2, '0')}:${String(segs).padStart(2, '0')}`
+  }
+
   // Tela principal da prova com questões
   const questoes = provaInfo.questoes || []
   const totalQuestoes = questoes.length
-  const respondidasCount = Object.keys(respostas).length
+
+  const respondidasObjetivas = Object.keys(respostas).length
+  const respondidasDissertativas = Object.entries(dissertativas).filter(
+    ([_, v]) => (v || '').trim().length > 0,
+  ).length
+  const respondidasCount = respondidasObjetivas + respondidasDissertativas
   const progressoPercent =
     totalQuestoes > 0 ? Math.round((respondidasCount / totalQuestoes) * 100) : 0
   const tudoRespondido = totalQuestoes > 0 && respondidasCount === totalQuestoes
   const setorVisual = getSetorVisual(provaInfo.setor)
+
+  const poucoTempo = segundosRestantes !== null && segundosRestantes <= 300 // menos de 5 min
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-between">
@@ -250,6 +355,22 @@ export default function CandidatoProvaPublica() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Widget do Cronômetro de 60 Minutos */}
+            {segundosRestantes !== null && (
+              <div
+                className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all shadow-xs ${
+                  poucoTempo
+                    ? 'bg-red-50 text-red-700 border-red-300 animate-pulse ring-2 ring-red-400/20'
+                    : 'bg-amber-50 text-amber-800 border-amber-300'
+                }`}
+              >
+                <Clock className={`w-4 h-4 ${poucoTempo ? 'text-red-600' : 'text-amber-600'}`} />
+                <span>
+                  {tempoEsgotado ? 'Tempo Esgotado' : `Restam ${formatarTempo(segundosRestantes)}`}
+                </span>
+              </div>
+            )}
+
             <span className="text-xs px-2.5 py-1 rounded-full font-semibold border bg-brand-50 text-brand-700 border-brand-200 hidden sm:inline-flex items-center gap-1.5">
               <span
                 className="w-1.5 h-1.5 rounded-full"
@@ -313,21 +434,38 @@ export default function CandidatoProvaPublica() {
             <Progress value={progressoPercent} className="h-2 bg-slate-100" />
           </div>
 
+          {/* Alerta de Cronômetro e Instruções */}
           <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <p className="leading-relaxed">
-              <strong>Importante:</strong> Esta prova é de múltipla escolha. Ao clicar em finalizar,
-              suas respostas serão gravadas definitivamente no sistema e o gestor da área receberá o
-              aviso. Não será possível refazer o teste.
+              <strong>Atenção ao tempo e envio:</strong> Você tem <strong>60 minutos</strong>{' '}
+              contados a partir da abertura do teste. Se o cronômetro zerar, todas as respostas já
+              preenchidas até o momento serão <strong>submetidas automaticamente</strong> para não
+              perder o seu trabalho. Responda tanto as questões objetivas quanto as dissertativas
+              com atenção e clareza.
             </p>
           </div>
+
+          {poucoTempo && !tempoEsgotado && (
+            <div className="p-3 bg-red-50 rounded-xl border border-red-300 text-xs text-red-800 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-red-600 shrink-0 animate-spin" />
+              <span>
+                <strong>Atenção:</strong> Faltam menos de 5 minutos! Conclua o preenchimento para
+                garantir seu envio completo.
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Lista de Questões */}
         <div className="space-y-5">
           {questoes.map((q, qIndex) => {
-            const respondida = respostas[q.id] !== undefined
+            const isDissertativa = q.tipo === 'dissertativa'
+            const respondida = isDissertativa
+              ? (dissertativas[q.id] || '').trim().length > 0
+              : respostas[q.id] !== undefined
             const respostaAtual = respostas[q.id]
+            const textoAtual = dissertativas[q.id] || ''
 
             return (
               <div
@@ -351,6 +489,14 @@ export default function CandidatoProvaPublica() {
                     <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                       {q.tema || `Questão ${q.ordem || qIndex + 1}`}
                     </span>
+                    {isDissertativa && (
+                      <Badge
+                        variant="outline"
+                        className="bg-purple-50 text-purple-700 border-purple-200 text-[10px]"
+                      >
+                        Dissertativa
+                      </Badge>
+                    )}
                   </div>
 
                   {respondida ? (
@@ -369,39 +515,59 @@ export default function CandidatoProvaPublica() {
                   {q.enunciado}
                 </p>
 
-                {/* Alternativas A, B, C, D */}
-                <div className="space-y-2.5 pt-1">
-                  {q.alternativas.map((altTexto, altIdx) => {
-                    const letras = ['A', 'B', 'C', 'D', 'E']
-                    const letra = letras[altIdx] || `${altIdx + 1}`
-                    const selecionada = respostaAtual === altIdx
+                {/* Bloco de Resposta: Dissertativa vs Objetiva */}
+                {isDissertativa ? (
+                  <div className="space-y-2 pt-1">
+                    <label className="block text-xs font-medium text-slate-600">
+                      Sua resposta dissertativa (argumentação e raciocínio técnico):
+                    </label>
+                    <textarea
+                      rows={5}
+                      value={textoAtual}
+                      onChange={(e) => handleDissertativaChange(q.id, e.target.value)}
+                      disabled={submetendo || tempoEsgotado}
+                      placeholder="Descreva detalhadamente a sua abordagem técnica, ferramentas e raciocínio para este cenário..."
+                      className="w-full text-xs sm:text-sm p-3.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all bg-slate-50/40 text-slate-800 resize-y"
+                    />
+                    <div className="flex items-center justify-between text-[11px] text-slate-400">
+                      <span>Avaliação qualitativa pelo gestor técnico da área</span>
+                      <span>{textoAtual.length} caracteres</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 pt-1">
+                    {q.alternativas.map((altTexto, altIdx) => {
+                      const letras = ['A', 'B', 'C', 'D', 'E']
+                      const letra = letras[altIdx] || `${altIdx + 1}`
+                      const selecionada = respostaAtual === altIdx
 
-                    return (
-                      <button
-                        key={altIdx}
-                        type="button"
-                        onClick={() => handleSelecionarAlternativa(q.id, altIdx)}
-                        disabled={submetendo}
-                        className={`w-full text-left p-3.5 rounded-xl border text-xs sm:text-sm transition-all flex items-start gap-3 ${
-                          selecionada
-                            ? 'bg-brand-50/80 border-brand-500 text-brand-950 font-medium ring-2 ring-brand-500/20'
-                            : 'bg-slate-50/60 border-slate-200 text-slate-700 hover:bg-slate-100/80 hover:border-slate-300'
-                        }`}
-                      >
-                        <span
-                          className={`w-6 h-6 rounded-md flex items-center justify-center font-bold text-xs shrink-0 transition-colors ${
+                      return (
+                        <button
+                          key={altIdx}
+                          type="button"
+                          onClick={() => handleSelecionarAlternativa(q.id, altIdx)}
+                          disabled={submetendo || tempoEsgotado}
+                          className={`w-full text-left p-3.5 rounded-xl border text-xs sm:text-sm transition-all flex items-start gap-3 ${
                             selecionada
-                              ? 'bg-brand-600 text-white'
-                              : 'bg-white border border-slate-300 text-slate-600'
+                              ? 'bg-brand-50/80 border-brand-500 text-brand-950 font-medium ring-2 ring-brand-500/20'
+                              : 'bg-slate-50/60 border-slate-200 text-slate-700 hover:bg-slate-100/80 hover:border-slate-300'
                           }`}
                         >
-                          {letra}
-                        </span>
-                        <span className="pt-0.5 leading-relaxed">{altTexto}</span>
-                      </button>
-                    )
-                  })}
-                </div>
+                          <span
+                            className={`w-6 h-6 rounded-md flex items-center justify-center font-bold text-xs shrink-0 transition-colors ${
+                              selecionada
+                                ? 'bg-brand-600 text-white'
+                                : 'bg-white border border-slate-300 text-slate-600'
+                            }`}
+                          >
+                            {letra}
+                          </span>
+                          <span className="pt-0.5 leading-relaxed">{altTexto}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )
           })}
@@ -422,8 +588,8 @@ export default function CandidatoProvaPublica() {
 
           <Button
             type="button"
-            disabled={!tudoRespondido || submetendo}
-            onClick={handleSubmeter}
+            disabled={(!tudoRespondido && !tempoEsgotado) || submetendo}
+            onClick={() => handleSubmeter(false)}
             className={`h-11 px-8 font-bold text-sm shadow-sm transition-all ${
               tudoRespondido
                 ? 'bg-emerald-600 hover:bg-emerald-700 text-white'

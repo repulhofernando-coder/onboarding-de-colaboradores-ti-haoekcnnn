@@ -122,13 +122,30 @@ export interface FaseConcluidaInfo {
   destaque_prazo?: string
 }
 
+export interface HistoricoRefacaoItem {
+  ciclo: number
+  solicitado_em: string
+  solicitado_por: string
+  solicitado_por_id?: string
+  solicitado_por_role?: string
+  motivo: string
+  relato_anterior?: string
+}
+
 export interface FaseSinalizadaInfo {
   fase_id: string
   titulo?: string
   etapa: number
-  sinalizado_em: string
+  relato?: string
+  sinalizado_em: string | null
   colaborador_nome?: string
   colaborador_email?: string
+  refacoes_count?: number
+  historico_refacoes?: HistoricoRefacaoItem[]
+  status_sinalizacao?: 'sinalizada' | 'refacao_solicitada'
+  motivo_refacao_atual?: string
+  refacao_solicitada_em?: string
+  refacao_solicitada_por?: string
 }
 
 export interface CronogramaFaseItem {
@@ -273,11 +290,14 @@ export interface QuestionarioModel extends RecordModel {
 
 export type Questionario = QuestionarioModel
 
+export type TipoQuestao = 'objetiva' | 'dissertativa'
+
 export interface TesteQuestaoModel extends RecordModel {
   questionario_id?: string
+  tipo?: TipoQuestao
   enunciado: string
   alternativas: string[]
-  correta_index: number
+  correta_index?: number | null
   gabarito_comentario?: string
   ordem: number
   ativo: boolean
@@ -286,6 +306,7 @@ export interface TesteQuestaoModel extends RecordModel {
 
 export interface TesteQuestaoPublica {
   id: string
+  tipo?: TipoQuestao
   ordem: number
   tema?: string
   enunciado: string
@@ -294,18 +315,21 @@ export interface TesteQuestaoPublica {
 
 export interface TesteRespostaItem {
   questao_id: string
+  tipo?: TipoQuestao
   ordem: number
   tema?: string
   enunciado: string
-  alternativas: string[]
-  resposta_escolhida: number
+  alternativas?: string[]
+  resposta_escolhida?: number
   correta_index?: number
-  correta?: boolean
+  correta?: boolean | null
+  texto_respondido?: string
   gabarito_comentario?: string
 }
 
 export interface TesteTentativa extends RecordModel {
-  onboarding_id: string
+  onboarding_id?: string
+  candidato_id?: string
   tentativa_numero: number
   total_questoes: number
   acertos: number
@@ -524,6 +548,7 @@ export interface CandidatoModel extends RecordModel {
   percentual_obtido?: number
   aprovado_teste?: boolean
   data_envio_prova?: string
+  data_inicio_prova?: string
   data_conclusao_prova?: string
   decidido_por?: string
   data_decisao?: string

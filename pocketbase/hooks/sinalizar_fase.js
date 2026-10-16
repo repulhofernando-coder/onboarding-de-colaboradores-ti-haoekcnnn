@@ -32,11 +32,20 @@ routerAdd('POST', '/backend/v1/sinalizar-fase', (e) => {
     const faseId = (data.faseId || '').trim()
     const faseTitulo = (data.faseTitulo || 'Fase').trim()
     const etapa = Number(data.etapa) || (faseId === 'etapa1' ? 1 : 2)
+    const relato = (data.relato || '').trim()
     const colaboradorNomeParam = (data.colaboradorNome || '').trim()
     const colaboradorEmailParam = (data.colaboradorEmail || '').trim()
 
     if (!faseId) {
       return e.json(400, { error: 'Identificador da fase (faseId) é obrigatório.' })
+    }
+
+    // REGRA ETAPA 2: Relato dissertativo obrigatório
+    if (etapa === 2 && !relato) {
+      return e.json(400, {
+        error:
+          'O relato dissertativo é obrigatório para sinalizar a conclusão da fase. Descreva com suas palavras o que você entendeu/aprendeu.',
+      })
     }
 
     if (!token && !onboardingId) {
@@ -91,18 +100,30 @@ routerAdd('POST', '/backend/v1/sinalizar-fase', (e) => {
       sinalizadas = []
     }
 
+    // Preservar histórico de refações prévias se existirem
+    let refacoesCount = 0
+    let historicoRefacoes = []
+    const idxExistente = sinalizadas.findIndex((s) => s && s.fase_id === faseId)
+    if (idxExistente >= 0) {
+      refacoesCount = sinalizadas[idxExistente].refacoes_count || 0
+      historicoRefacoes = sinalizadas[idxExistente].historico_refacoes || []
+    }
+
     const sinalInfo = {
       fase_id: faseId,
       titulo: faseTitulo,
       etapa: etapa,
+      relato: relato || '',
       sinalizado_em: agoraIso,
       colaborador_nome: colabNome,
       colaborador_email: colabEmail,
+      refacoes_count: refacoesCount,
+      historico_refacoes: historicoRefacoes,
+      status_sinalizacao: 'sinalizada', // 'sinalizada' | 'refacao_solicitada'
     }
 
-    const idx = sinalizadas.findIndex((s) => s && s.fase_id === faseId)
-    if (idx >= 0) {
-      sinalizadas[idx] = sinalInfo
+    if (idxExistente >= 0) {
+      sinalizadas[idxExistente] = sinalInfo
     } else {
       sinalizadas.push(sinalInfo)
     }
@@ -140,7 +161,11 @@ routerAdd('POST', '/backend/v1/sinalizar-fase', (e) => {
       logRecord.set('acao', 'Sinalização de conclusão pelo colaborador')
       logRecord.set(
         'detalhes',
-        `Colaborador sinalizou conclusão das atividades de "${faseTitulo}" (${rotuloEtapa}). Aguardando validação do responsável.`,
+        `Colaborador sinalizou conclusão das atividades de "${faseTitulo}" (${rotuloEtapa}). Aguardando validação do responsável.${
+          relato
+            ? ` Relato do colaborador: "${relato.length > 200 ? relato.substring(0, 200) + '...' : relato}"`
+            : ''
+        }`,
       )
       logRecord.set('fora_prazo', false)
       logRecord.set('destaque_prazo', '')
@@ -148,6 +173,7 @@ routerAdd('POST', '/backend/v1/sinalizar-fase', (e) => {
         fase_id: faseId,
         fase_titulo: faseTitulo,
         etapa: etapa,
+        relato: relato || '',
         sinalizado_em: agoraIso,
       })
       app.save(logRecord)
@@ -324,5 +350,196 @@ routerAdd('POST', '/backend/v1/sinalizar-fase', (e) => {
   } catch (err) {
     console.error('[Sinalizacao Endpoint] Erro geral:', err)
     return e.json(500, { error: 'Erro interno ao registrar sinalização de fase.' })
+  }
+})
+
+// --------------------------------------------------------------------------------------
+// 2. POST /backend/v1/fase/solicitar-refacao
+//    Gestor ou RH solicita refação de fase na Etapa 2 (comentário obrigatório, máx 2 refações)
+// --------------------------------------------------------------------------------------
+routerAdd('POST', '/backend/v1/fase/solicitar-refacao', (e) => {
+  try {
+    const app = e.app || $app
+    const rawBody = toString(e.request.body) || '{}'
+    let data = {}
+    try {
+      data = JSON.parse(rawBody)
+    } catch (_) {
+      try {
+        data = e.requestInfo().body || {}
+      } catch (_) {
+        data = {}
+      }
+    }
+
+    const onboardingId = (data.onboardingId || '').trim()
+    const faseId = (data.faseId || '').trim()
+    const faseTitulo = (data.faseTitulo || 'Fase').trim()
+    const motivo = (data.motivo || '').trim()
+    const usuarioId = (data.usuarioId || '').trim()
+    const usuarioNome = (data.usuarioNome || '').trim()
+    const usuarioRole = (data.usuarioRole || '').trim().toLowerCase()
+
+    if (!onboardingId || !faseId) {
+      return e.json(400, { error: 'ID do onboarding e identificador da fase são obrigatórios.' })
+    }
+
+    if (!motivo) {
+      return e.json(400, {
+        error: 'O motivo/comentário para a solicitação de refação é obrigatório.',
+      })
+    }
+
+    // Apenas Gestor ou RH/Admin podem solicitar refação
+    if (usuarioRole !== 'gestao' && usuarioRole !== 'rh' && usuarioRole !== 'admin') {
+      return e.json(403, {
+        error: 'Apenas Gestor, RH ou Administrador podem solicitar refação de fase.',
+      })
+    }
+
+    let onboarding = null
+    try {
+      onboarding = app.findRecordById('onboardings', onboardingId)
+    } catch (_) {}
+
+    if (!onboarding) {
+      return e.json(404, { error: 'Onboarding não encontrado.' })
+    }
+
+    const agoraIso = new Date().toISOString()
+    const colabNome = onboarding.getString('colaborador_nome') || 'Colaborador'
+    const colabEmail = onboarding.getString('colaborador_email') || ''
+
+    // Ler fases_sinalizadas existentes
+    let sinalizadas = []
+    try {
+      const rawJson = onboarding.getString('fases_sinalizadas')
+      if (rawJson && rawJson.trim()) {
+        sinalizadas = JSON.parse(rawJson)
+      } else {
+        const rawGet = onboarding.get('fases_sinalizadas')
+        if (Array.isArray(rawGet)) sinalizadas = rawGet
+      }
+    } catch (_) {
+      const rawGet = onboarding.get('fases_sinalizadas')
+      if (Array.isArray(rawGet)) sinalizadas = rawGet
+    }
+    if (!Array.isArray(sinalizadas)) sinalizadas = []
+
+    const idx = sinalizadas.findIndex((s) => s && s.fase_id === faseId)
+    let itemExistente = idx >= 0 ? sinalizadas[idx] : null
+
+    const refacoesAtuais =
+      itemExistente && typeof itemExistente.refacoes_count === 'number'
+        ? itemExistente.refacoes_count
+        : 0
+
+    // REGRA DE OURO: TETO MÁXIMO DE 2 REFAÇÕES POR FASE
+    if (refacoesAtuais >= 2) {
+      return e.json(400, {
+        error:
+          'Esta fase já atingiu o limite máximo de 2 refações permitidas. Alinhe diretamente com o colaborador.',
+        limiteAtingido: true,
+      })
+    }
+
+    const novoContador = refacoesAtuais + 1
+    const historico =
+      itemExistente && Array.isArray(itemExistente.historico_refacoes)
+        ? [...itemExistente.historico_refacoes]
+        : []
+
+    historico.push({
+      ciclo: novoContador,
+      solicitado_em: agoraIso,
+      solicitado_por: usuarioNome || 'Gestor',
+      solicitado_por_id: usuarioId || null,
+      solicitado_por_role: usuarioRole,
+      motivo: motivo,
+      relato_anterior: itemExistente ? itemExistente.relato || '' : '',
+    })
+
+    const sinalInfoAtualizado = {
+      fase_id: faseId,
+      titulo: faseTitulo,
+      etapa: 2,
+      relato: '', // Limpa o relato para o colaborador escrever novo ao refazer
+      sinalizado_em: itemExistente ? itemExistente.sinalizado_em : null,
+      colaborador_nome: colabNome,
+      colaborador_email: colabEmail,
+      refacoes_count: novoContador,
+      historico_refacoes: historico,
+      status_sinalizacao: 'refacao_solicitada',
+      motivo_refacao_atual: motivo,
+      refacao_solicitada_em: agoraIso,
+      refacao_solicitada_por: usuarioNome,
+    }
+
+    if (idx >= 0) {
+      sinalizadas[idx] = sinalInfoAtualizado
+    } else {
+      sinalizadas.push(sinalInfoAtualizado)
+    }
+
+    // Se a fase estiver marcada como concluída em fases_concluidas, desmarcar para reabrir
+    let fasesConcluidas = []
+    try {
+      const rawFc = onboarding.getString('fases_concluidas')
+      if (rawFc && rawFc.trim()) fasesConcluidas = JSON.parse(rawFc)
+      else {
+        const arr = onboarding.get('fases_concluidas')
+        if (Array.isArray(arr)) fasesConcluidas = arr
+      }
+    } catch (_) {}
+    if (Array.isArray(fasesConcluidas)) {
+      const fcFiltradas = fasesConcluidas.filter((fid) => fid !== faseId)
+      onboarding.set('fases_concluidas', fcFiltradas)
+    }
+
+    // Reabrir fase atual caso necessário
+    onboarding.set('fase_atual_id', faseId)
+    onboarding.set('etapa2_concluida', false)
+    onboarding.set('fases_sinalizadas', sinalizadas)
+    app.save(onboarding)
+
+    // Log de auditoria permanente
+    try {
+      const logsCol = app.findCollectionByNameOrId('logs_auditoria')
+      const logRecord = new Record(logsCol)
+      logRecord.set('onboarding_id', onboarding.id)
+      logRecord.set('colaborador_nome', colabNome)
+      logRecord.set('usuario_id', usuarioId || null)
+      logRecord.set('usuario_nome', usuarioNome || 'Gestor')
+      logRecord.set('usuario_role', usuarioRole || 'gestao')
+      logRecord.set('gestor_nome', usuarioNome || 'Gestor')
+      logRecord.set('acao', `Solicitação de Refação da Fase (${novoContador}/2)`)
+      logRecord.set(
+        'detalhes',
+        `Refação solicitada por ${usuarioNome} (${usuarioRole}) para a fase "${faseTitulo}" (Ciclo ${novoContador}/2). Motivo: "${motivo}". A fase foi reaberta no portal do colaborador para nova vivência e novo relato.`,
+      )
+      logRecord.set('fora_prazo', false)
+      logRecord.set('destaque_prazo', '')
+      logRecord.set('metadata', {
+        fase_id: faseId,
+        fase_titulo: faseTitulo,
+        ciclo_refacao: novoContador,
+        motivo: motivo,
+        solicitado_em: agoraIso,
+      })
+      app.save(logRecord)
+    } catch (errLog) {
+      console.error('[Refacao Endpoint] Erro ao gravar log de auditoria:', errLog)
+    }
+
+    return e.json(200, {
+      success: true,
+      message: `Refação da fase "${faseTitulo}" solicitada com sucesso (Ciclo ${novoContador}/2).`,
+      refacoesCount: novoContador,
+      onboarding: onboarding,
+      fases_sinalizadas: sinalizadas,
+    })
+  } catch (err) {
+    console.error('[Refacao Endpoint] Erro geral:', err)
+    return e.json(500, { error: 'Erro interno ao solicitar refação da fase.' })
   }
 })

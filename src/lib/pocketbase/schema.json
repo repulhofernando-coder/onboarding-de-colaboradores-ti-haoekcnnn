@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-16T13:56:09.880Z",
+  "generatedAt": "2026-10-16T14:28:32.686Z",
   "collections": [
     {
       "name": "users",
@@ -1093,7 +1093,7 @@
         {
           "name": "alternativas",
           "type": "json",
-          "required": true,
+          "required": false,
           "system": false
         },
         {
@@ -1146,6 +1146,13 @@
           "required": false,
           "system": false,
           "collectionRef": "questionarios"
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["objetiva", "dissertativa"]
         }
       ],
       "indexes": [
@@ -1509,6 +1516,12 @@
         {
           "name": "data_formalizacao_rh",
           "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_inicio_prova",
+          "type": "text",
           "required": false,
           "system": false
         }

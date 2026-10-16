@@ -740,6 +740,7 @@ export const onboardingService = {
     faseId: string
     faseTitulo: string
     etapa: number
+    relato?: string
     colaboradorNome?: string
     colaboradorEmail?: string
   }): Promise<{
@@ -759,6 +760,7 @@ export const onboardingService = {
         faseId: params.faseId,
         faseTitulo: params.faseTitulo,
         etapa: params.etapa,
+        relato: params.relato || '',
         colaboradorNome: params.colaboradorNome || '',
         colaboradorEmail: params.colaboradorEmail || '',
       },
@@ -1783,6 +1785,7 @@ export const candidatoProvaPublicaService = {
     liberado: boolean
     jaSubmetido?: boolean
     reprovado?: boolean
+    desistiu?: boolean
     candidatoNome?: string
     cargoPretendido?: string
     setor?: string
@@ -1793,6 +1796,10 @@ export const candidatoProvaPublicaService = {
     dataConclusao?: string
     mensagem?: string
     error?: string
+    duracaoMinutos?: number
+    dataInicioProva?: string
+    segundosRestantes?: number
+    expirado?: boolean
   }> {
     return await pb.send('/backend/v1/candidato/prova/publico', {
       method: 'GET',
@@ -1803,10 +1810,46 @@ export const candidatoProvaPublicaService = {
   async submeterProva(
     token: string,
     respostas: Record<string, number>,
+    dissertativas?: Record<string, string>,
+    porExpiracaoTempo?: boolean,
   ): Promise<{ success: boolean; mensagem: string }> {
     return await pb.send('/backend/v1/candidato/prova/submeter', {
       method: 'POST',
-      body: { token, respostas },
+      body: {
+        token,
+        respostas,
+        dissertativas: dissertativas || {},
+        porExpiracaoTempo: Boolean(porExpiracaoTempo),
+      },
+    })
+  },
+
+  async getTentativaGabarito(candidatoId: string): Promise<{
+    tentativa: import('@/types/onboarding').TesteTentativa
+  }> {
+    return await pb.send(`/backend/v1/candidato/tentativa/${encodeURIComponent(candidatoId)}`, {
+      method: 'GET',
+    })
+  },
+
+  async solicitarRefacaoFase(params: {
+    onboardingId: string
+    faseId: string
+    faseTitulo: string
+    motivo: string
+    usuarioId: string
+    usuarioNome: string
+    usuarioRole: string
+  }): Promise<{
+    success: boolean
+    message: string
+    refacoesCount: number
+    onboarding: Onboarding
+    fases_sinalizadas: import('@/types/onboarding').FaseSinalizadaInfo[]
+  }> {
+    return await pb.send('/backend/v1/fase/solicitar-refacao', {
+      method: 'POST',
+      body: params,
     })
   },
 }

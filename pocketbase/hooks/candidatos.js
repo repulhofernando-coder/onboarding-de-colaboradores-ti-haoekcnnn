@@ -112,6 +112,24 @@ routerAdd('GET', '/backend/v1/candidato/prova/publico', (e) => {
       questoesRecords = app.findRecordsByFilter('teste_questoes', 'ativo = true', 'ordem', 100, 0)
     }
 
+    // REGRA DE CRONÔMETRO DE 60 MINUTOS (Somente na prova do pré-candidato):
+    // O tempo começa a contar no servidor na PRIMEIRA abertura do link público (data_inicio_prova).
+    // Se o candidato já abriu antes, mantemos a data gravada.
+    const agoraIso = new Date().toISOString()
+    let dataInicioProva = candidato.getString('data_inicio_prova')
+    if (!dataInicioProva) {
+      dataInicioProva = agoraIso
+      candidato.set('data_inicio_prova', agoraIso)
+      app.save(candidato)
+    }
+
+    // Calcular segundos restantes (limite total = 60 minutos = 3600 segundos)
+    const duracaoTotalSegundos = 60 * 60
+    const inicioMs = new Date(dataInicioProva).getTime()
+    const agoraMs = new Date(agoraIso).getTime()
+    const decorridoSegundos = Math.max(0, Math.floor((agoraMs - inicioMs) / 1000))
+    const segundosRestantes = Math.max(0, duracaoTotalSegundos - decorridoSegundos)
+
     // Sanitizar questões para o portal público: NUNCA enviar correta_index nem gabarito_comentario
     const questoesSanitizadas = questoesRecords.map((q) => {
       let alternativas = []
@@ -122,12 +140,15 @@ routerAdd('GET', '/backend/v1/candidato/prova/publico', (e) => {
         alternativas = q.get('alternativas') || []
       }
 
+      const tipoQuestao = q.getString('tipo') || 'objetiva'
+
       return {
         id: q.id,
+        tipo: tipoQuestao,
         ordem: q.getInt('ordem'),
         tema: q.getString('tema'),
         enunciado: q.getString('enunciado'),
-        alternativas: alternativas,
+        alternativas: tipoQuestao === 'dissertativa' ? [] : alternativas,
       }
     })
 
@@ -141,6 +162,11 @@ routerAdd('GET', '/backend/v1/candidato/prova/publico', (e) => {
       questionarioDescricao: questRecord.getString('descricao'),
       totalQuestoes: questoesSanitizadas.length,
       questoes: questoesSanitizadas,
+      // Dados do cronômetro de 60 min (servidor)
+      duracaoMinutos: 60,
+      dataInicioProva: dataInicioProva,
+      segundosRestantes: segundosRestantes,
+      expirado: segundosRestantes <= 0,
     })
   } catch (err) {
     console.error('[Candidato Hook /prova/publico] Erro:', err)
@@ -168,6 +194,8 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
 
     const token = (data.token || '').trim()
     const respostasEnviadas = data.respostas || {} // { [questaoId]: number }
+    const dissertativasEnviadas = data.dissertativas || {} // { [questaoId]: string }
+    const porExpiracaoTempo = Boolean(data.porExpiracaoTempo) // true se envio automático pelo cronômetro ao zerar
 
     if (!token) {
       return e.json(400, { error: 'Token de acesso do candidato é obrigatório.' })
@@ -238,58 +266,112 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
       return e.json(500, { error: 'Nenhuma questão cadastrada para esta prova.' })
     }
 
-    // Validar se todas as questões foram respondidas
-    const faltantes = []
-    for (const q of questoesRecords) {
-      const resp = respostasEnviadas[q.id]
-      if (resp === undefined || resp === null || resp === '') {
-        faltantes.push(q.getInt('ordem'))
+    // CHECAGEM DO CRONÔMETRO (60 MINUTOS):
+    // Se o prazo expirou há mais de 2 minutos de tolerância para envio em trânsito e NÃO é o autoenvio que acabou de acionar,
+    // recusar novas submissões
+    const agoraIso = new Date().toISOString()
+    const dataInicioProvaStr = candidato.getString('data_inicio_prova')
+    if (dataInicioProvaStr) {
+      const inicioMs = new Date(dataInicioProvaStr).getTime()
+      const agoraMs = new Date(agoraIso).getTime()
+      const decorridoSeg = Math.floor((agoraMs - inicioMs) / 1000)
+      const toleranciaSeg = 120 // 2 minutos de tolerância para envio de rede
+      if (decorridoSeg > 3600 + toleranciaSeg && !porExpiracaoTempo) {
+        return e.json(403, {
+          error: 'O tempo limite de 60 minutos para a realização desta prova encerrou.',
+          expirado: true,
+        })
       }
     }
 
-    if (faltantes.length > 0) {
+    // Identificar questões objetivas e dissertativas
+    const faltantes = []
+    for (const q of questoesRecords) {
+      const tipoQ = q.getString('tipo') || 'objetiva'
+      if (tipoQ === 'dissertativa') {
+        const txt = dissertativasEnviadas[q.id]
+        if (!porExpiracaoTempo && (!txt || typeof txt !== 'string' || txt.trim().length === 0)) {
+          faltantes.push(q.getInt('ordem'))
+        }
+      } else {
+        const resp = respostasEnviadas[q.id]
+        if (!porExpiracaoTempo && (resp === undefined || resp === null || resp === '')) {
+          faltantes.push(q.getInt('ordem'))
+        }
+      }
+    }
+
+    if (faltantes.length > 0 && !porExpiracaoTempo) {
       return e.json(400, {
         error: `Existem ${faltantes.length} questão(ões) não respondida(s): Questão(ões) ${faltantes.join(', ')}. Responda todas para enviar.`,
         faltantes: faltantes,
       })
     }
 
-    // Correção no servidor
+    // Correção no servidor:
+    // REGRA DECIDIDA PELO USUÁRIO:
+    // Dissertativas NÃO têm peso na nota automática. A nota continua vindo SOMENTE das objetivas
+    // (percentual sobre o total de objetivas, régua do questionário).
     let acertos = 0
+    let totalObjetivas = 0
+    let totalDissertativas = 0
     const totalQuestoes = questoesRecords.length
     const mapaRespostas = []
 
     for (const q of questoesRecords) {
-      const respostaEscolhida = Number(respostasEnviadas[q.id])
-      const corretaIndex = q.getInt('correta_index')
-      const acertou = respostaEscolhida === corretaIndex
-      if (acertou) acertos++
+      const tipoQ = q.getString('tipo') || 'objetiva'
 
-      let alternativas = []
-      try {
-        const raw = q.getString('alternativas')
-        if (raw) alternativas = JSON.parse(raw)
-      } catch (_) {
-        alternativas = q.get('alternativas') || []
+      if (tipoQ === 'dissertativa') {
+        totalDissertativas++
+        const textoRespondido = (dissertativasEnviadas[q.id] || '').trim()
+
+        mapaRespostas.push({
+          questao_id: q.id,
+          tipo: 'dissertativa',
+          ordem: q.getInt('ordem'),
+          tema: q.getString('tema'),
+          enunciado: q.getString('enunciado'),
+          texto_respondido: textoRespondido,
+          gabarito_comentario: q.getString('gabarito_comentario'),
+          correta: null, // Dissertativa não possui correção automática booleana
+        })
+      } else {
+        totalObjetivas++
+        const respRaw = respostasEnviadas[q.id]
+        const temResposta = respRaw !== undefined && respRaw !== null && respRaw !== ''
+        const respostaEscolhida = temResposta ? Number(respRaw) : -1
+        const corretaIndex = q.getInt('correta_index')
+        const acertou = temResposta && respostaEscolhida === corretaIndex
+        if (acertou) acertos++
+
+        let alternativas = []
+        try {
+          const raw = q.getString('alternativas')
+          if (raw) alternativas = JSON.parse(raw)
+        } catch (_) {
+          alternativas = q.get('alternativas') || []
+        }
+
+        mapaRespostas.push({
+          questao_id: q.id,
+          tipo: 'objetiva',
+          ordem: q.getInt('ordem'),
+          tema: q.getString('tema'),
+          enunciado: q.getString('enunciado'),
+          alternativas: alternativas,
+          resposta_escolhida: respostaEscolhida,
+          correta_index: corretaIndex,
+          correta: acertou,
+          gabarito_comentario: q.getString('gabarito_comentario'),
+        })
       }
-
-      mapaRespostas.push({
-        questao_id: q.id,
-        ordem: q.getInt('ordem'),
-        tema: q.getString('tema'),
-        enunciado: q.getString('enunciado'),
-        alternativas: alternativas,
-        resposta_escolhida: respostaEscolhida,
-        correta_index: corretaIndex,
-        correta: acertou,
-        gabarito_comentario: q.getString('gabarito_comentario'),
-      })
     }
 
-    const percentual = Number(((acertos / totalQuestoes) * 100).toFixed(1))
+    // Nota percentual calculada SOBRE O TOTAL DE OBJETIVAS (se houver objetivas)
+    const divisor = totalObjetivas > 0 ? totalObjetivas : totalQuestoes
+    const percentual = Number(((acertos / divisor) * 100).toFixed(1))
     const reguaAprovacao = questRecord.getFloat('percentual_aprovacao') || 80.0
     const aprovadoTeste = percentual >= reguaAprovacao
-    const agoraIso = new Date().toISOString()
 
     let ipOrigem = ''
     try {
@@ -357,7 +439,7 @@ routerAdd('POST', '/backend/v1/candidato/prova/submeter', (e) => {
       logRecord.set('acao', 'Conclusão de Prova Técnica (Pré-selecionado)')
       logRecord.set(
         'detalhes',
-        `Candidato concluiu a prova "${qNome}". Resultado: ${acertos}/${totalQuestoes} (${percentual}%). Status no teste: ${aprovadoTeste ? `Atingiu a régua (>=${reguaAprovacao}%)` : `Abaixo da régua (<${reguaAprovacao}%)`}. Decisão final do Gestor pendente.`,
+        `Candidato concluiu a prova "${qNome}"${porExpiracaoTempo ? ' (Envio automático por término do tempo de 60 min)' : ''}. Resultado: ${acertos}/${totalObjetivas} objetivas (${percentual}%). ${totalDissertativas} questão(ões) dissertativa(s) respondida(s) para análise qualitativa do gestor. Status no teste: ${aprovadoTeste ? `Atingiu a régua (>=${reguaAprovacao}%)` : `Abaixo da régua (<${reguaAprovacao}%)`}. Decisão final do Gestor pendente.`,
       )
       logRecord.set('fora_prazo', false)
       logRecord.set('destaque_prazo', '')
@@ -784,6 +866,95 @@ routerAdd('POST', '/backend/v1/candidatos/reprovar-rh', (e) => {
   } catch (err) {
     console.error('[Candidatos Hook /reprovar-rh] Erro:', err)
     return e.json(500, { error: 'Erro ao registrar reprovação do RH.' })
+  }
+})
+
+// --------------------------------------------------------------------------------------
+// 3.5 GET /backend/v1/candidato/tentativa/:candidatoId
+//     Retorna a tentativa com gabarito para Admin, Gestor e RH
+// --------------------------------------------------------------------------------------
+routerAdd('GET', '/backend/v1/candidato/tentativa/{candidatoId}', (e) => {
+  try {
+    const app = e.app || $app
+    const candidatoId = (e.request.pathValue('candidatoId') || '').trim()
+
+    if (!candidatoId) {
+      return e.json(400, { error: 'ID do candidato é obrigatório.' })
+    }
+
+    let candidato = null
+    try {
+      candidato = app.findRecordById('candidatos', candidatoId)
+    } catch (_) {}
+
+    if (!candidato) {
+      return e.json(404, { error: 'Candidato não encontrado.' })
+    }
+
+    // Buscar a tentativa associada ao candidato
+    let tentativa = null
+    const tentativaId = candidato.getString('tentativa_id')
+    if (tentativaId) {
+      try {
+        tentativa = app.findRecordById('teste_tentativas', tentativaId)
+      } catch (_) {}
+    }
+
+    if (!tentativa) {
+      try {
+        const list = app.findRecordsByFilter(
+          'teste_tentativas',
+          `candidato_id = '${candidatoId}'`,
+          '-created',
+          1,
+          0,
+        )
+        if (list && list.length > 0) tentativa = list[0]
+      } catch (_) {}
+    }
+
+    if (!tentativa) {
+      return e.json(404, { error: 'Nenhuma tentativa submetida encontrada para este candidato.' })
+    }
+
+    let respostas = []
+    try {
+      const raw = tentativa.getString('respostas')
+      if (raw) respostas = JSON.parse(raw)
+    } catch (_) {
+      respostas = tentativa.get('respostas') || []
+    }
+
+    let questionarioNome = ''
+    const qid = tentativa.getString('questionario_id') || candidato.getString('questionario_id')
+    if (qid) {
+      try {
+        const qrec = app.findRecordById('questionarios', qid)
+        if (qrec) questionarioNome = qrec.getString('nome')
+      } catch (_) {}
+    }
+
+    return e.json(200, {
+      tentativa: {
+        id: tentativa.id,
+        candidato_id: candidato.id,
+        candidato_nome: candidato.getString('nome'),
+        cargo_pretendido: candidato.getString('cargo_pretendido'),
+        setor: candidato.getString('setor'),
+        tentativa_numero: tentativa.getInt('tentativa_numero') || 1,
+        total_questoes: tentativa.getInt('total_questoes'),
+        acertos: tentativa.getInt('acertos'),
+        percentual: tentativa.getFloat('percentual'),
+        aprovado: tentativa.getBool('aprovado'),
+        data_submissao: tentativa.getString('data_submissao'),
+        questionario_id: qid || '',
+        questionario_nome: questionarioNome,
+        respostas_detalhe: respostas,
+      },
+    })
+  } catch (err) {
+    console.error('[Candidato Hook /tentativa] Erro:', err)
+    return e.json(500, { error: 'Erro ao carregar gabarito da tentativa do candidato.' })
   }
 })
 
