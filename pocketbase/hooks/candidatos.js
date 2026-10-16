@@ -1058,15 +1058,37 @@ routerAdd('POST', '/backend/v1/candidatos/converter', (e) => {
       }
     } catch (_) {}
 
-    // Calcular data_fim padrão (15 dias a partir da dataInicio)
+    // Calcular data_fim padrão (data_inicio + 15 dias corridos, igual tela manual)
     let dataFimIso = ''
     try {
       const [ano, mes, dia] = dataInicio.split('-').map(Number)
       const d = new Date(Date.UTC(ano, mes - 1, dia))
-      d.setUTCDate(d.getUTCDate() + 14) // 15 dias corridos
+      d.setUTCDate(d.getUTCDate() + 15)
       dataFimIso = d.toISOString().split('T')[0]
     } catch (_) {
       dataFimIso = dataInicio
+    }
+
+    // Carregar snapshot dos itens de integração ativos do modelo (Etapa 1 - Checklist)
+    // Exatamente como a tela de criação manual de onboarding faz
+    const checklistSnapshot = []
+    try {
+      const itensModelo = app.findRecordsByFilter(
+        'itens_integracao_modelo',
+        'ativo = true',
+        'ordem,created',
+        100,
+        0,
+      )
+      for (const item of itensModelo) {
+        checklistSnapshot.push({
+          id: item.id,
+          titulo: item.getString('titulo'),
+          entregue: false,
+        })
+      }
+    } catch (errItens) {
+      console.warn('[Candidatos Hook] Aviso ao carregar itens_integracao_modelo:', errItens)
     }
 
     const tokenColaborador = $security.randomString(32)
@@ -1087,7 +1109,15 @@ routerAdd('POST', '/backend/v1/candidatos/converter', (e) => {
       rec.set('data_fim', dataFimIso)
       rec.set('status', 'novo')
       rec.set('etapa_atual', 1)
+      rec.set('etapa1_concluida', false)
+      rec.set('etapa2_concluida', false)
+      rec.set('etapa3_concluida', false)
       rec.set('token_acesso_colaborador', tokenColaborador)
+      rec.set('fases_concluidas', [])
+      rec.set('fases_sinalizadas', [])
+      rec.set('reavaliacoes_count', 0)
+      rec.set('prazo_suplementar_dias', 0)
+      rec.set('checklist_integracao', checklistSnapshot)
       if (questionarioOnboardingId) {
         rec.set('questionario_id', questionarioOnboardingId)
         rec.set('questionarios_vinculados', [questionarioOnboardingId])
@@ -1104,33 +1134,73 @@ routerAdd('POST', '/backend/v1/candidatos/converter', (e) => {
       txApp.save(candidato)
     })
 
-    // Semear tarefas modelo para o novo onboarding (se houver modelos)
+    // Semear tarefas modelo idênticas à tela de criação manual:
+    // 1. Templates da Etapa 1 (Apresentação RH)
+    // 2. Templates do Setor (Etapa 2 - Vivência Técnica)
+    const tarefasCol = app.findCollectionByNameOrId('tarefas_onboarding')
+
+    // 1. Etapa 1
     try {
-      const tarefasModelos = app.findRecordsByFilter(
+      const templatesEtapa1 = app.findRecordsByFilter(
         'modelo_tarefas',
-        `setor = '${candSetor}' || setor = '' || setor IS NULL`,
-        'ordem',
+        'etapa = 1',
+        'ordem,titulo',
         100,
         0,
       )
-      const tarefasCol = app.findCollectionByNameOrId('tarefas_onboarding')
-      for (const mod of tarefasModelos) {
+      for (const tpl of templatesEtapa1) {
         const novaT = new Record(tarefasCol)
         novaT.set('onboarding_id', novoOnboarding.id)
-        novaT.set('titulo', mod.getString('titulo'))
-        novaT.set('tipo', mod.getString('tipo') || 'manual')
-        novaT.set('descricao', mod.getString('descricao'))
-        novaT.set('etapa', mod.getInt('etapa') || 1)
-        novaT.set('ordem', mod.getInt('ordem') || 1)
-        novaT.set('material', mod.getString('material'))
-        novaT.set('fase', mod.getString('fase'))
-        novaT.set('conteudo_link', mod.getString('conteudo_link'))
-        novaT.set('criado_automaticamente', true)
+        novaT.set('titulo', tpl.getString('titulo'))
+        novaT.set('tipo', tpl.getString('tipo') || 'manual')
+        novaT.set('descricao', tpl.getString('descricao'))
+        novaT.set('etapa', 1)
+        novaT.set('ordem', tpl.getInt('ordem') || 1)
+        novaT.set('conteudo_url', tpl.getString('conteudo_url') || null)
+        novaT.set('conteudo_link', tpl.getString('conteudo_link') || '')
+        novaT.set('material', tpl.getString('material') || null)
         novaT.set('concluida', false)
+        novaT.set('criado_automaticamente', true)
         app.save(novaT)
       }
-    } catch (errMod) {
-      console.log('[Candidatos Hook] Aviso ao semear tarefas modelo:', errMod)
+    } catch (errEtapa1) {
+      console.error('[Candidatos Hook] Erro ao semear tarefas modelo Etapa 1:', errEtapa1)
+    }
+
+    // 2. Etapa 2 (por setor ou setor_ref)
+    try {
+      const candSetorLower = candSetor.toLowerCase()
+      let filterEtapa2 = `(setor = '${candSetorLower}' || setor = '${candSetor}' || setor ~ '${candSetor}'`
+      if (setorRefId) {
+        filterEtapa2 += ` || setor_ref = '${setorRefId}'`
+      }
+      filterEtapa2 += `) && (etapa = 2 || etapa = null || etapa = 0)`
+
+      const templatesEtapa2 = app.findRecordsByFilter(
+        'modelo_tarefas',
+        filterEtapa2,
+        'ordem,titulo',
+        100,
+        0,
+      )
+      for (const tpl of templatesEtapa2) {
+        const novaT = new Record(tarefasCol)
+        novaT.set('onboarding_id', novoOnboarding.id)
+        novaT.set('titulo', tpl.getString('titulo'))
+        novaT.set('tipo', tpl.getString('tipo') || 'manual')
+        novaT.set('descricao', tpl.getString('descricao'))
+        novaT.set('etapa', 2)
+        novaT.set('ordem', tpl.getInt('ordem') || 1)
+        novaT.set('conteudo_url', tpl.getString('conteudo_url') || null)
+        novaT.set('conteudo_link', tpl.getString('conteudo_link') || '')
+        novaT.set('material', tpl.getString('material') || null)
+        novaT.set('fase', tpl.getString('fase') || null)
+        novaT.set('concluida', false)
+        novaT.set('criado_automaticamente', true)
+        app.save(novaT)
+      }
+    } catch (errEtapa2) {
+      console.error('[Candidatos Hook] Erro ao semear tarefas modelo Etapa 2:', errEtapa2)
     }
 
     // Registrar auditoria

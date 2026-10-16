@@ -29,28 +29,13 @@ export function getErrorMessage(error: unknown): string {
 }
 
 export function isNetworkError(error: unknown): boolean {
+  if (!error) return false
   if (error instanceof ClientResponseError) {
-    // status 0 usually means aborted, network disconnect, CORS failure or timeout
-    if (error.status === 0) return true
-    const msg = (error.message || '').toLowerCase()
-    if (
-      msg.includes('network') ||
-      msg.includes('failed to fetch') ||
-      msg.includes('timeout') ||
-      msg.includes('connection')
-    ) {
-      return true
-    }
+    return error.status === 0 || error.isAbort
   }
   if (error instanceof Error) {
     const msg = error.message.toLowerCase()
-    return (
-      msg.includes('network') ||
-      msg.includes('failed to fetch') ||
-      msg.includes('networkerror') ||
-      msg.includes('timeout') ||
-      msg.includes('connection refused')
-    )
+    return msg.includes('network') || msg.includes('failed to fetch') || msg.includes('conexão')
   }
   return false
 }
