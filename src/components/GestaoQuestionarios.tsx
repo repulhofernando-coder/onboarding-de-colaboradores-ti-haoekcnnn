@@ -70,7 +70,7 @@ const TIPOS_USO_INFO: Record<
 }
 
 export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[] }) {
-  const { user, role, isAdmin, isGestao } = useAuth()
+  const { user, role, isAdmin, isGestao, isRH } = useAuth()
   const [questionarios, setQuestionarios] = useState<QuestionarioModel[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -109,6 +109,26 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
   // Modal Confirmação Exclusão
   const [deleteQItem, setDeleteQItem] = useState<QuestionarioModel | null>(null)
   const [deleteQuestaoItem, setDeleteQuestaoItem] = useState<TesteQuestaoModel | null>(null)
+
+  // Controle de permissão de escrita de questionários/questões:
+  // - Admin e RH sempre podem escrever.
+  // - Gestor pode escrever somente se tiver pode_editar_questionarios === true.
+  const podeEditarQuestionarios = Boolean(
+    isAdmin || isRH || (isGestao && user?.pode_editar_questionarios),
+  )
+
+  // Função auxiliar para verificar se o usuário pode alterar um questionário específico (permissão + setor correspondente)
+  const podeModificarQuestionario = (qSetor?: string) => {
+    if (isAdmin || isRH) return true
+    if (!isGestao) return false
+    if (!user?.pode_editar_questionarios) return false
+    return podeVisualizarSetor({
+      role,
+      userSetor: user?.setor as string | undefined,
+      itemSetor: qSetor,
+      setoresCadastrados: setoresList,
+    })
+  }
 
   const carregarQuestionarios = async () => {
     try {
@@ -180,6 +200,12 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
 
   // Handlers Questionário
   const handleOpenNovoQ = () => {
+    if (!podeEditarQuestionarios) {
+      toast.error(
+        'Somente leitura. Solicite ao Administrador a permissão para editar questionários do seu setor.',
+      )
+      return
+    }
     // Para papel Gestão, preencher o setor com o setor do usuário
     const setorGestao = user?.setor as string | undefined
     const setorPadrao =
@@ -204,16 +230,12 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
   }
 
   const handleOpenEditarQ = (q: QuestionarioModel) => {
-    if (
-      isGestao &&
-      !podeVisualizarSetor({
-        role,
-        userSetor: user?.setor as string | undefined,
-        itemSetor: q.setor,
-        setoresCadastrados: setoresList,
-      })
-    ) {
-      toast.error('Você não tem permissão para editar questionário de outro setor.')
+    if (!podeModificarQuestionario(q.setor)) {
+      toast.error(
+        isGestao && !user?.pode_editar_questionarios
+          ? 'Somente leitura. Solicite ao Administrador a permissão para editar questionários do seu setor.'
+          : 'Você não tem permissão para editar questionário de outro setor.',
+      )
       return
     }
     setEditingQ(q)
@@ -274,6 +296,14 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
   }
 
   const handleToggleAtivoQ = async (q: QuestionarioModel) => {
+    if (!podeModificarQuestionario(q.setor)) {
+      toast.error(
+        isGestao && !user?.pode_editar_questionarios
+          ? 'Somente leitura. Solicite ao Administrador a permissão para editar questionários do seu setor.'
+          : 'Você não tem permissão para alterar o status deste questionário.',
+      )
+      return
+    }
     try {
       const updated = await questionarioService.update(q.id, { ativo: !q.ativo })
       setQuestionarios((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
@@ -289,6 +319,15 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
 
   const handleExcluirQ = async () => {
     if (!deleteQItem) return
+    if (!podeModificarQuestionario(deleteQItem.setor)) {
+      toast.error(
+        isGestao && !user?.pode_editar_questionarios
+          ? 'Somente leitura. Solicite ao Administrador a permissão para editar questionários do seu setor.'
+          : 'Você não tem permissão para excluir este questionário.',
+      )
+      setDeleteQItem(null)
+      return
+    }
     try {
       await questionarioService.delete(deleteQItem.id)
       setQuestionarios((prev) => prev.filter((item) => item.id !== deleteQItem.id))
@@ -306,6 +345,14 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
   // Handlers Questões
   const handleOpenNovaQuestao = () => {
     if (!selectedQuestionario) return
+    if (!podeModificarQuestionario(selectedQuestionario.setor)) {
+      toast.error(
+        isGestao && !user?.pode_editar_questionarios
+          ? 'Somente leitura. Solicite ao Administrador a permissão para editar questionários do seu setor.'
+          : 'Você não tem permissão para cadastrar questão neste questionário.',
+      )
+      return
+    }
     setEditingQuestao(null)
     setQEnunciado('')
     setQAlternativas(['', '', '', ''])
@@ -318,6 +365,14 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
   }
 
   const handleOpenEditarQuestao = (q: TesteQuestaoModel) => {
+    if (!selectedQuestionario || !podeModificarQuestionario(selectedQuestionario.setor)) {
+      toast.error(
+        isGestao && !user?.pode_editar_questionarios
+          ? 'Somente leitura. Solicite ao Administrador a permissão para editar questionários do seu setor.'
+          : 'Você não tem permissão para editar questão deste questionário.',
+      )
+      return
+    }
     setEditingQuestao(q)
     setQEnunciado(q.enunciado)
     setQAlternativas(Array.isArray(q.alternativas) ? [...q.alternativas] : ['', '', '', ''])
@@ -381,6 +436,15 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
 
   const handleExcluirQuestao = async () => {
     if (!deleteQuestaoItem) return
+    if (!selectedQuestionario || !podeModificarQuestionario(selectedQuestionario.setor)) {
+      toast.error(
+        isGestao && !user?.pode_editar_questionarios
+          ? 'Somente leitura. Solicite ao Administrador a permissão para editar questionários do seu setor.'
+          : 'Você não tem permissão para excluir questão deste questionário.',
+      )
+      setDeleteQuestaoItem(null)
+      return
+    }
     try {
       await questionarioService.deleteQuestao(deleteQuestaoItem.id)
       setQuestoes((prev) => prev.filter((item) => item.id !== deleteQuestaoItem.id))
@@ -433,14 +497,7 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {(isAdmin ||
-              !isGestao ||
-              podeVisualizarSetor({
-                role,
-                userSetor: user?.setor as string | undefined,
-                itemSetor: selectedQuestionario.setor,
-                setoresCadastrados: setoresList,
-              })) && (
+            {podeModificarQuestionario(selectedQuestionario.setor) && (
               <Button
                 onClick={handleOpenNovaQuestao}
                 size="sm"
@@ -452,6 +509,23 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
             )}
           </div>
         </div>
+
+        {/* Banner discreto para gestor em modo Somente Leitura */}
+        {isGestao && !user?.pode_editar_questionarios && (
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Info className="w-4 h-4 text-slate-500 shrink-0" />
+              <span>
+                <strong>Modo Somente Leitura:</strong> Você pode visualizar o questionário e seu
+                banco de questões. A criação, alteração e exclusão de questões estão desabilitadas.
+                Solicite ao Administrador a permissão para editar questionários do seu setor.
+              </span>
+            </div>
+            <span className="text-[10px] font-semibold bg-slate-200 text-slate-700 px-2 py-0.5 rounded shrink-0">
+              Leitura
+            </span>
+          </div>
+        )}
 
         {/* Lista de Questões */}
         {loadingQuestoes ? (
@@ -466,14 +540,20 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
               Adicione questões de múltipla escolha com gabarito comentado para os colaboradores
               realizarem a prova.
             </p>
-            <Button
-              onClick={handleOpenNovaQuestao}
-              size="sm"
-              className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold"
-            >
-              <Plus className="w-3.5 h-3.5 mr-1" />
-              Cadastrar Primeira Questão
-            </Button>
+            {podeModificarQuestionario(selectedQuestionario.setor) ? (
+              <Button
+                onClick={handleOpenNovaQuestao}
+                size="sm"
+                className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                Cadastrar Primeira Questão
+              </Button>
+            ) : (
+              <p className="text-xs text-amber-700 font-medium">
+                Somente leitura. Solicite ao Administrador a permissão para cadastrar questões.
+              </p>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
@@ -583,14 +663,7 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
                       </div>
                     </div>
 
-                    {(isAdmin ||
-                      !isGestao ||
-                      podeVisualizarSetor({
-                        role,
-                        userSetor: user?.setor as string | undefined,
-                        itemSetor: selectedQuestionario.setor,
-                        setoresCadastrados: setoresList,
-                      })) && (
+                    {podeModificarQuestionario(selectedQuestionario.setor) && (
                       <div className="flex items-center gap-1 shrink-0">
                         <Button
                           variant="ghost"
@@ -811,7 +884,7 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
           </div>
         </div>
 
-        {(isAdmin || (isGestao && Boolean(user?.setor))) && (
+        {podeEditarQuestionarios && (
           <Button
             onClick={handleOpenNovoQ}
             size="sm"
@@ -822,6 +895,22 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
           </Button>
         )}
       </div>
+
+      {/* Banner discreto para gestor sem permissão de edição */}
+      {isGestao && !user?.pode_editar_questionarios && (
+        <div className="bg-amber-50/70 border border-amber-200 rounded-lg p-3 text-xs text-amber-900 flex items-start gap-2.5">
+          <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-0.5 leading-relaxed">
+            <p className="font-semibold">Modo de Consulta (Somente Leitura)</p>
+            <p className="text-amber-800 text-[11px]">
+              Você possui acesso de visualização aos questionários e ao banco de questões do seu
+              setor. Para criar novos questionários ou alterar/excluir questões, solicite ao
+              Administrador a permissão &quot;Pode editar questionários do seu setor&quot; na tela
+              de Usuários.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="bg-blue-50/70 border border-blue-200 rounded-lg p-3 text-xs text-blue-900 flex items-start gap-2.5">
         <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
@@ -844,7 +933,7 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
           <p className="text-xs text-gray-400 max-w-md mx-auto">
             Cadastre o primeiro questionário para vincular aos colaboradores da Etapa 3.
           </p>
-          {isAdmin && (
+          {podeEditarQuestionarios && (
             <Button
               onClick={handleOpenNovoQ}
               size="sm"
@@ -935,17 +1024,12 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
                     className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold h-8 rounded-lg flex-1"
                   >
                     <ListOrdered className="w-3.5 h-3.5 mr-1.5" />
-                    Gerenciar Questões
+                    {podeModificarQuestionario(q.setor)
+                      ? 'Gerenciar Questões'
+                      : 'Ver Questões (Leitura)'}
                   </Button>
 
-                  {(isAdmin ||
-                    (isGestao &&
-                      podeVisualizarSetor({
-                        role,
-                        userSetor: user?.setor as string | undefined,
-                        itemSetor: q.setor,
-                        setoresCadastrados: setoresList,
-                      }))) && (
+                  {podeModificarQuestionario(q.setor) && (
                     <div className="flex items-center gap-1">
                       <Button
                         variant="ghost"

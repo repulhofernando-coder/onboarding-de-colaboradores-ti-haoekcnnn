@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { userService, setorService } from '@/services/onboarding'
+import { userService, setorService, auditoriaService } from '@/services/onboarding'
 import { useAuth } from '@/contexts/AuthContext'
 import type { User, UserRole, SetorModel } from '@/types/onboarding'
 import { ROLES_INFO } from '@/types/onboarding'
@@ -78,6 +78,7 @@ export default function Usuarios() {
   const [formEmail, setFormEmail] = useState('')
   const [formRole, setFormRole] = useState<UserRole>('gestao')
   const [formSetor, setFormSetor] = useState<string>('')
+  const [formPodeEditarQuestionarios, setFormPodeEditarQuestionarios] = useState(false)
   const [formSenha, setFormSenha] = useState('')
   const [formSenhaAtual, setFormSenhaAtual] = useState('')
   const [formAtivo, setFormAtivo] = useState(true)
@@ -125,6 +126,7 @@ export default function Usuarios() {
     setFormEmail('')
     setFormRole('gestao')
     setFormSetor('')
+    setFormPodeEditarQuestionarios(false)
     setFormSenha('')
     setFormSenhaAtual('')
     setFormAtivo(true)
@@ -149,11 +151,14 @@ export default function Usuarios() {
     setFormRole(targetRole)
     // Setor atual: usar o nome/chave cadastrado
     setFormSetor(u.setor || '')
+    setFormPodeEditarQuestionarios(Boolean(u.pode_editar_questionarios))
     setFormSenha('')
     setFormSenhaAtual('')
     setFormAtivo(u.ativo !== false)
     setModalOpen(true)
   }
+
+  const { refreshUser } = useAuth()
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -181,21 +186,42 @@ export default function Usuarios() {
 
     setSaving(true)
     try {
+      const valorPermissao = formRole === 'gestao' ? formPodeEditarQuestionarios : false
+
       if (!editingUser) {
         // Criar usuário
-        await userService.create({
+        const novoUsuario = await userService.create({
           name: formNome,
           email: formEmail,
           password: formSenha,
           role: formRole,
           setor: formSetor,
           ativo: formAtivo,
+          pode_editar_questionarios: valorPermissao,
         })
+
+        if (formRole === 'gestao' && valorPermissao) {
+          await auditoriaService.registrar({
+            usuarioId: currentUser?.id || '',
+            usuarioNome: currentUser?.name || currentUser?.email || 'Administrador',
+            usuarioRole: currentRole,
+            acao: 'Concessão de Permissão de Questionários',
+            detalhes: `${currentUser?.name || 'Administrador'} cadastrou o gestor ${formNome} com a permissão 'Pode editar questionários do seu setor' ativada.`,
+            metadata: {
+              alvo_usuario_id: novoUsuario.id,
+              alvo_usuario_nome: formNome,
+              pode_editar_questionarios: true,
+            },
+          })
+        }
+
         toast.success(`Usuário ${formNome} criado com sucesso!`)
       } else {
         // Editar usuário
         const emailAlterado =
           formEmail.trim().toLowerCase() !== (editingUser.email || '').trim().toLowerCase()
+        const permissaoAnterior = Boolean(editingUser.pode_editar_questionarios)
+        const permissaoAlterada = formRole === 'gestao' && valorPermissao !== permissaoAnterior
 
         // PocketBase não permite alteração direta de e-mail em auth records sem confirmação de senha.
         // Se o e-mail foi alterado no formulário:
@@ -213,12 +239,33 @@ export default function Usuarios() {
               role: formRole,
               setor: formSetor,
               ativo: formAtivo,
+              pode_editar_questionarios: valorPermissao,
               password: temNovaSenha ? formSenha : undefined,
               oldPassword:
                 temNovaSenha && formSenhaAtual.trim() !== '' ? formSenhaAtual : undefined,
             },
             editingUser.email,
           )
+
+          if (permissaoAlterada) {
+            await auditoriaService.registrar({
+              usuarioId: currentUser?.id || '',
+              usuarioNome: currentUser?.name || currentUser?.email || 'Administrador',
+              usuarioRole: currentRole,
+              acao: valorPermissao
+                ? 'Concessão de Permissão de Questionários'
+                : 'Revogação de Permissão de Questionários',
+              detalhes: `${currentUser?.name || 'Administrador'} ${
+                valorPermissao ? 'concedeu' : 'revogou'
+              } a permissão 'Pode editar questionários do seu setor' para o usuário ${editingUser.name}.`,
+              metadata: {
+                alvo_usuario_id: editingUser.id,
+                alvo_usuario_nome: editingUser.name,
+                pode_editar_questionarios_anterior: permissaoAnterior,
+                pode_editar_questionarios_novo: valorPermissao,
+              },
+            })
+          }
         } catch (updateErr: unknown) {
           const updateErrObj = updateErr as {
             status?: number
@@ -247,9 +294,30 @@ export default function Usuarios() {
                 role: formRole,
                 setor: formSetor,
                 ativo: formAtivo,
+                pode_editar_questionarios: valorPermissao,
               },
               editingUser.email,
             )
+
+            if (permissaoAlterada) {
+              await auditoriaService.registrar({
+                usuarioId: currentUser?.id || '',
+                usuarioNome: currentUser?.name || currentUser?.email || 'Administrador',
+                usuarioRole: currentRole,
+                acao: valorPermissao
+                  ? 'Concessão de Permissão de Questionários'
+                  : 'Revogação de Permissão de Questionários',
+                detalhes: `${currentUser?.name || 'Administrador'} ${
+                  valorPermissao ? 'concedeu' : 'revogou'
+                } a permissão 'Pode editar questionários do seu setor' para o usuário ${editingUser.name}.`,
+                metadata: {
+                  alvo_usuario_id: editingUser.id,
+                  alvo_usuario_nome: editingUser.name,
+                  pode_editar_questionarios_anterior: permissaoAnterior,
+                  pode_editar_questionarios_novo: valorPermissao,
+                },
+              })
+            }
 
             toast.error(
               "Não foi possível alterar a senha: informe a senha atual do usuário ou oriente-o a usar 'Esqueci minha senha'.",
@@ -287,6 +355,13 @@ export default function Usuarios() {
 
       setModalOpen(false)
       await fetchUsers()
+      if (editingUser && currentUser?.id === editingUser.id) {
+        try {
+          await refreshUser()
+        } catch {
+          /* intentionally ignored */
+        }
+      }
     } catch (err: unknown) {
       console.error(err)
       const errorObj = err as {
@@ -612,6 +687,22 @@ export default function Usuarios() {
                       <span className="text-gray-500">Cadastrado em:</span>
                       <span className="font-medium text-gray-700">{formatDate(u.created)}</span>
                     </div>
+
+                    {role === 'gestao' && (
+                      <div className="flex items-center justify-between pt-1 border-t border-gray-50">
+                        <span className="text-gray-500">Questionários:</span>
+                        {u.pode_editar_questionarios ? (
+                          <span className="inline-flex items-center gap-1 font-semibold text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <CheckCircle2 className="w-2.5 h-2.5" />
+                            <span>Pode editar questionários</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 font-medium text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+                            <span>Somente leitura</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -857,6 +948,43 @@ export default function Usuarios() {
                   </p>
                 )}
               </div>
+
+              {/* Chave Pode editar questionários do seu setor (Apenas para papel Gestão) */}
+              {formRole === 'gestao' && (
+                <div className="p-3 rounded-lg border border-purple-200 bg-purple-50/50 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5 pr-2">
+                      <Label
+                        htmlFor="pode_editar_questionarios"
+                        className="text-xs font-bold text-purple-950 cursor-pointer"
+                      >
+                        Pode editar questionários do seu setor
+                      </Label>
+                      <p className="text-[11px] text-purple-800 leading-relaxed">
+                        Permite a este gestor criar, alterar e excluir questionários e questões do
+                        próprio setor. Por padrão fica desativada (somente leitura).
+                      </p>
+                    </div>
+                    <Switch
+                      id="pode_editar_questionarios"
+                      checked={formPodeEditarQuestionarios}
+                      onCheckedChange={setFormPodeEditarQuestionarios}
+                    />
+                  </div>
+                  <div className="text-[10px] text-purple-700 font-medium">
+                    {formPodeEditarQuestionarios ? (
+                      <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Permissão de edição concedida para o setor {formSetor || 'do gestor'}.
+                      </span>
+                    ) : (
+                      <span>
+                        O gestor terá acesso em modo somente leitura aos questionários do setor.
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <div className="flex items-center justify-between">

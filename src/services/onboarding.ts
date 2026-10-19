@@ -168,6 +168,7 @@ export const userService = {
     role?: UserRole
     setor?: string
     ativo?: boolean
+    pode_editar_questionarios?: boolean
   }): Promise<User> {
     const role = data.role || (data.setor === 'RH' ? 'rh' : 'gestao')
     // Se o setor foi fornecido explicitamente, respeita o valor (ex: "Windows", "Datacenter", "RH", etc.)
@@ -182,6 +183,7 @@ export const userService = {
       role,
       setor,
       ativo: data.ativo ?? true,
+      pode_editar_questionarios: Boolean(data.pode_editar_questionarios),
       emailVisibility: true,
       verified: true,
     })
@@ -197,6 +199,7 @@ export const userService = {
       password?: string
       oldPassword?: string
       ativo?: boolean
+      pode_editar_questionarios?: boolean
     },
     currentEmail?: string,
   ): Promise<User> {
@@ -219,6 +222,9 @@ export const userService = {
       payload.setor = data.setor.trim()
     }
     if (data.ativo !== undefined) payload.ativo = data.ativo
+    if (data.pode_editar_questionarios !== undefined) {
+      payload.pode_editar_questionarios = Boolean(data.pode_editar_questionarios)
+    }
     // Omitir password/passwordConfirm caso seja vazio, em branco ou nulo
     if (data.password && data.password.trim() !== '') {
       payload.password = data.password

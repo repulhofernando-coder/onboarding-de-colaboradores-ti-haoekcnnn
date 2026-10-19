@@ -213,7 +213,10 @@ export default function Manual() {
                 Opera com visibilidade estritamente restrita ao seu próprio departamento/setor:
                 acompanha desde a Etapa 1 em modo leitura e assume o controle a partir da Etapa 2
                 (conclui fases, define clientes de referência e faz avaliação final). Acessa também
-                os modelos e questionários do seu setor. Não acessa a tela de Usuários.
+                os modelos e questionários do seu setor. Por padrão, possui acesso em modo somente
+                leitura aos questionários do setor; a permissão de criar/editar/excluir
+                questionários pode ser concedida pelo Administrador em Usuários via chave &quot;Pode
+                editar questionários do seu setor&quot;. Não acessa a tela de Usuários.
               </p>
             </div>
           </div>
@@ -242,7 +245,8 @@ export default function Manual() {
                 <strong>Gestão:</strong> Visualiza somente itens do seu próprio setor em{' '}
                 <em>Visão Geral</em>, <em>Onboardings</em>, <em>Colaboradores</em>, <em>Perfil</em>,{' '}
                 <em>Avaliações</em>, <em>Pré-selecionados</em> e{' '}
-                <em>Questionários/Modelos por Setor</em>.
+                <em>Questionários/Modelos por Setor</em> (com edição de questionários condicionada à
+                permissão individual concedida pelo Admin).
               </li>
               <li>
                 <strong>Gestor sem setor cadastrado:</strong> Recebe aviso explicativo em banner de
@@ -1395,13 +1399,28 @@ export default function Manual() {
                       Modelos & Questionários por Setor
                     </td>
                     <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
-                      Todos os setores
+                      Todos os setores (Edição livre)
                     </td>
                     <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
-                      Todos os setores
+                      Todos os setores (Edição livre)
                     </td>
-                    <td className="py-2.5 px-3 text-center font-bold text-brand-700">
-                      Apenas o próprio setor
+                    <td className="py-2.5 px-3 text-center text-xs text-brand-900 font-semibold">
+                      Próprio setor: leitura por padrão; edição permitida apenas se chave &quot;Pode
+                      editar questionários&quot; estiver ativa
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/70 bg-purple-50/30">
+                    <td className="py-2.5 px-3 font-semibold text-purple-950">
+                      Chave &quot;Pode editar questionários do seu setor&quot;
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Gerencia em /usuarios (concede/revoga)
+                    </td>
+                    <td className="py-2.5 px-3 text-center text-slate-500 font-medium">
+                      Não gerencia a chave
+                    </td>
+                    <td className="py-2.5 px-3 text-center text-xs font-semibold text-purple-900">
+                      Recebe a permissão individualmente (default: desligada)
                     </td>
                   </tr>
                   <tr className="hover:bg-slate-50/70">
@@ -1489,6 +1508,24 @@ export default function Manual() {
                   <strong>Gestão NÃO visualiza</strong> nem acessa os certificados do colaborador
                   (aba bloqueada/não renderizada). Toda a inclusão, edição ou exclusão gera log com
                   autor, papel, carimbo de data/hora e detalhes.
+                </p>
+              </div>
+
+              <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl text-emerald-950 space-y-1 md:col-span-2">
+                <strong className="block font-bold text-emerald-900 text-xs uppercase tracking-wide">
+                  3. Questionários & Banco de Questões (Regra de Edição por Usuário):
+                </strong>
+                <p>
+                  <strong>Admin e RH</strong> possuem permissão irrestrita de criação, edição e
+                  exclusão de questionários e banco de questões em qualquer setor. Para o papel{' '}
+                  <strong>Gestão</strong>, o acesso padrão é <strong>somente leitura</strong>{' '}
+                  restrito ao próprio setor. O Administrador pode conceder a permissão individual de
+                  edição na tela de Usuários (/usuarios) ativando a chave{' '}
+                  <em>&quot;Pode editar questionários do seu setor&quot;</em>. Quando ativa, o
+                  gestor pode criar e alterar questionários e questões do próprio setor; quando
+                  desativada, os botões de edição são ocultados e o servidor PocketBase bloqueia
+                  operações de escrita (RLS). A concessão/revogação da chave e todas as edições em
+                  questionários geram logs formais de auditoria com autor e data.
                 </p>
               </div>
             </div>

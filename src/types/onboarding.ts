@@ -36,6 +36,7 @@ export interface User extends RecordModel {
   avatar?: string
   ativo?: boolean
   verified?: boolean
+  pode_editar_questionarios?: boolean
 }
 
 export const ROLES_INFO: Record<

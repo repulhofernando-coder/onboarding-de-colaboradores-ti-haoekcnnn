@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-19T17:11:43.655Z",
+  "generatedAt": "2026-10-19T17:27:34.856Z",
   "collections": [
     {
       "name": "users",
@@ -54,6 +54,12 @@
         {
           "name": "setor",
           "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pode_editar_questionarios",
+          "type": "bool",
           "required": false,
           "system": false
         }
@@ -1084,9 +1090,9 @@
       "apiRules": {
         "list": "@request.auth.id != ''",
         "view": "@request.auth.id != ''",
-        "create": "@request.auth.role = 'admin'",
-        "update": "@request.auth.role = 'admin'",
-        "delete": "@request.auth.role = 'admin'"
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.pode_editar_questionarios = true && @request.auth.setor != '' && (questionario_id.setor = '' || questionario_id.setor ~ @request.auth.setor)))",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.pode_editar_questionarios = true && @request.auth.setor != '' && (questionario_id.setor = '' || questionario_id.setor ~ @request.auth.setor)))",
+        "delete": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.pode_editar_questionarios = true && @request.auth.setor != '' && (questionario_id.setor = '' || questionario_id.setor ~ @request.auth.setor)))"
       },
       "fields": [
         {
@@ -1295,9 +1301,9 @@
       "apiRules": {
         "list": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.setor != '' && (setor = '' || setor ~ @request.auth.setor)))",
         "view": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.setor != '' && (setor = '' || setor ~ @request.auth.setor)))",
-        "create": "@request.auth.role = 'admin'",
-        "update": "@request.auth.role = 'admin'",
-        "delete": "@request.auth.role = 'admin'"
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.pode_editar_questionarios = true && @request.auth.setor != '' && (setor = '' || setor ~ @request.auth.setor)))",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.pode_editar_questionarios = true && @request.auth.setor != '' && (setor = '' || setor ~ @request.auth.setor)))",
+        "delete": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.pode_editar_questionarios = true && @request.auth.setor != '' && (setor = '' || setor ~ @request.auth.setor)))"
       },
       "fields": [
         {

@@ -80,9 +80,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   const refreshUser = async () => {
-    if (pb.authStore.isValid) {
-      const res = await pb.collection('users').authRefresh<User>()
-      setUser(res.record)
+    if (pb.authStore.isValid && pb.authStore.record?.id) {
+      try {
+        const fullRecord = await pb.collection('users').getOne<User>(pb.authStore.record.id)
+        setUser(fullRecord)
+      } catch {
+        const res = await pb.collection('users').authRefresh<User>()
+        setUser(res.record)
+      }
     }
   }
 
