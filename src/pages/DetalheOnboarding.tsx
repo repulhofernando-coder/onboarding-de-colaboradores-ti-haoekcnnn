@@ -27,7 +27,7 @@ import type {
   TesteTentativa,
 } from '@/types/onboarding'
 import { itemIntegracaoModeloService } from '@/services/onboarding'
-import { SETORES_INFO, STATUS_INFO, getSetorVisual } from '@/types/onboarding'
+import { SETORES_INFO, STATUS_INFO, getSetorVisual, setorToString } from '@/types/onboarding'
 import { calcularDiasRestantes, formatShortDate, formatDateTime } from '@/lib/dateUtils'
 import {
   ArrowLeft,
@@ -1293,10 +1293,9 @@ export default function DetalheOnboarding() {
   // Verificação de permissão de visualização por departamento para papel Gestão
   const temPermissaoSetor = podeVisualizarSetor({
     role,
-    userSetor: user?.setor,
+    userSetor: user?.setor as string | undefined,
     itemSetor: setorToString(onboarding.setor),
-    itemSetorRef:
-      typeof onboarding.setor_ref === 'string' ? onboarding.setor_ref : onboarding.setor_ref?.id,
+    itemSetorRef: onboarding.setor_ref || onboarding.expand?.setor_ref?.id,
   })
 
   if (isGestao && !temPermissaoSetor) {

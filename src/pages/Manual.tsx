@@ -210,24 +210,50 @@ export default function Manual() {
                 Gestão
               </div>
               <p className="text-xs text-teal-950 leading-relaxed">
-                Acompanha desde a Etapa 1 (somente leitura), mas assume o controle a partir da Etapa
-                2: conclui fases, define clientes de referência e faz a avaliação final; não acessa
-                as telas de Usuários nem Modelos de Tarefas.
+                Opera com visibilidade estritamente restrita ao seu próprio departamento/setor:
+                acompanha desde a Etapa 1 em modo leitura e assume o controle a partir da Etapa 2
+                (conclui fases, define clientes de referência e faz avaliação final). Acessa também
+                os modelos e questionários do seu setor. Não acessa a tela de Usuários.
               </p>
             </div>
           </div>
 
           {/* Visibilidade */}
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-700 space-y-1">
+          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-700 space-y-2">
             <p>
-              <strong>Visibilidade dos Processos:</strong> gestores visualizam onboardings e o
-              Perfil do Colaborador de todas as áreas, mas só podem agir naqueles em que são o
-              gestor responsável (ou Admin).
+              <strong>Visibilidade dos Processos por Setor (Regra de Negócio Oficial):</strong> o
+              papel{' '}
+              <strong>
+                Gestão visualiza APENAS os dados e registros pertencentes ao seu próprio
+                departamento
+              </strong>{' '}
+              (definido no cadastro do usuário em <code>users.setor</code>). Essa restrição atua em
+              profundidade na interface e nas regras de segurança do servidor (PocketBase):
             </p>
-            <p className="text-xs text-slate-500">
+            <ul className="list-disc list-inside space-y-1 text-xs text-slate-600 pl-1">
+              <li>
+                <strong>Admin:</strong> Acesso total a todos os setores e módulos operacionais.
+              </li>
+              <li>
+                <strong>RH:</strong> Opera transversalmente em todos os setores (onboardings,
+                colaboradores, pré-selecionados, certificados).
+              </li>
+              <li>
+                <strong>Gestão:</strong> Visualiza somente itens do seu próprio setor em{' '}
+                <em>Visão Geral</em>, <em>Onboardings</em>, <em>Colaboradores</em>, <em>Perfil</em>,{' '}
+                <em>Avaliações</em>, <em>Pré-selecionados</em> e{' '}
+                <em>Questionários/Modelos por Setor</em>.
+              </li>
+              <li>
+                <strong>Gestor sem setor cadastrado:</strong> Recebe aviso explicativo em banner de
+                destaque no topo das páginas e tem o acesso aos dados bloqueado por segurança até
+                que o RH/Admin defina seu setor.
+              </li>
+            </ul>
+            <p className="text-xs text-slate-500 pt-1">
               * Ações cadastrais (edição de cargo/setor/gestor e exclusão do perfil) e a aba de
-              Certificados com documentos comprobatórios são de acesso exclusivo de RH e Admin (ver
-              matriz detalhada na Seção 11).
+              Certificados com documentos comprobatórios continuam sendo de acesso exclusivo de RH e
+              Admin (ver matriz detalhada na Seção 11).
             </p>
           </div>
         </section>
@@ -1259,22 +1285,25 @@ export default function Manual() {
             </div>
           </div>
 
-          {/* 11.3 Matriz de Visibilidade por Papel */}
-          <div className="mb-2 border-l-4 border-slate-800 pl-4 py-1">
-            <h3 className="text-base font-bold text-gray-900 mb-2">
-              11.3 Matriz de Visibilidade & Permissões por Papel (Perfil & Certificados):
-            </h3>
-            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed mb-3">
-              Em consonância com as boas práticas de segurança da informação e privacidade (LGPD), o
-              acesso às funcionalidades do Perfil e Certificados obedece à seguinte matriz de
-              controle:
-            </p>
+          {/* 11.3 Matriz de Visibilidade & Regras por Papel */}
+          <div className="mb-2 border-l-4 border-slate-800 pl-4 py-1 space-y-4">
+            <div>
+              <h3 className="text-base font-bold text-gray-900 mb-2">
+                11.3 Matriz de Visibilidade & Permissões por Papel (Departamental e LGPD):
+              </h3>
+              <p className="text-xs sm:text-sm text-gray-700 leading-relaxed mb-3">
+                O sistema adota o modelo de <strong>visibilidade departamental estrita</strong> para
+                o papel <strong>Gestão</strong>, aliado às diretrizes da LGPD para proteção de
+                documentos sensíveis (Certificados):
+              </p>
+            </div>
 
-            <div className="overflow-x-auto rounded-xl border border-gray-200 mb-3">
+            {/* Tabela de Visibilidade Geral dos Módulos */}
+            <div className="overflow-x-auto rounded-xl border border-gray-200">
               <table className="w-full text-left text-xs sm:text-sm">
                 <thead className="bg-slate-100 text-slate-900 font-bold border-b border-gray-200">
                   <tr>
-                    <th className="py-2.5 px-3">Funcionalidade / Ação</th>
+                    <th className="py-2.5 px-3">Módulo / Tela</th>
                     <th className="py-2.5 px-3 text-center">Administrador</th>
                     <th className="py-2.5 px-3 text-center">RH (Recursos Humanos)</th>
                     <th className="py-2.5 px-3 text-center">Gestão (Gestor da Área)</th>
@@ -1283,86 +1312,157 @@ export default function Manual() {
                 <tbody className="divide-y divide-gray-100 bg-white">
                   <tr className="hover:bg-slate-50/70">
                     <td className="py-2.5 px-3 font-semibold text-gray-900">
-                      Visualizar Perfil do Colaborador (Ficha Única)
+                      Visão Geral (Dashboard)
                     </td>
                     <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
-                      Sim (Total)
+                      Todos os setores
                     </td>
                     <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
-                      Sim (Total)
+                      Todos os setores
                     </td>
-                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
-                      Sim (Acompanhamento)
+                    <td className="py-2.5 px-3 text-center font-bold text-brand-700">
+                      Apenas o próprio setor
                     </td>
                   </tr>
                   <tr className="hover:bg-slate-50/70">
                     <td className="py-2.5 px-3 font-semibold text-gray-900">
-                      Editar Cargo, Setor ou Gestor Responsável
+                      Onboardings & Colaboradores
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Todos os setores
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Todos os setores
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-brand-700">
+                      Apenas o próprio setor
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/70">
+                    <td className="py-2.5 px-3 font-semibold text-gray-900">
+                      Perfil do Colaborador (Ficha Única)
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Total (todos)
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Total (todos)
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-brand-700">
+                      Apenas do próprio setor
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/70">
+                    <td className="py-2.5 px-3 font-semibold text-gray-900">Avaliações Finais</td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Todos os setores
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Acompanha todos
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-brand-700">
+                      Avalia apenas o próprio setor
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/70">
+                    <td className="py-2.5 px-3 font-semibold text-gray-900">
+                      Pré-selecionados (Contratação)
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Todos os setores
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Todos os setores
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-brand-700">
+                      Candidatos do próprio setor
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/70">
+                    <td className="py-2.5 px-3 font-semibold text-gray-900">
+                      Decisão Técnica na Prova do Candidato
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">Sim</td>
+                    <td className="py-2.5 px-3 text-center text-slate-500 font-medium">
+                      Não (aguarda gestão)
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-brand-700">
+                      Sim (apenas do próprio setor)
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/70">
+                    <td className="py-2.5 px-3 font-semibold text-gray-900">
+                      Modelos & Questionários por Setor
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Todos os setores
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Todos os setores
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-brand-700">
+                      Apenas o próprio setor
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/70">
+                    <td className="py-2.5 px-3 font-semibold text-gray-900">
+                      Gestão de Usuários (/usuarios)
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Sim (acesso total)
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Sim (cria/gerencia)
+                    </td>
+                    <td className="py-2.5 px-3 text-center text-red-600 font-bold">Bloqueado</td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/70 bg-amber-50/40">
+                    <td className="py-2.5 px-3 font-bold text-amber-950">
+                      Aba Certificados (LGPD)
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Sim (total)
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Sim (total)
+                    </td>
+                    <td className="py-2.5 px-3 text-center text-red-700 font-bold">
+                      Bloqueado (não visualiza)
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/70">
+                    <td className="py-2.5 px-3 font-semibold text-gray-900">
+                      Editar/Excluir Colaborador
                     </td>
                     <td className="py-2.5 px-3 text-center font-bold text-emerald-700">Sim</td>
                     <td className="py-2.5 px-3 text-center font-bold text-emerald-700">Sim</td>
                     <td className="py-2.5 px-3 text-center text-red-600 font-bold">
-                      Não (Somente Leitura)
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-slate-50/70">
-                    <td className="py-2.5 px-3 font-semibold text-gray-900">
-                      Excluir Colaborador (Cascata Atômica)
-                    </td>
-                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">Sim</td>
-                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">Sim</td>
-                    <td className="py-2.5 px-3 text-center text-red-600 font-bold">
-                      Não (Sem permissão)
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-slate-50/70">
-                    <td className="py-2.5 px-3 font-semibold text-gray-900">
-                      Visualizar Aba Trajetória Unificada
-                    </td>
-                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">Sim</td>
-                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">Sim</td>
-                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">Sim</td>
-                  </tr>
-                  <tr className="hover:bg-slate-50/70 bg-amber-50/40">
-                    <td className="py-2.5 px-3 font-bold text-amber-950">
-                      Aba Certificados (Visualização & Download) — Regra LGPD
-                    </td>
-                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
-                      Sim (Acesso Total)
-                    </td>
-                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
-                      Sim (Acesso Total)
-                    </td>
-                    <td className="py-2.5 px-3 text-center text-red-700 font-bold">
-                      Bloqueado (Não visualiza aba)
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-slate-50/70 bg-amber-50/40">
-                    <td className="py-2.5 px-3 font-bold text-amber-950">
-                      Cadastrar / Editar / Excluir Certificados
-                    </td>
-                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">Sim</td>
-                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">Sim</td>
-                    <td className="py-2.5 px-3 text-center text-red-700 font-bold">
-                      Bloqueado (Não visualiza)
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-slate-50/70">
-                    <td className="py-2.5 px-3 font-semibold text-gray-900">
-                      Auditoria de Eventos e Certificados (Logs)
-                    </td>
-                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
-                      Sim (Completa)
-                    </td>
-                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
-                      Sim (Completa)
-                    </td>
-                    <td className="py-2.5 px-3 text-center font-bold text-slate-600">
-                      Eventos de Onboarding
+                      Não (somente leitura)
                     </td>
                   </tr>
                 </tbody>
               </table>
+            </div>
+
+            {/* Card Explicativo: Gestor sem setor cadastrado */}
+            <div className="p-3.5 bg-amber-50/80 border border-amber-200 rounded-xl text-xs sm:text-sm text-amber-950 space-y-1.5">
+              <strong className="block text-amber-900 font-bold uppercase tracking-wide text-xs">
+                Importante: Regra de Gestor sem Setor Cadastrado & Defesa em Profundidade
+              </strong>
+              <p>
+                Quando um usuário com papel <strong>Gestão</strong> não possui setor vinculado no
+                cadastro (campo <code>users.setor</code> em branco), o sistema aplica a política de
+                menor privilégio:
+                <strong> nenhum registro de departamento é exibido</strong> e um banner amarelo de
+                aviso é renderizado no topo de todas as páginas operacionais com a mensagem
+                orientando a contatar o RH/Administrador.
+              </p>
+              <p>
+                Todas as ações (avaliação, aprovação técnica em contratação, edição de
+                questionários) possuem <strong>validação dupla</strong>: regras de segurança RLS no
+                banco PocketBase e bloqueio defensivo na interface, impedindo que requisições
+                forçadas afetem dados de outros setores.
+              </p>
             </div>
 
             {/* Resumo Consolidado da Matriz de Visibilidade */}

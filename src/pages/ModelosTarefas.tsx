@@ -54,6 +54,8 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
+import { podeVisualizarSetor } from '@/lib/gestaoVisibility'
+import { AvisoSetorGestor } from '@/components/AvisoSetorGestor'
 
 import { GestaoQuestionarios } from '@/components/GestaoQuestionarios'
 import { HelpCircle } from 'lucide-react'
@@ -61,7 +63,7 @@ import { HelpCircle } from 'lucide-react'
 type TabType = 'biblioteca' | 'etapa1' | 'questionarios' | string
 
 export default function ModelosTarefas() {
-  const { user, isAdmin, isRH } = useAuth()
+  const { user, role, isAdmin, isRH, isGestao } = useAuth()
 
   // Lista dinâmica de setores da coleção
   const [setoresList, setSetoresList] = useState<SetorModel[]>([])
@@ -936,6 +938,9 @@ export default function ModelosTarefas() {
 
   return (
     <div className="space-y-6">
+      {/* Aviso de setor para papel Gestão */}
+      <AvisoSetorGestor setoresList={setoresList} moduloNome="modelos de tarefas por setor" />
+
       {/* Top Banner */}
       <div className="bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -972,32 +977,46 @@ export default function ModelosTarefas() {
               </Button>
             )}
 
-            {isBiblioteca ? (
-              <Button
-                onClick={() => openNewMaterialModal('manual')}
-                className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold h-9 rounded-lg shadow-sm"
-              >
-                <Plus className="w-3.5 h-3.5 mr-1.5" />
-                Novo Material na Biblioteca
-              </Button>
-            ) : (
-              <>
-                <Button
-                  onClick={() => openNewModal('video')}
-                  className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold h-9 rounded-lg"
-                >
-                  <Video className="w-3.5 h-3.5 mr-1.5" />
-                  Adicionar Vídeo
-                </Button>
-                <Button
-                  onClick={() => openNewModal('manual')}
-                  className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold h-9 rounded-lg"
-                >
-                  <FileText className="w-3.5 h-3.5 mr-1.5" />
-                  Adicionar Manual
-                </Button>
-              </>
-            )}
+            {isBiblioteca
+              ? (isAdmin || isRH) && (
+                  <Button
+                    onClick={() => openNewMaterialModal('manual')}
+                    className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold h-9 rounded-lg shadow-sm"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1.5" />
+                    Novo Material na Biblioteca
+                  </Button>
+                )
+              : isQuestionarios
+                ? null
+                : (isAdmin ||
+                    isRH ||
+                    (isGestao &&
+                      activeSetorModel &&
+                      podeVisualizarSetor({
+                        role,
+                        userSetor: user?.setor as string | undefined,
+                        itemSetor: activeSetorModel.chave || activeSetorModel.nome,
+                        itemSetorRef: activeSetorModel.id,
+                        setoresCadastrados: setoresList,
+                      }))) && (
+                    <>
+                      <Button
+                        onClick={() => openNewModal('video')}
+                        className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold h-9 rounded-lg"
+                      >
+                        <Video className="w-3.5 h-3.5 mr-1.5" />
+                        Adicionar Vídeo
+                      </Button>
+                      <Button
+                        onClick={() => openNewModal('manual')}
+                        className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold h-9 rounded-lg"
+                      >
+                        <FileText className="w-3.5 h-3.5 mr-1.5" />
+                        Adicionar Manual
+                      </Button>
+                    </>
+                  )}
           </div>
         </div>
       </div>
@@ -1057,16 +1076,36 @@ export default function ModelosTarefas() {
           <span className="text-[11px] text-gray-400 block truncate">Provas e testes técnicos</span>
         </button>
 
-        {/* 3. Abas das Áreas Dinâmicas da Coleção (ou fallback se carregando/vazio) */}
+        {/* 3. Abas das Áreas Dinâmicas da Coleção (ou fallback se carregando/vazio) — filtradas para Gestão */}
         {(setoresList.length > 0
-          ? setoresList.filter((s) => s.ativo !== false)
-          : Object.keys(SETORES_INFO).map((k) => ({
-              id: k,
-              nome: SETORES_INFO[k].nome,
-              descricao: SETORES_INFO[k].descricao,
-              cor: SETORES_INFO[k].cor,
-              ativo: true,
-            }))
+          ? setoresList.filter((s) => {
+              if (s.ativo === false) return false
+              if (!isGestao) return true
+              return podeVisualizarSetor({
+                role,
+                userSetor: user?.setor as string | undefined,
+                itemSetor: s.chave || s.nome,
+                itemSetorRef: s.id,
+                setoresCadastrados: setoresList,
+              })
+            })
+          : Object.keys(SETORES_INFO)
+              .map((k) => ({
+                id: k,
+                nome: SETORES_INFO[k].nome,
+                descricao: SETORES_INFO[k].descricao,
+                cor: SETORES_INFO[k].cor,
+                ativo: true,
+              }))
+              .filter((s) => {
+                if (!isGestao) return true
+                return podeVisualizarSetor({
+                  role,
+                  userSetor: user?.setor as string | undefined,
+                  itemSetor: s.id,
+                  setoresCadastrados: setoresList,
+                })
+              })
         ).map((s) => {
           const isSelected = selectedTab === s.id || (s.chave && selectedTab === s.chave)
           const cor = s.cor || '#4F46E5'

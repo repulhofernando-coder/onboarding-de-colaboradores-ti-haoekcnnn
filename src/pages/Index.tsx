@@ -52,7 +52,7 @@ export default function Index() {
         role,
         userSetor: user?.setor,
         itemSetor: setorToString(o.setor),
-        itemSetorRef: typeof o.setor_ref === 'string' ? o.setor_ref : o.setor_ref?.id,
+        itemSetorRef: o.setor_ref || o.expand?.setor_ref?.id,
         setoresCadastrados: setoresList,
       }),
     )
@@ -86,7 +86,16 @@ export default function Index() {
 
   // Lista unificada de setores para o gráfico (da coleção com fallback, filtrada se Gestão)
   const setoresAtivosGrafico = useMemo(() => {
-    let base =
+    type SetorItem = {
+      id: string
+      chave?: string
+      nome: string
+      cor?: string
+      descricao?: string
+      ativo?: boolean
+    }
+
+    const base: SetorItem[] =
       setoresList.length > 0
         ? setoresList.filter((s) => s.ativo !== false)
         : Object.keys(SETORES_INFO).map((k) => ({
@@ -99,10 +108,10 @@ export default function Index() {
           }))
 
     if (isGestao) {
-      base = base.filter((s) =>
+      return base.filter((s) =>
         podeVisualizarSetor({
           role,
-          userSetor: user?.setor,
+          userSetor: user?.setor as string | undefined,
           itemSetor: s.chave || s.nome,
           itemSetorRef: s.id,
           setoresCadastrados: setoresList,

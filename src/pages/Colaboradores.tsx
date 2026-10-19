@@ -89,9 +89,9 @@ export default function Colaboradores() {
     return todosOnboardings.filter((o) =>
       podeVisualizarSetor({
         role,
-        userSetor: user?.setor,
+        userSetor: user?.setor as string | undefined,
         itemSetor: setorToString(o.setor),
-        itemSetorRef: typeof o.setor_ref === 'string' ? o.setor_ref : o.setor_ref?.id,
+        itemSetorRef: o.setor_ref || o.expand?.setor_ref?.id,
         setoresCadastrados: setoresList,
       }),
     )

@@ -35,6 +35,8 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
+import { podeVisualizarSetor } from '@/lib/gestaoVisibility'
+import { AvisoSetorGestor } from '@/components/AvisoSetorGestor'
 
 const TIPOS_USO_INFO: Record<
   TipoDeUsoQuestionario,
@@ -68,7 +70,7 @@ const TIPOS_USO_INFO: Record<
 }
 
 export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[] }) {
-  const { isAdmin } = useAuth()
+  const { user, role, isAdmin, isGestao } = useAuth()
   const [questionarios, setQuestionarios] = useState<QuestionarioModel[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -112,7 +114,18 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
     try {
       setLoading(true)
       const list = await questionarioService.listAll()
-      setQuestionarios(list)
+      // Se papel Gestão, defesa em profundidade na interface (servidor já filtra)
+      const filtrados = isGestao
+        ? list.filter((q) =>
+            podeVisualizarSetor({
+              role,
+              userSetor: user?.setor as string | undefined,
+              itemSetor: q.setor,
+              setoresCadastrados: setoresList,
+            }),
+          )
+        : list
+      setQuestionarios(filtrados)
 
       // Carregar contagem de questões para cada questionário (para alertar banco insuficiente)
       try {
@@ -167,10 +180,22 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
 
   // Handlers Questionário
   const handleOpenNovoQ = () => {
+    // Para papel Gestão, preencher o setor com o setor do usuário
+    const setorGestao = user?.setor as string | undefined
+    const setorPadrao =
+      isGestao && setorGestao
+        ? setoresList.find(
+            (s) =>
+              s.chave?.toLowerCase() === setorGestao.toLowerCase() ||
+              s.nome.toLowerCase() === setorGestao.toLowerCase() ||
+              s.id === setorGestao,
+          )?.chave || setorGestao
+        : setoresList[0]?.chave || setoresList[0]?.id || 'windows'
+
     setEditingQ(null)
     setFormQNome('')
     setFormQDescricao('')
-    setFormQSetor(setoresList[0]?.chave || setoresList[0]?.id || 'windows')
+    setFormQSetor(setorPadrao)
     setFormQTipoUso('onboarding')
     setFormQPercentual(95)
     setFormQQuestoesPorProva(20)
@@ -179,6 +204,18 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
   }
 
   const handleOpenEditarQ = (q: QuestionarioModel) => {
+    if (
+      isGestao &&
+      !podeVisualizarSetor({
+        role,
+        userSetor: user?.setor as string | undefined,
+        itemSetor: q.setor,
+        setoresCadastrados: setoresList,
+      })
+    ) {
+      toast.error('Você não tem permissão para editar questionário de outro setor.')
+      return
+    }
     setEditingQ(q)
     setFormQNome(q.nome)
     setFormQDescricao(q.descricao || '')
@@ -396,14 +433,23 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <Button
-              onClick={handleOpenNovaQuestao}
-              size="sm"
-              className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold h-8 rounded-lg"
-            >
-              <Plus className="w-3.5 h-3.5 mr-1" />
-              Nova Questão
-            </Button>
+            {(isAdmin ||
+              !isGestao ||
+              podeVisualizarSetor({
+                role,
+                userSetor: user?.setor as string | undefined,
+                itemSetor: selectedQuestionario.setor,
+                setoresCadastrados: setoresList,
+              })) && (
+              <Button
+                onClick={handleOpenNovaQuestao}
+                size="sm"
+                className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold h-8 rounded-lg"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                Nova Questão
+              </Button>
+            )}
           </div>
         </div>
 
@@ -537,26 +583,35 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenEditarQuestao(q)}
-                        className="h-8 w-8 text-gray-500 hover:text-gray-800"
-                        title="Editar questão"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setDeleteQuestaoItem(q)}
-                        className="h-8 w-8 text-gray-400 hover:text-red-600"
-                        title="Excluir questão"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
+                    {(isAdmin ||
+                      !isGestao ||
+                      podeVisualizarSetor({
+                        role,
+                        userSetor: user?.setor as string | undefined,
+                        itemSetor: selectedQuestionario.setor,
+                        setoresCadastrados: setoresList,
+                      })) && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenEditarQuestao(q)}
+                          className="h-8 w-8 text-gray-500 hover:text-gray-800"
+                          title="Editar questão"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDeleteQuestaoItem(q)}
+                          className="h-8 w-8 text-gray-400 hover:text-red-600"
+                          title="Excluir questão"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -738,6 +793,8 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
   // Visualização de lista dos questionários
   return (
     <div className="bg-white rounded-xl border border-gray-200/90 shadow-sm p-6 space-y-6">
+      <AvisoSetorGestor setoresList={setoresList} moduloNome="questionários de conhecimento" />
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
@@ -754,7 +811,7 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
           </div>
         </div>
 
-        {isAdmin && (
+        {(isAdmin || (isGestao && Boolean(user?.setor))) && (
           <Button
             onClick={handleOpenNovoQ}
             size="sm"
@@ -881,7 +938,14 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
                     Gerenciar Questões
                   </Button>
 
-                  {isAdmin && (
+                  {(isAdmin ||
+                    (isGestao &&
+                      podeVisualizarSetor({
+                        role,
+                        userSetor: user?.setor as string | undefined,
+                        itemSetor: q.setor,
+                        setoresCadastrados: setoresList,
+                      }))) && (
                     <div className="flex items-center gap-1">
                       <Button
                         variant="ghost"

@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
+import { getSetorUsuarioNome } from '@/lib/gestaoVisibility'
 
 interface NavItem {
   label: string
@@ -43,7 +44,12 @@ const navItems: NavItem[] = [
   { label: 'Pré-selecionados', path: '/pre-selecionados', icon: UserCheck2 },
   { label: 'Onboardings', path: '/onboardings', icon: ListTodo },
   { label: 'Colaboradores', path: '/colaboradores', icon: Users },
-  { label: 'Modelos de Tarefas', path: '/modelos', icon: Layers, allowedRoles: ['admin', 'rh'] },
+  {
+    label: 'Modelos de Tarefas',
+    path: '/modelos',
+    icon: Layers,
+    allowedRoles: ['admin', 'rh', 'gestao'],
+  },
   { label: 'Avaliações', path: '/avaliacoes', icon: ClipboardCheck },
   { label: 'Manual', path: '/manual', icon: BookOpen },
   { label: 'Auditoria & Logs', path: '/logs', icon: FileText, allowedRoles: ['admin'] },
@@ -56,6 +62,13 @@ export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  // Rótulo do papel, com o setor do usuário quando existir (ex.: "Gestão · Windows")
+  const labelPapelComSetor = (() => {
+    const papel = ROLES_INFO[role]?.nome || 'Usuário'
+    const setor = getSetorUsuarioNome(user)
+    return setor ? `${papel} · ${setor}` : papel
+  })()
 
   const handleLogout = () => {
     logout()
@@ -169,7 +182,7 @@ export default function Layout() {
                 ) : (
                   <ShieldCheck className="w-3 h-3 text-teal-600" />
                 )}
-                <span>{ROLES_INFO[role]?.nome || 'Usuário'}</span>
+                <span>{labelPapelComSetor}</span>
               </div>
             </div>
           </div>
@@ -214,9 +227,7 @@ export default function Layout() {
               <span className="text-xs font-semibold text-gray-800">
                 {user?.name || user?.email}
               </span>
-              <span className="text-[11px] text-gray-500 font-medium">
-                {ROLES_INFO[role]?.nome || 'Usuário'}
-              </span>
+              <span className="text-[11px] text-gray-500 font-medium">{labelPapelComSetor}</span>
             </div>
 
             <DropdownMenu>
@@ -241,7 +252,7 @@ export default function Layout() {
                       ROLES_INFO[role]?.badgeClass || 'bg-gray-50 text-gray-700 border-gray-200'
                     }`}
                   >
-                    Papel: {ROLES_INFO[role]?.nome || 'Usuário'}
+                    Papel: {labelPapelComSetor}
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />

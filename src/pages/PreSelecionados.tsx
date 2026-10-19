@@ -17,6 +17,8 @@ import type {
   User,
 } from '@/types/onboarding'
 import { CANDIDATO_STATUS_INFO, getSetorVisual } from '@/types/onboarding'
+import { podeVisualizarSetor } from '@/lib/gestaoVisibility'
+import { AvisoSetorGestor } from '@/components/AvisoSetorGestor'
 import { formatShortDate, formatDateTime } from '@/lib/dateUtils'
 import {
   Users,
@@ -325,6 +327,20 @@ export default function PreSelecionados() {
 
   // Abertura do Modal de Decisão (Aprovado / Reprovado)
   const abrirModalDecisao = (candidato: CandidatoModel, decisao: 'aprovado' | 'reprovado') => {
+    // Defesa em profundidade: Gestão só pode aprovar/reprovar candidatos do próprio setor
+    if (
+      isGestao &&
+      !podeVisualizarSetor({
+        role,
+        userSetor: user?.setor as string | undefined,
+        itemSetor: candidato.setor,
+        setoresCadastrados: setores,
+      })
+    ) {
+      toast.error('Você só pode avaliar candidatos do seu próprio departamento.')
+      return
+    }
+
     setCandidatoDecisao(candidato)
     setTipoDecisao(decisao)
     setMotivoReprovacao('')
@@ -480,9 +496,22 @@ export default function PreSelecionados() {
     }
   }
 
+  // Filtro de visibilidade por departamento para o papel Gestão
+  const candidatosVisiveis = useMemo(() => {
+    if (!isGestao) return candidatos
+    return candidatos.filter((c) =>
+      podeVisualizarSetor({
+        role,
+        userSetor: user?.setor as string | undefined,
+        itemSetor: c.setor,
+        setoresCadastrados: setores,
+      }),
+    )
+  }, [candidatos, isGestao, role, user?.setor, setores])
+
   // Filtros em memória
   const candidatosFiltrados = useMemo(() => {
-    return candidatos.filter((c) => {
+    return candidatosVisiveis.filter((c) => {
       // Busca textual
       const q = search.toLowerCase().trim()
       const matchSearch =
@@ -500,10 +529,27 @@ export default function PreSelecionados() {
 
       return matchSearch && matchStatus && matchSetor
     })
-  }, [candidatos, search, filtroStatus, filtroSetor])
+  }, [candidatosVisiveis, search, filtroStatus, filtroSetor])
+
+  // Setores exibidos no filtro (filtrados para papel Gestão)
+  const setoresFiltro = useMemo(() => {
+    if (!isGestao) return setores
+    return setores.filter((s) =>
+      podeVisualizarSetor({
+        role,
+        userSetor: user?.setor as string | undefined,
+        itemSetor: s.chave || s.nome,
+        itemSetorRef: s.id,
+        setoresCadastrados: setores,
+      }),
+    )
+  }, [setores, isGestao, role, user?.setor])
 
   return (
     <div className="space-y-6">
+      {/* Aviso de setor para papel Gestão */}
+      <AvisoSetorGestor setoresList={setores} moduloNome="candidatos pré-selecionados" />
+
       {/* Top Banner Informativo */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-gray-200/90 shadow-sm">
         <div>
@@ -554,7 +600,7 @@ export default function PreSelecionados() {
                 : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
             }`}
           >
-            Todos ({candidatos.length})
+            Todos ({candidatosVisiveis.length})
           </button>
 
           <button
@@ -576,7 +622,7 @@ export default function PreSelecionados() {
               }`}
             >
               {
-                candidatos.filter(
+                candidatosVisiveis.filter(
                   (c) => c.status === 'aprovado_aguardando_rh' || c.status === 'aprovado',
                 ).length
               }
@@ -601,7 +647,7 @@ export default function PreSelecionados() {
                   : 'bg-amber-100 text-amber-800'
               }`}
             >
-              {candidatos.filter((c) => c.status === 'prova_concluida').length}
+              {candidatosVisiveis.filter((c) => c.status === 'prova_concluida').length}
             </span>
           </button>
 
@@ -623,7 +669,7 @@ export default function PreSelecionados() {
                   : 'bg-blue-100 text-blue-800'
               }`}
             >
-              {candidatos.filter((c) => c.status === 'prova_enviada').length}
+              {candidatosVisiveis.filter((c) => c.status === 'prova_enviada').length}
             </span>
           </button>
 
@@ -645,7 +691,7 @@ export default function PreSelecionados() {
                   : 'bg-purple-100 text-purple-800'
               }`}
             >
-              {candidatos.filter((c) => c.status === 'convertido').length}
+              {candidatosVisiveis.filter((c) => c.status === 'convertido').length}
             </span>
           </button>
 
@@ -667,7 +713,7 @@ export default function PreSelecionados() {
                   : 'bg-stone-100 text-stone-700'
               }`}
             >
-              {candidatos.filter((c) => c.status === 'desistiu').length}
+              {candidatosVisiveis.filter((c) => c.status === 'desistiu').length}
             </span>
           </button>
 
@@ -687,7 +733,7 @@ export default function PreSelecionados() {
                 filtroStatus === 'reprovado' ? 'bg-red-800 text-white' : 'bg-red-100 text-red-800'
               }`}
             >
-              {candidatos.filter((c) => c.status === 'reprovado').length}
+              {candidatosVisiveis.filter((c) => c.status === 'reprovado').length}
             </span>
           </button>
         </div>
@@ -729,7 +775,7 @@ export default function PreSelecionados() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos os setores</SelectItem>
-                {setores.map((s) => (
+                {setoresFiltro.map((s) => (
                   <SelectItem key={s.id} value={s.chave || s.nome}>
                     {s.nome}
                   </SelectItem>
@@ -788,7 +834,16 @@ export default function PreSelecionados() {
             const passouRegua = percentual >= regua
 
             // 1. Gestor da área e Admin avaliam a prova técnica (aprovado -> vai para 'aprovado_aguardando_rh')
-            const podeDecidir = (isGestao || isAdmin) && item.status === 'prova_concluida'
+            // Defesa em profundidade: papel Gestão só pode avaliar se pertencer ao mesmo setor
+            const pertenceAoSetorDoGestor = podeVisualizarSetor({
+              role,
+              userSetor: user?.setor as string | undefined,
+              itemSetor: item.setor,
+              setoresCadastrados: setores,
+            })
+            const podeDecidir =
+              (isAdmin || (isGestao && pertenceAoSetorDoGestor)) &&
+              item.status === 'prova_concluida'
 
             // 2. Fase intermediária: Apenas RH e Admin podem agir em candidatos aprovados pelo gestor
             const estaAguardandoRH =

@@ -62,7 +62,7 @@ const App = () => (
             <Route
               path="/modelos"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'rh']}>
+                <ProtectedRoute allowedRoles={['admin', 'rh', 'gestao']}>
                   <ModelosTarefas />
                 </ProtectedRoute>
               }

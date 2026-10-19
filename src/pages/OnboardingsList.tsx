@@ -61,7 +61,7 @@ export default function OnboardingsList() {
         role,
         userSetor: user?.setor,
         itemSetor: setorToString(o.setor),
-        itemSetorRef: typeof o.setor_ref === 'string' ? o.setor_ref : o.setor_ref?.id,
+        itemSetorRef: o.setor_ref || o.expand?.setor_ref?.id,
         setoresCadastrados: setoresList,
       }),
     )

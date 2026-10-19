@@ -11,6 +11,8 @@ import {
 import { useRealtime } from '@/hooks/use-realtime'
 import type { Onboarding, AvaliacaoDecisao, SetorModel, FaseModelo } from '@/types/onboarding'
 import { SETORES_INFO, getSetorVisual, setorToString } from '@/types/onboarding'
+import { podeVisualizarSetor } from '@/lib/gestaoVisibility'
+import { AvisoSetorGestor } from '@/components/AvisoSetorGestor'
 import { calcularDiasRestantes, formatShortDate, formatDateTime } from '@/lib/dateUtils'
 import {
   ClipboardCheck,
@@ -39,8 +41,8 @@ import {
 import { toast } from 'sonner'
 
 export default function Avaliacoes() {
-  const { user, role, isAdmin } = useAuth()
-  const [onboardings, setOnboardings] = useState<Onboarding[]>([])
+  const { user, role, isAdmin, isGestao } = useAuth()
+  const [todosOnboardings, setTodosOnboardings] = useState<Onboarding[]>([])
   const [setoresList, setSetoresList] = useState<SetorModel[]>([])
   const [filtroSetor, setFiltroSetor] = useState<string>('todos')
   const [loading, setLoading] = useState(true)
@@ -64,7 +66,7 @@ export default function Avaliacoes() {
   const fetchData = async () => {
     try {
       const [data, setores] = await Promise.all([onboardingService.list(), setorService.listAll()])
-      setOnboardings(data)
+      setTodosOnboardings(data)
       setSetoresList(setores)
     } catch (err) {
       console.error(err)
@@ -81,6 +83,20 @@ export default function Avaliacoes() {
   useRealtime<Onboarding>('onboardings', () => {
     fetchData()
   })
+
+  // Filtragem de departamento para o papel Gestão
+  const onboardings = useMemo(() => {
+    if (!isGestao) return todosOnboardings
+    return todosOnboardings.filter((o) =>
+      podeVisualizarSetor({
+        role,
+        userSetor: user?.setor as string | undefined,
+        itemSetor: setorToString(o.setor),
+        itemSetorRef: o.setor_ref || o.expand?.setor_ref?.id,
+        setoresCadastrados: setoresList,
+      }),
+    )
+  }, [todosOnboardings, isGestao, role, user?.setor, setoresList])
 
   // Colaboradores aguardando avaliação final filtrados por setor
   const pendentes = useMemo(() => {
@@ -132,6 +148,21 @@ export default function Avaliacoes() {
   }, [onboardings])
 
   const openAvaliarModal = (item: Onboarding) => {
+    // Defesa em profundidade: papel Gestão não pode abrir modal de outro setor
+    if (
+      isGestao &&
+      !podeVisualizarSetor({
+        role,
+        userSetor: user?.setor as string | undefined,
+        itemSetor: setorToString(item.setor),
+        itemSetorRef: item.setor_ref || item.expand?.setor_ref?.id,
+        setoresCadastrados: setoresList,
+      })
+    ) {
+      toast.error('Você não tem permissão para avaliar colaboradores de outro setor.')
+      return
+    }
+
     setSelectedOnboarding(item)
     setDecisao(null)
     setObservacoes('')
@@ -235,14 +266,51 @@ export default function Avaliacoes() {
   // Somente Admin ou o Gestor Responsável atribuído ao onboarding podem avaliar
   const podeAvaliarItem = (item: Onboarding) => {
     if (isAdmin) return true
-    if (role === 'gestao' && item.gestor_id === user?.id) return true
-    // Se gestao mas gestor_id não definido no item, permite para não travar legado
-    if (role === 'gestao' && !item.gestor_id) return true
+    if (role === 'gestao') {
+      const temPermissaoSetor = podeVisualizarSetor({
+        role,
+        userSetor: user?.setor as string | undefined,
+        itemSetor: setorToString(item.setor),
+        itemSetorRef: item.setor_ref || item.expand?.setor_ref?.id,
+        setoresCadastrados: setoresList,
+      })
+      if (!temPermissaoSetor) return false
+      if (item.gestor_id === user?.id) return true
+      if (!item.gestor_id) return true
+      return true // Gestor do mesmo setor pode avaliar
+    }
     return false
   }
 
+  // Lista de setores exibidos no filtro (filtrada para Gestão)
+  const setoresFiltro = useMemo(() => {
+    const base =
+      setoresList.length > 0
+        ? setoresList.filter((s) => s.ativo !== false)
+        : Object.keys(SETORES_INFO).map((k) => ({
+            id: k,
+            chave: k,
+            nome: SETORES_INFO[k].nome,
+            cor: SETORES_INFO[k].cor,
+          }))
+
+    if (!isGestao) return base
+    return base.filter((s) =>
+      podeVisualizarSetor({
+        role,
+        userSetor: user?.setor as string | undefined,
+        itemSetor: s.chave || s.nome,
+        itemSetorRef: s.id,
+        setoresCadastrados: setoresList,
+      }),
+    )
+  }, [setoresList, isGestao, role, user?.setor])
+
   return (
     <div className="space-y-6">
+      {/* Aviso de setor para papel Gestão */}
+      <AvisoSetorGestor setoresList={setoresList} moduloNome="avaliações" />
+
       {/* Alerta de Atraso se houver colaboradores que excederam 15 dias */}
       {atrasados.length > 0 && (
         <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-900 flex items-start gap-3 animate-fade-in shadow-xs">
@@ -374,15 +442,7 @@ export default function Avaliacoes() {
           >
             Todas as Áreas ({onboardings.length})
           </button>{' '}
-          {(setoresList.length > 0
-            ? setoresList.filter((s) => s.ativo !== false)
-            : Object.keys(SETORES_INFO).map((k) => ({
-                id: k,
-                chave: k,
-                nome: SETORES_INFO[k].nome,
-                cor: SETORES_INFO[k].cor,
-              }))
-          ).map((s) => {
+          {setoresFiltro.map((s) => {
             const val = s.chave || s.nome
             const active = filtroSetor === val || filtroSetor === s.id
             return (

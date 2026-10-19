@@ -29,18 +29,15 @@ export function getErrorMessage(error: unknown): string {
 }
 
 export function isNetworkError(error: unknown): boolean {
-  if (!error) return false
-  if (error instanceof TypeError && error.message.toLowerCase().includes('fetch')) return true
+  if (error instanceof ClientResponseError) {
+    return error.status === 0
+  }
+  if (error instanceof TypeError && error.message.toLowerCase().includes('failed to fetch')) {
+    return true
+  }
   if (error instanceof Error) {
     const msg = error.message.toLowerCase()
-    return (
-      msg.includes('network') ||
-      msg.includes('connection') ||
-      msg.includes('failed to fetch') ||
-      msg.includes('offline') ||
-      msg.includes('aborterror') ||
-      ('status' in error && (error as { status?: number }).status === 0)
-    )
+    return msg.includes('network') || msg.includes('connection') || msg.includes('conexão')
   }
   return false
 }
