@@ -79,6 +79,7 @@ export default function Usuarios() {
   const [formRole, setFormRole] = useState<UserRole>('gestao')
   const [formSetor, setFormSetor] = useState<string>('')
   const [formSenha, setFormSenha] = useState('')
+  const [formSenhaAtual, setFormSenhaAtual] = useState('')
   const [formAtivo, setFormAtivo] = useState(true)
 
   // Modal de Exclusão
@@ -125,6 +126,7 @@ export default function Usuarios() {
     setFormRole('gestao')
     setFormSetor('')
     setFormSenha('')
+    setFormSenhaAtual('')
     setFormAtivo(true)
     setModalOpen(true)
   }
@@ -148,6 +150,7 @@ export default function Usuarios() {
     // Setor atual: usar o nome/chave cadastrado
     setFormSetor(u.setor || '')
     setFormSenha('')
+    setFormSenhaAtual('')
     setFormAtivo(u.ativo !== false)
     setModalOpen(true)
   }
@@ -199,19 +202,78 @@ export default function Usuarios() {
         // NÃO enviamos o novo e-mail no PATCH (evitando HTTP 400 validation_values_mismatch),
         // salvamos os demais campos (nome, papel, setor, ativo, senha se informada),
         // e alertamos o administrador de forma clara sobre a restrição de alteração de e-mail.
-        await userService.update(
-          editingUser.id,
-          {
-            name: formNome,
-            // Nunca envia e-mail diferente no update para evitar rejeição do PocketBase
-            email: undefined,
-            role: formRole,
-            setor: formSetor,
-            ativo: formAtivo,
-            password: formSenha.trim() !== '' ? formSenha : undefined,
-          },
-          editingUser.email,
-        )
+        const temNovaSenha = formSenha.trim() !== ''
+        try {
+          await userService.update(
+            editingUser.id,
+            {
+              name: formNome,
+              // Nunca envia e-mail diferente no update para evitar rejeição do PocketBase
+              email: undefined,
+              role: formRole,
+              setor: formSetor,
+              ativo: formAtivo,
+              password: temNovaSenha ? formSenha : undefined,
+              oldPassword:
+                temNovaSenha && formSenhaAtual.trim() !== '' ? formSenhaAtual : undefined,
+            },
+            editingUser.email,
+          )
+        } catch (updateErr: unknown) {
+          const updateErrObj = updateErr as {
+            status?: number
+            data?: {
+              data?: Record<string, { code?: string; message?: string }>
+              message?: string
+            }
+            message?: string
+          }
+
+          const oldPasswordError = updateErrObj?.data?.data?.oldPassword
+          const isOldPasswordError =
+            oldPasswordError?.code === 'validation_required' ||
+            oldPasswordError?.code === 'validation_values_mismatch' ||
+            (oldPasswordError?.message &&
+              (oldPasswordError.message.toLowerCase().includes('blank') ||
+                oldPasswordError.message.toLowerCase().includes('match')))
+
+          if (temNovaSenha && isOldPasswordError) {
+            // Salva os demais dados (nome, papel, setor, status) normalmente
+            await userService.update(
+              editingUser.id,
+              {
+                name: formNome,
+                email: undefined,
+                role: formRole,
+                setor: formSetor,
+                ativo: formAtivo,
+              },
+              editingUser.email,
+            )
+
+            toast.error(
+              "Não foi possível alterar a senha: informe a senha atual do usuário ou oriente-o a usar 'Esqueci minha senha'.",
+              { duration: 7000 },
+            )
+
+            if (emailAlterado) {
+              toast.warning(
+                'Dados do usuário atualizados, exceto o e-mail: alterar o e-mail de um usuário existente requer confirmação por senha — recrie o usuário ou contate o administrador.',
+                { duration: 7000 },
+              )
+            } else {
+              toast.success(
+                `Dados cadastrais de ${formNome} atualizados com sucesso (senha não alterada).`,
+              )
+            }
+
+            setModalOpen(false)
+            await fetchUsers()
+            return
+          }
+
+          throw updateErr
+        }
 
         if (emailAlterado) {
           toast.warning(
@@ -241,7 +303,20 @@ export default function Usuarios() {
         emailError?.code === 'validation_values_mismatch' ||
         (emailError?.message && emailError.message.toLowerCase().includes("values don't match"))
 
-      if (isMismatchOrEmailAuthError) {
+      const oldPasswordError = errorObj?.data?.data?.oldPassword
+      const isOldPasswordError =
+        oldPasswordError?.code === 'validation_required' ||
+        oldPasswordError?.code === 'validation_values_mismatch' ||
+        (oldPasswordError?.message &&
+          (oldPasswordError.message.toLowerCase().includes('blank') ||
+            oldPasswordError.message.toLowerCase().includes('match')))
+
+      if (isOldPasswordError) {
+        toast.error(
+          "Não foi possível alterar a senha: informe a senha atual do usuário ou oriente-o a usar 'Esqueci minha senha'.",
+          { duration: 7000 },
+        )
+      } else if (isMismatchOrEmailAuthError) {
         toast.error(
           'Não foi possível salvar: a alteração de e-mail requer confirmação por senha — recrie o usuário ou contate o administrador',
           { duration: 6000 },
@@ -807,6 +882,29 @@ export default function Usuarios() {
                     className="pl-9 h-10 text-sm border-gray-300"
                   />
                 </div>
+
+                {editingUser && formSenha.trim() !== '' && (
+                  <div className="mt-3 p-3 bg-amber-50/60 rounded-lg border border-amber-200 space-y-2">
+                    <Label className="text-xs font-semibold text-gray-700">
+                      Senha atual do usuário
+                    </Label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <Input
+                        type="password"
+                        placeholder="Informe a senha atual do usuário"
+                        value={formSenhaAtual}
+                        onChange={(e) => setFormSenhaAtual(e.target.value)}
+                        className="pl-9 h-9 text-xs border-amber-300 bg-white"
+                      />
+                    </div>
+                    <p className="text-[11px] text-amber-800 leading-relaxed">
+                      Para definir uma nova senha para este usuário, informe a senha atual dele. Se
+                      não a souber, oriente o usuário a usar &apos;Esqueci minha senha&apos; na tela
+                      de login, ou recrie o usuário.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-lg border border-gray-200 bg-gray-50/50">

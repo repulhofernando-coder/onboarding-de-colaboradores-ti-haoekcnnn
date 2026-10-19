@@ -195,6 +195,7 @@ export const userService = {
       role?: UserRole
       setor?: string
       password?: string
+      oldPassword?: string
       ativo?: boolean
     },
     currentEmail?: string,
@@ -222,6 +223,9 @@ export const userService = {
     if (data.password && data.password.trim() !== '') {
       payload.password = data.password
       payload.passwordConfirm = data.password
+      if (data.oldPassword && data.oldPassword.trim() !== '') {
+        payload.oldPassword = data.oldPassword
+      }
     }
     return pb.collection('users').update<User>(id, payload)
   },
