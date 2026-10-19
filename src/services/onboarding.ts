@@ -201,11 +201,12 @@ export const userService = {
   ): Promise<User> {
     const payload: Record<string, unknown> = {}
     if (data.name !== undefined) payload.name = data.name.trim()
-    if (data.email !== undefined) {
+    if (data.email !== undefined && data.email.trim() !== '') {
       const trimmedEmail = data.email.trim()
       // No PocketBase auth collection (_pb_users_auth_), enviar o campo `email` no update
       // aciona a verificação/confirmação de alteração de e-mail e exige confirmação por senha.
-      // Se o e-mail não foi alterado em relação ao atual, NÃO incluímos no payload.
+      // Se o e-mail não foi alterado em relação ao atual (ou se currentEmail foi fornecido e difere),
+      // só incluímos se realmente pretendemos alterar o e-mail.
       if (!currentEmail || trimmedEmail.toLowerCase() !== currentEmail.trim().toLowerCase()) {
         payload.email = trimmedEmail
       }
@@ -217,6 +218,7 @@ export const userService = {
       payload.setor = data.setor.trim()
     }
     if (data.ativo !== undefined) payload.ativo = data.ativo
+    // Omitir password/passwordConfirm caso seja vazio, em branco ou nulo
     if (data.password && data.password.trim() !== '') {
       payload.password = data.password
       payload.passwordConfirm = data.password

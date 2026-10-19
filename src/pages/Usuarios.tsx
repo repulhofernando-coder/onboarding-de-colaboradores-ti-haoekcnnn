@@ -194,20 +194,33 @@ export default function Usuarios() {
         const emailAlterado =
           formEmail.trim().toLowerCase() !== (editingUser.email || '').trim().toLowerCase()
 
+        // PocketBase não permite alteração direta de e-mail em auth records sem confirmação de senha.
+        // Se o e-mail foi alterado no formulário:
+        // NÃO enviamos o novo e-mail no PATCH (evitando HTTP 400 validation_values_mismatch),
+        // salvamos os demais campos (nome, papel, setor, ativo, senha se informada),
+        // e alertamos o administrador de forma clara sobre a restrição de alteração de e-mail.
         await userService.update(
           editingUser.id,
           {
             name: formNome,
-            // Só envia o email no payload se realmente foi alterado
-            email: emailAlterado ? formEmail.trim() : undefined,
+            // Nunca envia e-mail diferente no update para evitar rejeição do PocketBase
+            email: undefined,
             role: formRole,
             setor: formSetor,
             ativo: formAtivo,
-            password: formSenha || undefined,
+            password: formSenha.trim() !== '' ? formSenha : undefined,
           },
           editingUser.email,
         )
-        toast.success(`Usuário ${formNome} atualizado com sucesso!`)
+
+        if (emailAlterado) {
+          toast.warning(
+            'Dados do usuário atualizados, exceto o e-mail: alterar o e-mail de um usuário existente requer confirmação por senha — recrie o usuário ou contate o administrador.',
+            { duration: 7000 },
+          )
+        } else {
+          toast.success(`Usuário ${formNome} atualizado com sucesso!`)
+        }
       }
 
       setModalOpen(false)
