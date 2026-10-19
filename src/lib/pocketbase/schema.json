@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-19T14:50:59.754Z",
+  "generatedAt": "2026-10-19T15:27:24.151Z",
   "collections": [
     {
       "name": "users",
@@ -574,8 +574,8 @@
       "name": "avaliacoes",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
+        "list": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.setor != '' && onboarding_id.setor ~ @request.auth.setor))",
+        "view": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.setor != '' && onboarding_id.setor ~ @request.auth.setor))",
         "create": "@request.auth.id != ''",
         "update": "@request.auth.id != ''",
         "delete": "@request.auth.id != ''"
@@ -1294,8 +1294,8 @@
       "name": "questionarios",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
+        "list": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.setor != '' && (setor = '' || setor ~ @request.auth.setor)))",
+        "view": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.setor != '' && (setor = '' || setor ~ @request.auth.setor)))",
         "create": "@request.auth.role = 'admin'",
         "update": "@request.auth.role = 'admin'",
         "delete": "@request.auth.role = 'admin'"
@@ -1368,8 +1368,8 @@
       "name": "candidatos",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
+        "list": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.setor != '' && setor ~ @request.auth.setor))",
+        "view": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.setor != '' && setor ~ @request.auth.setor))",
         "create": "@request.auth.role = 'admin' || @request.auth.role = 'rh'",
         "update": "@request.auth.id != ''",
         "delete": "@request.auth.role = 'admin' || @request.auth.role = 'rh'"

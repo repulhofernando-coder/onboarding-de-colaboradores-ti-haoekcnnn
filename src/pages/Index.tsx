@@ -6,6 +6,8 @@ import { useRealtime } from '@/hooks/use-realtime'
 import type { Onboarding, SetorModel } from '@/types/onboarding'
 import { SETORES_INFO, getSetorVisual, setorToString } from '@/types/onboarding'
 import { calcularDiasRestantes, formatShortDate, formatDateTime } from '@/lib/dateUtils'
+import { podeVisualizarSetor } from '@/lib/gestaoVisibility'
+import { AvisoSetorGestor } from '@/components/AvisoSetorGestor'
 import {
   Clock,
   CheckCircle2,
@@ -24,16 +26,16 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 
 export default function Index() {
-  const { user } = useAuth()
+  const { user, role, isGestao } = useAuth()
   const navigate = useNavigate()
-  const [onboardings, setOnboardings] = useState<Onboarding[]>([])
+  const [todosOnboardings, setTodosOnboardings] = useState<Onboarding[]>([])
   const [setoresList, setSetoresList] = useState<SetorModel[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchOnboardings = async () => {
     try {
       const [data, setores] = await Promise.all([onboardingService.list(), setorService.listAll()])
-      setOnboardings(data)
+      setTodosOnboardings(data)
       setSetoresList(setores)
     } catch (err) {
       console.error('Erro ao carregar dados do dashboard:', err)
@@ -41,6 +43,20 @@ export default function Index() {
       setLoading(false)
     }
   }
+
+  // Filtro de visibilidade por departamento para o papel Gestão
+  const onboardings = useMemo(() => {
+    if (!isGestao) return todosOnboardings
+    return todosOnboardings.filter((o) =>
+      podeVisualizarSetor({
+        role,
+        userSetor: user?.setor,
+        itemSetor: setorToString(o.setor),
+        itemSetorRef: typeof o.setor_ref === 'string' ? o.setor_ref : o.setor_ref?.id,
+        setoresCadastrados: setoresList,
+      }),
+    )
+  }, [todosOnboardings, isGestao, role, user?.setor, setoresList])
 
   useEffect(() => {
     fetchOnboardings()
@@ -68,20 +84,34 @@ export default function Index() {
   const aguardandoAvaliacao = onboardings.filter((o) => o.status === 'avaliacao_pendente').length
   const naoAptos = onboardings.filter((o) => o.status === 'nao_apto').length
 
-  // Lista unificada de setores para o gráfico (da coleção com fallback)
+  // Lista unificada de setores para o gráfico (da coleção com fallback, filtrada se Gestão)
   const setoresAtivosGrafico = useMemo(() => {
-    if (setoresList.length > 0) {
-      return setoresList.filter((s) => s.ativo !== false)
+    let base =
+      setoresList.length > 0
+        ? setoresList.filter((s) => s.ativo !== false)
+        : Object.keys(SETORES_INFO).map((k) => ({
+            id: k,
+            chave: k,
+            nome: SETORES_INFO[k].nome,
+            cor: SETORES_INFO[k].cor,
+            descricao: SETORES_INFO[k].descricao,
+            ativo: true,
+          }))
+
+    if (isGestao) {
+      base = base.filter((s) =>
+        podeVisualizarSetor({
+          role,
+          userSetor: user?.setor,
+          itemSetor: s.chave || s.nome,
+          itemSetorRef: s.id,
+          setoresCadastrados: setoresList,
+        }),
+      )
     }
-    return Object.keys(SETORES_INFO).map((k) => ({
-      id: k,
-      chave: k,
-      nome: SETORES_INFO[k].nome,
-      cor: SETORES_INFO[k].cor,
-      descricao: SETORES_INFO[k].descricao,
-      ativo: true,
-    }))
-  }, [setoresList])
+
+    return base
+  }, [setoresList, isGestao, role, user?.setor])
 
   // Contagem dinâmica por setor
   const setorCounts = useMemo(() => {
@@ -219,6 +249,9 @@ export default function Index() {
 
   return (
     <div className="space-y-7">
+      {/* Aviso de setor para papel Gestão */}
+      <AvisoSetorGestor setoresList={setoresList} moduloNome="onboardings" />
+
       {/* Top Banner / Welcome */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm">
         <div>

@@ -15,16 +15,20 @@ import {
   ExternalLink,
   Users,
 } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
+import { podeVisualizarSetor } from '@/lib/gestaoVisibility'
+import { AvisoSetorGestor } from '@/components/AvisoSetorGestor'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 
 export default function OnboardingsList() {
+  const { user, role, isGestao } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const statusParam = searchParams.get('status') as OnboardingStatus | null
 
-  const [onboardings, setOnboardings] = useState<Onboarding[]>([])
+  const [todosOnboardings, setTodosOnboardings] = useState<Onboarding[]>([])
   const [setoresList, setSetoresList] = useState<SetorModel[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -40,7 +44,7 @@ export default function OnboardingsList() {
   const fetchData = async () => {
     try {
       const [data, setores] = await Promise.all([onboardingService.list(), setorService.listAll()])
-      setOnboardings(data)
+      setTodosOnboardings(data)
       setSetoresList(setores)
     } catch (err) {
       console.error(err)
@@ -48,6 +52,20 @@ export default function OnboardingsList() {
       setLoading(false)
     }
   }
+
+  // Filtragem de departamento para o papel Gestão
+  const onboardings = useMemo(() => {
+    if (!isGestao) return todosOnboardings
+    return todosOnboardings.filter((o) =>
+      podeVisualizarSetor({
+        role,
+        userSetor: user?.setor,
+        itemSetor: setorToString(o.setor),
+        itemSetorRef: typeof o.setor_ref === 'string' ? o.setor_ref : o.setor_ref?.id,
+        setoresCadastrados: setoresList,
+      }),
+    )
+  }, [todosOnboardings, isGestao, role, user?.setor, setoresList])
 
   useEffect(() => {
     fetchData()
@@ -153,6 +171,9 @@ export default function OnboardingsList() {
 
   return (
     <div className="space-y-6">
+      {/* Aviso de setor para papel Gestão */}
+      <AvisoSetorGestor setoresList={setoresList} moduloNome="onboardings" />
+
       {/* Header com busca e novo onboarding */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-gray-200/90 shadow-sm">
         <div>
@@ -249,31 +270,43 @@ export default function OnboardingsList() {
                 nome: SETORES_INFO[k].nome,
                 cor: SETORES_INFO[k].cor,
               }))
-          ).map((s) => {
-            const val = s.chave || s.nome
-            const active = selectedSetor === val || selectedSetor === s.id
-            return (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => {
-                  setSelectedSetor(val)
-                  setPage(1)
-                }}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5 ${
-                  active
-                    ? 'bg-brand-600 text-white shadow-xs'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: s.cor || '#2563EB' }}
-                />
-                <span>{s.nome}</span>
-              </button>
+          )
+            .filter(
+              (s) =>
+                !isGestao ||
+                podeVisualizarSetor({
+                  role,
+                  userSetor: user?.setor,
+                  itemSetor: s.chave || s.nome,
+                  itemSetorRef: s.id,
+                  setoresCadastrados: setoresList,
+                }),
             )
-          })}
+            .map((s) => {
+              const val = s.chave || s.nome
+              const active = selectedSetor === val || selectedSetor === s.id
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedSetor(val)
+                    setPage(1)
+                  }}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                    active
+                      ? 'bg-brand-600 text-white shadow-xs'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: s.cor || '#2563EB' }}
+                  />
+                  <span>{s.nome}</span>
+                </button>
+              )
+            })}
         </div>
       </div>
 

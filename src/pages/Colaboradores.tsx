@@ -21,12 +21,15 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { useAuth } from '@/contexts/AuthContext'
+import { podeVisualizarSetor } from '@/lib/gestaoVisibility'
+import { AvisoSetorGestor } from '@/components/AvisoSetorGestor'
 import { ModalExcluirColaborador } from '@/components/ModalExcluirColaborador'
 import { ModalEditarColaborador } from '@/components/ModalEditarColaborador'
 import { ModalSugestaoMudancaArea } from '@/components/ModalSugestaoMudancaArea'
 import { Edit, UserCog } from 'lucide-react'
 import { toast } from 'sonner'
-import type { Questionario } from '@/types/onboarding'
+import type { Questionario, SetorModel } from '@/types/onboarding'
+import { setorService } from '@/services/onboarding'
 
 interface ColaboradorAgregado {
   nome: string
@@ -38,11 +41,12 @@ interface ColaboradorAgregado {
 }
 
 export default function Colaboradores() {
-  const { isAdmin, isRH } = useAuth()
+  const { user, role, isAdmin, isRH, isGestao } = useAuth()
   const podeExcluir = isAdmin || isRH
   const podeEditar = isAdmin || isRH // Gestão não edita
 
-  const [onboardings, setOnboardings] = useState<Onboarding[]>([])
+  const [todosOnboardings, setTodosOnboardings] = useState<Onboarding[]>([])
+  const [setoresList, setSetoresList] = useState<SetorModel[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
@@ -69,14 +73,29 @@ export default function Colaboradores() {
 
   const fetchOnboardings = async () => {
     try {
-      const data = await onboardingService.list()
-      setOnboardings(data)
+      const [data, setores] = await Promise.all([onboardingService.list(), setorService.listAll()])
+      setTodosOnboardings(data)
+      setSetoresList(setores)
     } catch (err) {
       console.error(err)
     } finally {
       setLoading(false)
     }
   }
+
+  // Filtragem de departamento para o papel Gestão
+  const onboardings = useMemo(() => {
+    if (!isGestao) return todosOnboardings
+    return todosOnboardings.filter((o) =>
+      podeVisualizarSetor({
+        role,
+        userSetor: user?.setor,
+        itemSetor: setorToString(o.setor),
+        itemSetorRef: typeof o.setor_ref === 'string' ? o.setor_ref : o.setor_ref?.id,
+        setoresCadastrados: setoresList,
+      }),
+    )
+  }, [todosOnboardings, isGestao, role, user?.setor, setoresList])
 
   useEffect(() => {
     fetchOnboardings()
@@ -130,6 +149,9 @@ export default function Colaboradores() {
 
   return (
     <div className="space-y-6">
+      {/* Aviso de setor para papel Gestão */}
+      <AvisoSetorGestor setoresList={setoresList} moduloNome="colaboradores" />
+
       {/* Top Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-gray-200/90 shadow-sm">
         <div>
@@ -313,7 +335,7 @@ export default function Colaboradores() {
           }}
           onboarding={onboardingParaEditar}
           onSucesso={(atualizado) => {
-            setOnboardings((prev) =>
+            setTodosOnboardings((prev) =>
               prev.map((o) => (o.id === atualizado.id ? { ...o, ...atualizado } : o)),
             )
             fetchOnboardings()
@@ -353,7 +375,7 @@ export default function Colaboradores() {
           onboardingId={colaboradorParaExcluir.onboardingId}
           onSucesso={(res) => {
             // Atualiza estado local imediatamente sem precisar recarregar a página
-            setOnboardings((prev) =>
+            setTodosOnboardings((prev) =>
               prev.filter(
                 (o) =>
                   o.colaborador_nome.trim().toLowerCase() !== res.colaboradorNome.toLowerCase() &&

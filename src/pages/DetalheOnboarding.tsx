@@ -90,9 +90,12 @@ import { toast } from 'sonner'
 import type { AvaliacaoColaborador, CertificadoColaborador } from '@/types/onboarding'
 import { avaliacaoColaboradorService, certificadoService } from '@/services/onboarding'
 
+import { podeVisualizarSetor } from '@/lib/gestaoVisibility'
+import { ShieldAlert } from 'lucide-react'
+
 export default function DetalheOnboarding() {
   const { id } = useParams<{ id: string }>()
-  const { user, role, isAdmin, isRH } = useAuth()
+  const { user, role, isAdmin, isRH, isGestao } = useAuth()
   const navigate = useNavigate()
 
   const [onboarding, setOnboarding] = useState<Onboarding | null>(null)
@@ -1283,6 +1286,39 @@ export default function DetalheOnboarding() {
       <div className="py-24 text-center">
         <div className="w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
         <p className="text-sm text-gray-500 font-medium">Carregando detalhes do onboarding...</p>
+      </div>
+    )
+  }
+
+  // Verificação de permissão de visualização por departamento para papel Gestão
+  const temPermissaoSetor = podeVisualizarSetor({
+    role,
+    userSetor: user?.setor,
+    itemSetor: setorToString(onboarding.setor),
+    itemSetorRef:
+      typeof onboarding.setor_ref === 'string' ? onboarding.setor_ref : onboarding.setor_ref?.id,
+  })
+
+  if (isGestao && !temPermissaoSetor) {
+    return (
+      <div className="py-16 max-w-xl mx-auto text-center space-y-4">
+        <div className="w-14 h-14 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900">Acesso Restrito ao Departamento</h2>
+        <p className="text-sm text-gray-600 leading-relaxed">
+          {user?.setor?.trim()
+            ? `Este colaborador pertence a outro departamento. Seu papel como Gestão permite acompanhar apenas técnicos do setor ${user.setor}.`
+            : 'Seu usuário possui o papel Gestão, mas ainda não possui departamento configurado pelo Admin/RH. Solicite a definição do setor para ter acesso aos colaboradores.'}
+        </p>
+        <div className="pt-2">
+          <Button asChild variant="outline" className="text-sm font-semibold">
+            <Link to="/colaboradores" className="inline-flex items-center gap-1.5">
+              <ArrowLeft className="w-4 h-4" />
+              <span>Voltar para Colaboradores</span>
+            </Link>
+          </Button>
+        </div>
       </div>
     )
   }
