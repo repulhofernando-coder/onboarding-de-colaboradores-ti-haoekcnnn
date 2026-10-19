@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { userService } from '@/services/onboarding'
+import { userService, setorService } from '@/services/onboarding'
 import { useAuth } from '@/contexts/AuthContext'
-import type { User, UserRole } from '@/types/onboarding'
+import type { User, UserRole, SetorModel } from '@/types/onboarding'
 import { ROLES_INFO } from '@/types/onboarding'
+import { getSetorUsuarioNome } from '@/lib/gestaoVisibility'
 import {
   Users,
   Search,
@@ -19,6 +20,8 @@ import {
   KeyRound,
   AlertTriangle,
   Lock,
+  Layers,
+  Info,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -53,8 +56,14 @@ import {
 import { toast } from 'sonner'
 
 export default function Usuarios() {
-  const { user: currentUser, role: currentRole, isAdmin: isCurrentAdmin } = useAuth()
+  const {
+    user: currentUser,
+    role: currentRole,
+    isAdmin: isCurrentAdmin,
+    isRH: isCurrentRH,
+  } = useAuth()
   const [users, setUsers] = useState<User[]>([])
+  const [setores, setSetores] = useState<SetorModel[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterRole, setFilterRole] = useState<'todos' | UserRole>('todos')
@@ -68,6 +77,7 @@ export default function Usuarios() {
   const [formNome, setFormNome] = useState('')
   const [formEmail, setFormEmail] = useState('')
   const [formRole, setFormRole] = useState<UserRole>('gestao')
+  const [formSetor, setFormSetor] = useState<string>('')
   const [formSenha, setFormSenha] = useState('')
   const [formAtivo, setFormAtivo] = useState(true)
 
@@ -75,13 +85,19 @@ export default function Usuarios() {
   const [deleteUser, setDeleteUser] = useState<User | null>(null)
   const [deleting, setDeleting] = useState(false)
 
+  const canEditUsers = isCurrentAdmin || isCurrentRH
+
   const fetchUsers = async () => {
     try {
-      const list = await userService.getAllUsers()
-      setUsers(list)
+      const [userList, setorList] = await Promise.all([
+        userService.getAllUsers(),
+        setorService.listAtivos(),
+      ])
+      setUsers(userList)
+      setSetores(setorList)
     } catch (err) {
       console.error(err)
-      toast.error('Erro ao carregar lista de usuários.')
+      toast.error('Erro ao carregar lista de usuários ou setores.')
     } finally {
       setLoading(false)
     }
@@ -99,16 +115,25 @@ export default function Usuarios() {
   }
 
   const handleOpenCreate = () => {
+    if (!canEditUsers) {
+      toast.error('Apenas Administrador e RH podem cadastrar usuários.')
+      return
+    }
     setEditingUser(null)
     setFormNome('')
     setFormEmail('')
     setFormRole('gestao')
+    setFormSetor('')
     setFormSenha('')
     setFormAtivo(true)
     setModalOpen(true)
   }
 
   const handleOpenEdit = (u: User) => {
+    if (!canEditUsers) {
+      toast.error('Apenas Administrador e RH podem editar usuários.')
+      return
+    }
     const targetRole = getUserRole(u)
     // Se o usuário atual for RH e o alvo for Admin, RH não pode editar o Admin
     if (!isCurrentAdmin && targetRole === 'admin') {
@@ -120,6 +145,8 @@ export default function Usuarios() {
     setFormNome(u.name || '')
     setFormEmail(u.email || '')
     setFormRole(targetRole)
+    // Setor atual: usar o nome/chave cadastrado
+    setFormSetor(u.setor || '')
     setFormSenha('')
     setFormAtivo(u.ativo !== false)
     setModalOpen(true)
@@ -158,6 +185,7 @@ export default function Usuarios() {
           email: formEmail,
           password: formSenha,
           role: formRole,
+          setor: formSetor,
           ativo: formAtivo,
         })
         toast.success(`Usuário ${formNome} criado com sucesso!`)
@@ -167,6 +195,7 @@ export default function Usuarios() {
           name: formNome,
           email: formEmail,
           role: formRole,
+          setor: formSetor,
           ativo: formAtivo,
           password: formSenha || undefined,
         })
@@ -277,6 +306,12 @@ export default function Usuarios() {
     })
   }
 
+  // Nome amigável do setor para exibição no card
+  const getDisplaySetorNome = (u: User): string => {
+    if (!u.setor || !u.setor.trim()) return 'Não atribuído'
+    return getSetorUsuarioNome(u, setores) || u.setor
+  }
+
   return (
     <div className="space-y-6">
       {/* Top Banner */}
@@ -288,13 +323,19 @@ export default function Usuarios() {
           </p>
         </div>
 
-        <Button
-          onClick={handleOpenCreate}
-          className="bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm shrink-0"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          <span>Novo Usuário</span>
-        </Button>
+        {canEditUsers ? (
+          <Button
+            onClick={handleOpenCreate}
+            className="bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm shrink-0"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            <span>Novo Usuário</span>
+          </Button>
+        ) : (
+          <div className="text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+            Apenas Administrador e RH podem gerenciar usuários
+          </div>
+        )}
       </div>
 
       {/* Filtros e Busca */}
@@ -407,6 +448,26 @@ export default function Usuarios() {
                   {/* Informações complementares */}
                   <div className="pt-2 border-t border-gray-100 text-xs text-gray-600 space-y-1.5">
                     <div className="flex items-center justify-between">
+                      <span className="text-gray-500 flex items-center gap-1">
+                        <Layers className="w-3 h-3 text-gray-400" />
+                        <span>Departamento / Setor:</span>
+                      </span>
+                      {u.setor && u.setor.trim() ? (
+                        <span className="font-semibold text-gray-800 bg-gray-100 px-2 py-0.5 rounded text-[11px] border border-gray-200">
+                          {getDisplaySetorNome(u)}
+                        </span>
+                      ) : (
+                        <span
+                          className={`font-medium text-[11px] italic ${
+                            role === 'gestao' ? 'text-amber-600 font-semibold' : 'text-gray-400'
+                          }`}
+                        >
+                          {role === 'gestao' ? 'Sem setor (bloqueado)' : 'Livre / Global'}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between">
                       <span className="text-gray-500">Status da Conta:</span>
                       <span
                         className={`inline-flex items-center gap-1 font-semibold text-[11px] px-2 py-0.5 rounded-full ${
@@ -449,14 +510,14 @@ export default function Usuarios() {
                     <Switch
                       id={`ativo-${u.id}`}
                       checked={isAtivo}
-                      disabled={isSelf || !canModifyAdmin}
+                      disabled={!canEditUsers || isSelf || !canModifyAdmin}
                       onCheckedChange={(checked) => handleToggleAtivo(u, checked)}
                       aria-label="Ativar ou desativar usuário"
                     />
                     <Label
                       htmlFor={`ativo-${u.id}`}
                       className={`text-xs text-gray-600 font-medium ${
-                        isSelf || !canModifyAdmin
+                        !canEditUsers || isSelf || !canModifyAdmin
                           ? 'cursor-not-allowed opacity-60'
                           : 'cursor-pointer'
                       }`}
@@ -466,36 +527,44 @@ export default function Usuarios() {
                   </div>
 
                   <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={!canModifyAdmin}
-                      onClick={() => handleOpenEdit(u)}
-                      className="h-8 px-2.5 text-xs text-gray-700 border-gray-300 hover:bg-gray-50 disabled:opacity-40"
-                      title={
-                        !canModifyAdmin ? 'RH não pode editar o Administrador' : 'Editar usuário'
-                      }
-                    >
-                      <Pencil className="w-3.5 h-3.5 mr-1 text-gray-500" />
-                      <span>Editar</span>
-                    </Button>
+                    {canEditUsers ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={!canModifyAdmin}
+                          onClick={() => handleOpenEdit(u)}
+                          className="h-8 px-2.5 text-xs text-gray-700 border-gray-300 hover:bg-gray-50 disabled:opacity-40"
+                          title={
+                            !canModifyAdmin
+                              ? 'RH não pode editar o Administrador'
+                              : 'Editar usuário'
+                          }
+                        >
+                          <Pencil className="w-3.5 h-3.5 mr-1 text-gray-500" />
+                          <span>Editar</span>
+                        </Button>
 
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={isSelf || !canModifyAdmin}
-                      onClick={() => setDeleteUser(u)}
-                      className="h-8 px-2 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-40"
-                      title={
-                        isSelf
-                          ? 'Você não pode excluir seu próprio usuário'
-                          : !canModifyAdmin
-                            ? 'RH não pode excluir o Administrador'
-                            : 'Excluir usuário'
-                      }
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={isSelf || !canModifyAdmin}
+                          onClick={() => setDeleteUser(u)}
+                          className="h-8 px-2 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-40"
+                          title={
+                            isSelf
+                              ? 'Você não pode excluir seu próprio usuário'
+                              : !canModifyAdmin
+                                ? 'RH não pode excluir o Administrador'
+                                : 'Excluir usuário'
+                          }
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </>
+                    ) : (
+                      <span className="text-[11px] text-gray-400 italic">Somente leitura</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -550,7 +619,20 @@ export default function Usuarios() {
                 <Label className="text-xs font-semibold text-gray-700">
                   Papel de Acesso (Perfil) *
                 </Label>
-                <Select value={formRole} onValueChange={(val) => setFormRole(val as UserRole)}>
+                <Select
+                  value={formRole}
+                  onValueChange={(val) => {
+                    const newRole = val as UserRole
+                    setFormRole(newRole)
+                    // Sugere auto-preenchimento para RH caso não tenha setor selecionado
+                    if (newRole === 'rh' && !formSetor) {
+                      const rhSetor = setores.find(
+                        (s) => s.nome.toUpperCase() === 'RH' || s.chave?.toLowerCase() === 'rh',
+                      )
+                      if (rhSetor) setFormSetor(rhSetor.nome)
+                    }
+                  }}
+                >
                   <SelectTrigger className="mt-1.5 h-10 text-sm border-gray-300">
                     <SelectValue placeholder="Selecione o papel de acesso" />
                   </SelectTrigger>
@@ -569,6 +651,98 @@ export default function Usuarios() {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Campo Departamento / Setor */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-gray-700">
+                    Departamento / Setor{' '}
+                    {formRole === 'gestao' ? '(Altamente Recomendado)' : '(Opcional)'}
+                  </Label>
+                  {formSetor && (
+                    <button
+                      type="button"
+                      onClick={() => setFormSetor('')}
+                      className="text-[11px] text-brand-600 hover:underline"
+                    >
+                      Limpar seleção
+                    </button>
+                  )}
+                </div>
+
+                <Select
+                  value={formSetor ? formSetor : '__none__'}
+                  onValueChange={(val) => setFormSetor(val === '__none__' ? '' : val)}
+                >
+                  <SelectTrigger
+                    className={`mt-1.5 h-10 text-sm border-gray-300 ${
+                      formRole === 'gestao' && !formSetor
+                        ? 'border-amber-400 bg-amber-50/40 focus:ring-amber-500'
+                        : ''
+                    }`}
+                  >
+                    <SelectValue placeholder="Selecione o departamento / setor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">
+                      <span className="text-gray-400 italic">Nenhum departamento atribuído</span>
+                    </SelectItem>
+                    {setores.map((s) => (
+                      <SelectItem key={s.id} value={s.nome}>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="w-2.5 h-2.5 rounded-full shrink-0"
+                            style={{ backgroundColor: s.cor || '#2563EB' }}
+                          />
+                          <span>{s.nome}</span>
+                          {s.descricao && (
+                            <span className="text-[11px] text-gray-400 truncate max-w-[200px]">
+                              — {s.descricao}
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Orientações contextuais para o papel Gestão */}
+                {formRole === 'gestao' ? (
+                  <div
+                    className={`mt-2 p-2.5 rounded-lg border text-xs flex items-start gap-2 ${
+                      !formSetor
+                        ? 'bg-amber-50/90 border-amber-200 text-amber-900'
+                        : 'bg-blue-50/80 border-blue-200 text-blue-900'
+                    }`}
+                  >
+                    <Info
+                      className={`w-4 h-4 shrink-0 mt-0.5 ${
+                        !formSetor ? 'text-amber-600' : 'text-blue-600'
+                      }`}
+                    />
+                    <div className="leading-relaxed">
+                      {!formSetor ? (
+                        <span>
+                          <strong>Atenção:</strong> Usuários com perfil <strong>Gestão</strong>{' '}
+                          devem ter um departamento atribuído. Sem ele, a política de visibilidade
+                          restringirá o acesso e o gestor não visualizará colaboradores,
+                          questionários ou avaliações de nenhuma área.
+                        </span>
+                      ) : (
+                        <span>
+                          Este gestor acompanhará exclusivamente colaboradores, provas e avaliações
+                          vinculados ao setor <strong>{formSetor}</strong>.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    Alimentado dinamicamente pelos setores cadastrados no sistema. Pode ser deixado
+                    em branco para administradores.
+                  </p>
+                )}
               </div>
 
               <div>

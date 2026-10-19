@@ -46,6 +46,14 @@ cronAdd('assegurar_schema_setor_text', '0 4 * * *', (e) => {
       colFase.fields.add(new TextField({ name: 'setor', required: false }))
       pbApp.save(colFase)
     }
+
+    const colUsers = pbApp.findCollectionByNameOrId('_pb_users_auth_')
+    const fUsers = colUsers.fields.getByName('setor')
+    if (fUsers && fUsers.type !== 'text') {
+      colUsers.fields.removeByName('setor')
+      colUsers.fields.add(new TextField({ name: 'setor', required: false }))
+      pbApp.save(colUsers)
+    }
   } catch (err) {
     console.error('[Cron Assegurar Schema Error]', err)
   }

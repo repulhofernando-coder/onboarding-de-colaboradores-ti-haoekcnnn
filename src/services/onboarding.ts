@@ -166,11 +166,13 @@ export const userService = {
     email: string
     password: string
     role?: UserRole
-    setor?: UserSetor
+    setor?: string
     ativo?: boolean
   }): Promise<User> {
     const role = data.role || (data.setor === 'RH' ? 'rh' : 'gestao')
-    const setor: UserSetor = role === 'rh' ? 'RH' : 'Gestão'
+    // Se o setor foi fornecido explicitamente, respeita o valor (ex: "Windows", "Datacenter", "RH", etc.)
+    // Caso contrário, adota fallback amigável baseado no papel
+    const setor = data.setor !== undefined ? data.setor.trim() : role === 'rh' ? 'RH' : ''
 
     return pb.collection('users').create<User>({
       name: data.name.trim(),
@@ -191,7 +193,7 @@ export const userService = {
       name?: string
       email?: string
       role?: UserRole
-      setor?: UserSetor
+      setor?: string
       password?: string
       ativo?: boolean
     },
@@ -201,9 +203,9 @@ export const userService = {
     if (data.email !== undefined) payload.email = data.email.trim()
     if (data.role !== undefined) {
       payload.role = data.role
-      payload.setor = data.role === 'rh' ? 'RH' : 'Gestão'
-    } else if (data.setor !== undefined) {
-      payload.setor = data.setor
+    }
+    if (data.setor !== undefined) {
+      payload.setor = data.setor.trim()
     }
     if (data.ativo !== undefined) payload.ativo = data.ativo
     if (data.password && data.password.trim() !== '') {

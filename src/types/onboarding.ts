@@ -2,7 +2,7 @@ export type Setor = 'windows' | 'linux_rede' | 'datacenter' | 'campo' | 'infraes
 
 export type UserRole = 'admin' | 'rh' | 'gestao'
 
-export type UserSetor = 'RH' | 'Gestão'
+export type UserSetor = 'RH' | 'Gestão' | string
 
 export type OnboardingStatus =
   | 'novo'
