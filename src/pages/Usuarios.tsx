@@ -191,14 +191,22 @@ export default function Usuarios() {
         toast.success(`Usuário ${formNome} criado com sucesso!`)
       } else {
         // Editar usuário
-        await userService.update(editingUser.id, {
-          name: formNome,
-          email: formEmail,
-          role: formRole,
-          setor: formSetor,
-          ativo: formAtivo,
-          password: formSenha || undefined,
-        })
+        const emailAlterado =
+          formEmail.trim().toLowerCase() !== (editingUser.email || '').trim().toLowerCase()
+
+        await userService.update(
+          editingUser.id,
+          {
+            name: formNome,
+            // Só envia o email no payload se realmente foi alterado
+            email: emailAlterado ? formEmail.trim() : undefined,
+            role: formRole,
+            setor: formSetor,
+            ativo: formAtivo,
+            password: formSenha || undefined,
+          },
+          editingUser.email,
+        )
         toast.success(`Usuário ${formNome} atualizado com sucesso!`)
       }
 
@@ -207,11 +215,26 @@ export default function Usuarios() {
     } catch (err: unknown) {
       console.error(err)
       const errorObj = err as {
-        data?: { data?: Record<string, { message?: string }> }
+        status?: number
+        data?: {
+          data?: Record<string, { code?: string; message?: string }>
+          message?: string
+        }
         message?: string
       }
-      if (
-        errorObj?.data?.data?.email ||
+
+      const emailError = errorObj?.data?.data?.email
+      const isMismatchOrEmailAuthError =
+        emailError?.code === 'validation_values_mismatch' ||
+        (emailError?.message && emailError.message.toLowerCase().includes("values don't match"))
+
+      if (isMismatchOrEmailAuthError) {
+        toast.error(
+          'Não foi possível salvar: a alteração de e-mail requer confirmação por senha — recrie o usuário ou contate o administrador',
+          { duration: 6000 },
+        )
+      } else if (
+        emailError ||
         (errorObj?.message && errorObj.message.toLowerCase().includes('email'))
       ) {
         toast.error('Este e-mail já está cadastrado no sistema.')
@@ -611,7 +634,9 @@ export default function Usuarios() {
                   className="mt-1.5 h-10 text-sm border-gray-300"
                 />
                 <p className="text-[11px] text-gray-500 mt-1">
-                  Usuários criados internamente já nascem com o e-mail verificado.
+                  {editingUser
+                    ? 'Atenção: alterar o e-mail de um usuário existente exige confirmação por senha do PocketBase.'
+                    : 'Usuários criados internamente já nascem com o e-mail verificado.'}
                 </p>
               </div>
 

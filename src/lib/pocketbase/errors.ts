@@ -29,17 +29,16 @@ export function getErrorMessage(error: unknown): string {
 }
 
 export function isNetworkError(error: unknown): boolean {
-  if (!error) return false
   if (error instanceof ClientResponseError) {
-    return error.status === 0 || error.message.toLowerCase().includes('failed to fetch')
+    return error.status === 0 || error.isAbort
   }
   if (error instanceof Error) {
     const msg = error.message.toLowerCase()
     return (
       msg.includes('network') ||
       msg.includes('failed to fetch') ||
-      msg.includes('connection') ||
-      msg.includes('offline')
+      msg.includes('abort') ||
+      msg.includes('connection')
     )
   }
   return false
