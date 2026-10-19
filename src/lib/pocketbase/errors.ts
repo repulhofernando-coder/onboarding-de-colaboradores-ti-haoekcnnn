@@ -27,3 +27,20 @@ export function getErrorMessage(error: unknown): string {
   const msgs = Object.values(extractFieldErrors(error))
   return msgs.length > 0 ? msgs.join(' ') : error.message || 'An unexpected error occurred.'
 }
+
+export function isNetworkError(error: unknown): boolean {
+  if (!error) return false
+  if (error instanceof TypeError && error.message.toLowerCase().includes('fetch')) return true
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase()
+    return (
+      msg.includes('network') ||
+      msg.includes('connection') ||
+      msg.includes('failed to fetch') ||
+      msg.includes('offline') ||
+      msg.includes('aborterror') ||
+      ('status' in error && (error as { status?: number }).status === 0)
+    )
+  }
+  return false
+}
