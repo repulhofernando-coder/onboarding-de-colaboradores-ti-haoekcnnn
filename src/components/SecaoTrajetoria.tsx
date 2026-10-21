@@ -25,6 +25,7 @@ import type {
   LogAuditoria,
   AvaliacaoColaborador,
   CertificadoColaborador,
+  ColaboradorCurso,
 } from '@/types/onboarding'
 
 export interface SecaoTrajetoriaProps {
@@ -33,6 +34,7 @@ export interface SecaoTrajetoriaProps {
   logsAuditoria: LogAuditoria[]
   avaliacoes: AvaliacaoColaborador[]
   certificados: CertificadoColaborador[]
+  cursos?: ColaboradorCurso[]
   onNavegarOnboarding?: (id: string) => void
 }
 
@@ -45,6 +47,7 @@ export type TipoEventoTrajetoria =
   | 'mudanca_cargo_setor'
   | 'avaliacao_dossie'
   | 'certificado'
+  | 'curso_grade'
   | 'auditoria_geral'
 
 export interface EventoTrajetoria {
@@ -68,6 +71,7 @@ export function SecaoTrajetoria({
   logsAuditoria,
   avaliacoes,
   certificados,
+  cursos = [],
   onNavegarOnboarding,
 }: SecaoTrajetoriaProps) {
   // Unificação cronológica (mais recentes primeiro)
@@ -261,9 +265,51 @@ export function SecaoTrajetoria({
       })
     })
 
+    // 5. Cursos da Grade (Atribuição e Conclusão)
+    cursos.forEach((c) => {
+      const cursoTitulo = c.expand?.curso?.titulo || 'Treinamento'
+      const nivel = (c.expand?.curso?.nivel || 'essencial').toUpperCase()
+      const autorAtribuicao = c.atribuido_por || 'RH/Admin'
+
+      // Se o curso já foi concluído, adicionar o marco de conclusão
+      if (c.status === 'concluido' && c.concluido_em) {
+        lista.push({
+          id: `curso-concluido-${c.id}`,
+          dataHora: c.concluido_em,
+          tipo: 'curso_grade',
+          titulo: `Curso Concluído: ${cursoTitulo}`,
+          subtitulo: `Nível: ${nivel} • Conclusão validada pelo RH/Admin`,
+          detalhes: `Colaborador concluiu com êxito o curso da grade técnica.${c.observacao ? ` Obs: ${c.observacao}` : ''}`,
+          autorNome: c.concluido_por || autorAtribuicao,
+          autorRole: 'RH',
+          badgeLabel: 'Curso Concluído',
+          badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold',
+        })
+      }
+
+      // Evento de Associação / Atribuição
+      lista.push({
+        id: `curso-atribuido-${c.id}`,
+        dataHora: c.atribuido_em || c.created,
+        tipo: 'curso_grade',
+        titulo: `Curso Associado: ${cursoTitulo} (${nivel})`,
+        subtitulo: `Trilha de capacitação da grade de departamento`,
+        detalhes: `Curso pontuado na grade técnica atribuído ao colaborador.${c.observacao ? ` Obs: ${c.observacao}` : ''}`,
+        autorNome: autorAtribuicao,
+        autorRole: 'RH',
+        badgeLabel: `Grade: ${nivel}`,
+        badgeColor:
+          c.expand?.curso?.nivel === 'essencial'
+            ? 'bg-red-50 text-red-700 border-red-200 font-semibold'
+            : c.expand?.curso?.nivel === 'recomendado'
+              ? 'bg-amber-50 text-amber-800 border-amber-200 font-semibold'
+              : 'bg-blue-50 text-blue-700 border-blue-200 font-semibold',
+      })
+    })
+
     // Ordenação decrescente: do evento mais recente para o mais antigo
     return lista.sort((a, b) => new Date(b.dataHora).getTime() - new Date(a.dataHora).getTime())
-  }, [todosOnboardings, logsAuditoria, avaliacoes, certificados])
+  }, [todosOnboardings, logsAuditoria, avaliacoes, certificados, cursos])
 
   const getIconeEvento = (tipo: TipoEventoTrajetoria) => {
     switch (tipo) {
@@ -281,6 +327,8 @@ export function SecaoTrajetoria({
         return <GraduationCap className="w-4 h-4 text-teal-600" />
       case 'certificado':
         return <Award className="w-4 h-4 text-blue-600" />
+      case 'curso_grade':
+        return <GraduationCap className="w-4 h-4 text-emerald-600" />
       default:
         return <GitCommit className="w-4 h-4 text-gray-500" />
     }
@@ -302,6 +350,8 @@ export function SecaoTrajetoria({
         return 'border-teal-300 bg-teal-50 text-teal-700'
       case 'certificado':
         return 'border-blue-300 bg-blue-50 text-blue-700'
+      case 'curso_grade':
+        return 'border-emerald-300 bg-emerald-50 text-emerald-700'
       default:
         return 'border-gray-300 bg-gray-50 text-gray-700'
     }

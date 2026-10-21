@@ -2009,7 +2009,14 @@ export const auditoriaService = {
   },
 }
 
-import type { AvaliacaoColaborador, CertificadoColaborador } from '@/types/onboarding'
+import type {
+  AvaliacaoColaborador,
+  CertificadoColaborador,
+  Curso,
+  ColaboradorCurso,
+  NivelCurso,
+  StatusColaboradorCurso,
+} from '@/types/onboarding'
 
 export const avaliacaoColaboradorService = {
   async listByColaborador(colaboradorId: string): Promise<AvaliacaoColaborador[]> {
@@ -2235,5 +2242,310 @@ export const certificadoService = {
   getUrlArquivo(certificado: CertificadoColaborador): string | null {
     if (!certificado.arquivo) return null
     return `${import.meta.env.VITE_POCKETBASE_URL}/api/files/certificados/${certificado.id}/${certificado.arquivo}`
+  },
+}
+
+export const cursoService = {
+  async listAll(filter?: string): Promise<Curso[]> {
+    try {
+      return await pb.collection('cursos').getFullList<Curso>({
+        filter,
+        sort: 'nivel,titulo',
+        expand: 'setor',
+      })
+    } catch (err) {
+      console.warn('Erro ao carregar cursos:', err)
+      return []
+    }
+  },
+
+  async listBySetorId(setorId: string): Promise<Curso[]> {
+    if (!setorId) return []
+    try {
+      return await pb.collection('cursos').getFullList<Curso>({
+        filter: `setor = '${setorId}'`,
+        sort: 'nivel,titulo',
+        expand: 'setor',
+      })
+    } catch (err) {
+      console.warn('Erro ao carregar cursos por setor:', err)
+      return []
+    }
+  },
+
+  async getById(id: string): Promise<Curso> {
+    return await pb.collection('cursos').getOne<Curso>(id, {
+      expand: 'setor',
+    })
+  },
+
+  async create(dados: {
+    titulo: string
+    descricao?: string
+    link: string
+    nivel: NivelCurso
+    setor: string
+    ativo?: boolean
+    autor?: { id: string; nome: string; role: string; setorNome?: string }
+  }): Promise<Curso> {
+    const record = await pb.collection('cursos').create<Curso>(
+      {
+        titulo: dados.titulo.trim(),
+        descricao: dados.descricao?.trim() || '',
+        link: dados.link.trim(),
+        nivel: dados.nivel,
+        setor: dados.setor,
+        ativo: dados.ativo ?? true,
+      },
+      {
+        expand: 'setor',
+      },
+    )
+
+    if (dados.autor) {
+      await auditoriaService.registrar({
+        usuarioId: dados.autor.id,
+        usuarioNome: dados.autor.nome,
+        usuarioRole: dados.autor.role,
+        acao: 'Criação de Curso na Grade',
+        detalhes: `Curso "${dados.titulo.trim()}" (Nível: ${dados.nivel}${dados.autor.setorNome ? `, Departamento: ${dados.autor.setorNome}` : ''}) cadastrado na Grade por ${dados.autor.nome}.`,
+        metadata: {
+          curso_id: record.id,
+          titulo: dados.titulo.trim(),
+          nivel: dados.nivel,
+          setor_id: dados.setor,
+          link: dados.link.trim(),
+        },
+      })
+    }
+
+    return record
+  },
+
+  async update(
+    id: string,
+    dados: {
+      titulo?: string
+      descricao?: string
+      link?: string
+      nivel?: NivelCurso
+      setor?: string
+      ativo?: boolean
+      autor?: { id: string; nome: string; role: string; setorNome?: string }
+    },
+  ): Promise<Curso> {
+    const payload: Record<string, unknown> = {}
+    if (dados.titulo !== undefined) payload.titulo = dados.titulo.trim()
+    if (dados.descricao !== undefined) payload.descricao = dados.descricao.trim()
+    if (dados.link !== undefined) payload.link = dados.link.trim()
+    if (dados.nivel !== undefined) payload.nivel = dados.nivel
+    if (dados.setor !== undefined) payload.setor = dados.setor
+    if (dados.ativo !== undefined) payload.ativo = dados.ativo
+
+    const record = await pb.collection('cursos').update<Curso>(id, payload, {
+      expand: 'setor',
+    })
+
+    if (dados.autor) {
+      await auditoriaService.registrar({
+        usuarioId: dados.autor.id,
+        usuarioNome: dados.autor.nome,
+        usuarioRole: dados.autor.role,
+        acao: 'Edição de Curso na Grade',
+        detalhes: `Curso "${record.titulo}" atualizado por ${dados.autor.nome}.`,
+        metadata: {
+          curso_id: id,
+          titulo: record.titulo,
+          nivel: record.nivel,
+          setor_id: record.setor,
+        },
+      })
+    }
+
+    return record
+  },
+
+  async delete(dados: {
+    id: string
+    titulo: string
+    autor?: { id: string; nome: string; role: string }
+  }): Promise<boolean> {
+    const res = await pb.collection('cursos').delete(dados.id)
+
+    if (dados.autor) {
+      await auditoriaService.registrar({
+        usuarioId: dados.autor.id,
+        usuarioNome: dados.autor.nome,
+        usuarioRole: dados.autor.role,
+        acao: 'Exclusão de Curso na Grade',
+        detalhes: `Curso "${dados.titulo}" excluído da Grade por ${dados.autor.nome}.`,
+        metadata: {
+          curso_id: dados.id,
+          titulo: dados.titulo,
+        },
+      })
+    }
+
+    return res
+  },
+}
+
+export const colaboradorCursoService = {
+  async listByColaborador(colaboradorId: string): Promise<ColaboradorCurso[]> {
+    if (!colaboradorId) return []
+    try {
+      return await pb.collection('colaborador_cursos').getFullList<ColaboradorCurso>({
+        filter: `colaborador = '${colaboradorId}'`,
+        sort: '-created',
+        expand: 'curso,curso.setor,colaborador',
+      })
+    } catch (err) {
+      console.warn('Erro ao carregar cursos do colaborador:', err)
+      return []
+    }
+  },
+
+  async listByColaboradorIds(colaboradorIds: string[]): Promise<ColaboradorCurso[]> {
+    if (!colaboradorIds || colaboradorIds.length === 0) return []
+    try {
+      const filter = colaboradorIds.map((id) => `colaborador = '${id}'`).join(' || ')
+      return await pb.collection('colaborador_cursos').getFullList<ColaboradorCurso>({
+        filter,
+        sort: '-created',
+        expand: 'curso,curso.setor,colaborador',
+      })
+    } catch (err) {
+      console.warn('Erro ao carregar cursos por ids de colaboradores:', err)
+      return []
+    }
+  },
+
+  async associar(dados: {
+    colaboradorId: string
+    colaboradorNome: string
+    cursoId: string
+    cursoTitulo: string
+    cursoNivel: string
+    observacao?: string
+    autor: { id: string; nome: string; role: string }
+  }): Promise<ColaboradorCurso> {
+    const record = await pb.collection('colaborador_cursos').create<ColaboradorCurso>(
+      {
+        colaborador: dados.colaboradorId,
+        curso: dados.cursoId,
+        status: 'pendente',
+        atribuido_em: new Date().toISOString(),
+        observacao: dados.observacao?.trim() || '',
+        atribuido_por: dados.autor.nome,
+      },
+      {
+        expand: 'curso,curso.setor,colaborador',
+      },
+    )
+
+    await auditoriaService.registrar({
+      onboardingId: dados.colaboradorId,
+      colaboradorNome: dados.colaboradorNome,
+      usuarioId: dados.autor.id,
+      usuarioNome: dados.autor.nome,
+      usuarioRole: dados.autor.role,
+      acao: 'Associação de Curso da Grade',
+      detalhes: `Curso "${dados.cursoTitulo}" (${dados.cursoNivel.toUpperCase()}) associado ao colaborador por ${dados.autor.nome}.${dados.observacao ? ` Obs: ${dados.observacao}` : ''}`,
+      metadata: {
+        colaborador_curso_id: record.id,
+        curso_id: dados.cursoId,
+        curso_titulo: dados.cursoTitulo,
+        curso_nivel: dados.cursoNivel,
+        status: 'pendente',
+      },
+    })
+
+    return record
+  },
+
+  async atualizarStatus(dados: {
+    id: string
+    colaboradorId: string
+    colaboradorNome: string
+    cursoTitulo: string
+    cursoNivel: string
+    novoStatus: StatusColaboradorCurso
+    observacao?: string
+    autor: { id: string; nome: string; role: string }
+  }): Promise<ColaboradorCurso> {
+    const payload: Record<string, unknown> = {
+      status: dados.novoStatus,
+    }
+
+    if (dados.observacao !== undefined) {
+      payload.observacao = dados.observacao.trim()
+    }
+
+    if (dados.novoStatus === 'concluido') {
+      payload.concluido_em = new Date().toISOString()
+      payload.concluido_por = dados.autor.nome
+    } else {
+      payload.concluido_em = null
+      payload.concluido_por = ''
+    }
+
+    const record = await pb
+      .collection('colaborador_cursos')
+      .update<ColaboradorCurso>(dados.id, payload, {
+        expand: 'curso,curso.setor,colaborador',
+      })
+
+    const acaoLabel =
+      dados.novoStatus === 'concluido'
+        ? 'Conclusão de Curso da Grade'
+        : 'Atualização de Status de Curso'
+
+    const detalhes =
+      dados.novoStatus === 'concluido'
+        ? `Curso "${dados.cursoTitulo}" (${dados.cursoNivel.toUpperCase()}) marcado como CONCLUÍDO por ${dados.autor.nome}.`
+        : `Status do curso "${dados.cursoTitulo}" alterado para ${dados.novoStatus.toUpperCase()} por ${dados.autor.nome}.`
+
+    await auditoriaService.registrar({
+      onboardingId: dados.colaboradorId,
+      colaboradorNome: dados.colaboradorNome,
+      usuarioId: dados.autor.id,
+      usuarioNome: dados.autor.nome,
+      usuarioRole: dados.autor.role,
+      acao: acaoLabel,
+      detalhes,
+      metadata: {
+        colaborador_curso_id: dados.id,
+        curso_titulo: dados.cursoTitulo,
+        novo_status: dados.novoStatus,
+      },
+    })
+
+    return record
+  },
+
+  async desassociar(dados: {
+    id: string
+    colaboradorId: string
+    colaboradorNome: string
+    cursoTitulo: string
+    autor: { id: string; nome: string; role: string }
+  }): Promise<boolean> {
+    const res = await pb.collection('colaborador_cursos').delete(dados.id)
+
+    await auditoriaService.registrar({
+      onboardingId: dados.colaboradorId,
+      colaboradorNome: dados.colaboradorNome,
+      usuarioId: dados.autor.id,
+      usuarioNome: dados.autor.nome,
+      usuarioRole: dados.autor.role,
+      acao: 'Remoção de Curso Associado',
+      detalhes: `Associação do curso "${dados.cursoTitulo}" removida do perfil por ${dados.autor.nome}.`,
+      metadata: {
+        colaborador_curso_id: dados.id,
+        curso_titulo: dados.cursoTitulo,
+      },
+    })
+
+    return res
   },
 }

@@ -1550,7 +1550,7 @@ export default function Manual() {
         </section>
 
         {/* ========================================================= */}
-        {/* SEÇÃO 12 — Checklist rápido de homologação */}
+        {/* SEÇÃO 12 — Grade de Cursos por Departamento & Capacitação Contínua */}
         {/* ========================================================= */}
         <section className="mb-10 avoid-break page-break-before">
           <div className="flex items-center gap-2.5 mb-4 border-b border-gray-200 pb-2">
@@ -1558,7 +1558,115 @@ export default function Manual() {
               12
             </div>
             <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
-              SEÇÃO 12 — Checklist rápido de homologação
+              SEÇÃO 12 — Grade de Cursos por Departamento & Capacitação Contínua (Versão 0.0.55)
+            </h2>
+          </div>
+
+          <p className="text-xs sm:text-sm text-gray-700 leading-relaxed mb-4">
+            A <strong>Grade de Cursos</strong> (/grade-cursos) é o catálogo permanente de
+            capacitação e treinamento técnico de TI do Grupo Mundo Open. Ao contrário do onboarding
+            inicial de 15 dias, a Grade de Cursos{' '}
+            <strong>não pertence à Etapa 1 nem ao ciclo de contratação</strong>: ela foi concebida
+            para uso contínuo ao longo de toda a jornada do colaborador na empresa, permitindo
+            aperfeiçoamento constante e plano de desenvolvimento individual (PDI).
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+            <div className="p-4 rounded-xl border border-gray-200 bg-gray-50/70 space-y-2">
+              <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-brand-600" />
+                Catálogo Central Dinâmico por Setor
+              </h4>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                Cada departamento cadastrado no sistema (Infraestrutura, Suporte N1/N2,
+                Desenvolvimento, NOC, etc.) possui seu próprio card automático de cursos com links
+                diretos, conteúdo programático e 3 níveis de relevância técnica:
+              </p>
+              <ul className="text-xs text-gray-600 list-disc list-inside space-y-1">
+                <li>
+                  <strong className="text-red-700">🔴 Essencial:</strong> Cursos mandatórios e de
+                  base técnica imprescindível para o setor.
+                </li>
+                <li>
+                  <strong className="text-amber-800">🟡 Recomendado:</strong> Cursos importantes
+                  para progressão e especialização das atividades.
+                </li>
+                <li>
+                  <strong className="text-blue-700">🔵 Complementar:</strong> Cursos extras,
+                  opcionais e de expansão de repertório técnico.
+                </li>
+              </ul>
+            </div>
+
+            <div className="p-4 rounded-xl border border-gray-200 bg-gray-50/70 space-y-2">
+              <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                Associação & Ciclo de Vida no Perfil
+              </h4>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                A atribuição e o acompanhamento dos cursos ocorrem dentro do{' '}
+                <strong>Perfil do Colaborador</strong> (aba <em>Cursos da Grade</em>):
+              </p>
+              <ul className="text-xs text-gray-600 list-disc list-inside space-y-1">
+                <li>
+                  <strong>Atribuição:</strong> O RH ou Administrador associa cursos da grade ao
+                  colaborador a qualquer momento.
+                </li>
+                <li>
+                  <strong>Status do Curso:</strong> <em>Pendente</em> → <em>Em andamento</em> →{' '}
+                  <em>Concluído</em>.
+                </li>
+                <li>
+                  <strong>Validação de Conclusão:</strong> Marcação privativa de RH e Admin. Ao
+                  concluir, o sistema registra a data e o autor no histórico.
+                </li>
+                <li>
+                  <strong>Atalho "Lançar como Certificado":</strong> Com um clique no curso
+                  concluído, o sistema abre o modal de certificados pré-preenchido com o título e
+                  setor emissor para registro formal.
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-indigo-200 bg-indigo-50/50 text-xs text-indigo-900 mb-6 space-y-2">
+            <h4 className="font-bold uppercase tracking-wider flex items-center gap-1.5">
+              <span>Matriz de Acesso e Visibilidade da Grade de Cursos:</span>
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              <div className="bg-white/80 p-2.5 rounded-lg border border-indigo-100">
+                <strong className="block text-gray-900">Admin</strong>
+                <span className="text-gray-600">
+                  Acesso total (leitura, criação, edição, exclusão de cursos e atribuição).
+                </span>
+              </div>
+              <div className="bg-white/80 p-2.5 rounded-lg border border-indigo-100">
+                <strong className="block text-gray-900">RH</strong>
+                <span className="text-gray-600">
+                  Acesso total à grade e validação de conclusões no perfil do colaborador.
+                </span>
+              </div>
+              <div className="bg-white/80 p-2.5 rounded-lg border border-indigo-100">
+                <strong className="block text-gray-900">Gestão</strong>
+                <span className="text-gray-600">
+                  Somente leitura e restrito exclusivamente ao card e colaboradores do próprio
+                  setor.
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ========================================================= */}
+        {/* SEÇÃO 13 — Checklist rápido de homologação */}
+        {/* ========================================================= */}
+        <section className="mb-10 avoid-break page-break-before">
+          <div className="flex items-center gap-2.5 mb-4 border-b border-gray-200 pb-2">
+            <div className="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+              13
+            </div>
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+              SEÇÃO 13 — Checklist rápido de homologação
             </h2>
           </div>
 
@@ -1609,6 +1717,12 @@ export default function Manual() {
               'Monitoramento de Validade: conferir badge vermelha quando vencido, âmbar quando ≤ 90 dias e verde quando válido;',
               'Restrição LGPD Certificados: logar com perfil Gestão e confirmar que a aba Certificados NÃO é exibida / exibe aviso restrito;',
               'Auditoria de Certificados: validar que cada inclusão, edição e exclusão de certificado registra log com autor, papel, horário e detalhes.',
+              'Grade de Cursos (/grade-cursos): verificar cards por departamento gerados automaticamente para os setores cadastrados;',
+              'Níveis de Relevância na Grade: cadastrar curso com nível Essencial (vermelho), Recomendado (âmbar) e Complementar (azul) com link externo funcional;',
+              'Visibilidade por Papel na Grade: logar com papel Gestão e conferir que apenas o card do seu setor é visível (em modo leitura, sem botões de escrita);',
+              'Perfil do Colaborador — Aba Cursos da Grade: RH/Admin associam um curso ao colaborador com observação opcional;',
+              'Transição de Status & Conclusão de Curso: alterar status para Em andamento e Concluído (grava data, usuário no histórico de auditoria e na linha do tempo da Trajetória);',
+              'Atalho "Lançar como Certificado": clicar no botão em um curso concluído e verificar abertura do formulário de Certificados com título e emissor pré-preenchidos.',
             ].map((item, idx) => (
               <div
                 key={idx}

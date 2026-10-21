@@ -75,6 +75,7 @@ import { ModalSugestaoMudancaArea } from '@/components/ModalSugestaoMudancaArea'
 import { SecaoAvaliacoesColaborador } from '@/components/SecaoAvaliacoesColaborador'
 import { SecaoTrajetoria } from '@/components/SecaoTrajetoria'
 import { SecaoCertificados } from '@/components/SecaoCertificados'
+import { SecaoCursosColaborador } from '@/components/SecaoCursosColaborador'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
@@ -87,8 +88,16 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import type { AvaliacaoColaborador, CertificadoColaborador } from '@/types/onboarding'
-import { avaliacaoColaboradorService, certificadoService } from '@/services/onboarding'
+import type {
+  AvaliacaoColaborador,
+  CertificadoColaborador,
+  ColaboradorCurso,
+} from '@/types/onboarding'
+import {
+  avaliacaoColaboradorService,
+  certificadoService,
+  colaboradorCursoService,
+} from '@/services/onboarding'
 
 import { podeVisualizarSetor } from '@/lib/gestaoVisibility'
 import { ShieldAlert } from 'lucide-react'
@@ -134,13 +143,23 @@ export default function DetalheOnboarding() {
   const [obsTemp, setObsTemp] = useState('')
   const [salvandoObs, setSalvandoObs] = useState(false)
 
-  // Abas do Perfil do Colaborador: 'trajetoria', 'onboarding', 'certificados', 'avaliacoes', 'auditoria'
+  // Abas do Perfil do Colaborador: 'trajetoria', 'onboarding', 'cursos', 'certificados', 'avaliacoes', 'auditoria'
   const [abaAtiva, setAbaAtiva] = useState<
-    'trajetoria' | 'onboarding' | 'certificados' | 'avaliacoes' | 'auditoria'
+    'trajetoria' | 'onboarding' | 'cursos' | 'certificados' | 'avaliacoes' | 'auditoria'
   >('trajetoria')
+  const [cursosColaboradorList, setCursosColaboradorList] = useState<ColaboradorCurso[]>([])
   const [logsAuditoria, setLogsAuditoria] = useState<LogAuditoria[]>([])
   const [loadingLogs, setLoadingLogs] = useState(false)
   const [carregandoCertificadosAba, setCarregandoCertificadosAba] = useState(false)
+
+  // Estados para atalho "Lançar como Certificado" a partir de curso concluído
+  const [modalCertificadoAbertoExterno, setModalCertificadoAbertoExterno] = useState(false)
+  const [dadosCertificadoPreenchimento, setDadosCertificadoPreenchimento] = useState<{
+    titulo?: string
+    emissor?: string
+    dataEmissao?: string
+    observacoes?: string
+  } | null>(null)
 
   const recarregarCertificadosPerfil = async () => {
     if (!onboarding || (!isAdmin && !isRH)) return
@@ -154,6 +173,17 @@ export default function DetalheOnboarding() {
       console.warn('Erro ao atualizar lista de certificados no perfil:', e)
     } finally {
       setCarregandoCertificadosAba(false)
+    }
+  }
+
+  const recarregarCursosPerfil = async () => {
+    if (!onboarding) return
+    try {
+      const cursos = await colaboradorCursoService.listByColaborador(onboarding.id)
+      setCursosColaboradorList(cursos)
+      carregarLogs()
+    } catch (e) {
+      console.warn('Erro ao atualizar cursos do colaborador no perfil:', e)
     }
   }
 
@@ -307,6 +337,14 @@ export default function DetalheOnboarding() {
           } catch {
             setCertificadosList([])
           }
+        }
+
+        // Buscar cursos da grade associados ao colaborador
+        try {
+          const cursosColab = await colaboradorCursoService.listByColaborador(onb.id)
+          setCursosColaboradorList(cursosColab)
+        } catch {
+          setCursosColaboradorList([])
         }
       }
     } catch (err) {
@@ -1557,6 +1595,32 @@ export default function DetalheOnboarding() {
             <span>Onboarding ({progressoPercent}%)</span>
           </button>
 
+          {/* Aba Cursos da Grade (Uso Contínuo na Jornada) */}
+          <button
+            type="button"
+            onClick={() => {
+              setAbaAtiva('cursos')
+              recarregarCursosPerfil()
+            }}
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
+              abaAtiva === 'cursos'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <GraduationCap className="w-3.5 h-3.5" />
+            <span>Cursos da Grade</span>
+            {cursosColaboradorList.length > 0 && (
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  abaAtiva === 'cursos' ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'
+                }`}
+              >
+                {cursosColaboradorList.length}
+              </span>
+            )}
+          </button>
+
           {/* Aba 3: Certificados (RH / Admin) */}
           {(isAdmin || isRH) && (
             <button
@@ -1644,6 +1708,35 @@ export default function DetalheOnboarding() {
             logsAuditoria={logsAuditoria}
             avaliacoes={avaliacoesDossie}
             certificados={certificadosList}
+            cursos={cursosColaboradorList}
+          />
+        </div>
+      )}
+
+      {/* ABA Cursos da Grade (Jornada do Colaborador) */}
+      {abaAtiva === 'cursos' && (
+        <div className="space-y-6">
+          <SecaoCursosColaborador
+            onboarding={onboarding}
+            todosOnboardings={todosOnboardings}
+            onCursoAlterado={() => {
+              recarregarCursosPerfil()
+            }}
+            onLancarComoCertificado={(cursoAssociado) => {
+              const tituloCurso = cursoAssociado.expand?.curso?.titulo || 'Curso da Grade'
+              const setorNome = cursoAssociado.expand?.curso?.expand?.setor?.nome || 'Mundo Open TI'
+              setDadosCertificadoPreenchimento({
+                titulo: tituloCurso,
+                emissor: setorNome,
+                dataEmissao: cursoAssociado.concluido_em
+                  ? cursoAssociado.concluido_em.split('T')[0]
+                  : new Date().toISOString().split('T')[0],
+                observacoes: `Concluído através da Grade de Cursos por Departamento (validador: ${cursoAssociado.concluido_por || 'RH/Admin'}).${cursoAssociado.observacao ? ` Obs: ${cursoAssociado.observacao}` : ''}`,
+              })
+              setAbaAtiva('certificados')
+              setModalCertificadoAbertoExterno(true)
+              toast.info('Formulário de Certificado aberto com dados do curso concluído!')
+            }}
           />
         </div>
       )}
@@ -1654,6 +1747,12 @@ export default function DetalheOnboarding() {
           <SecaoCertificados
             onboarding={onboarding}
             todosOnboardings={todosOnboardings}
+            modalNovoAbertoExterno={modalCertificadoAbertoExterno}
+            dadosPreenchimentoExterno={dadosCertificadoPreenchimento}
+            onFecharModalExterno={() => {
+              setModalCertificadoAbertoExterno(false)
+              setDadosCertificadoPreenchimento(null)
+            }}
             onCertificadoAlterado={() => {
               recarregarCertificadosPerfil()
             }}

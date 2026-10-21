@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-19T17:27:34.856Z",
+  "generatedAt": "2026-10-21T15:30:09.075Z",
   "collections": [
     {
       "name": "users",
@@ -52,14 +52,14 @@
           "selectValues": ["admin", "rh", "gestao"]
         },
         {
-          "name": "setor",
-          "type": "text",
+          "name": "pode_editar_questionarios",
+          "type": "bool",
           "required": false,
           "system": false
         },
         {
-          "name": "pode_editar_questionarios",
-          "type": "bool",
+          "name": "setor",
+          "type": "text",
           "required": false,
           "system": false
         }
@@ -1775,6 +1775,159 @@
         "CREATE INDEX idx_certificados_colaborador ON certificados (colaborador)",
         "CREATE INDEX idx_certificados_data_emissao ON certificados (data_emissao)",
         "CREATE INDEX idx_certificados_data_validade ON certificados (data_validade)"
+      ]
+    },
+    {
+      "name": "cursos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.setor != '' && (setor.chave ~ @request.auth.setor || setor.nome ~ @request.auth.setor || setor = @request.auth.setor)))",
+        "view": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.setor != '' && (setor.chave ~ @request.auth.setor || setor.nome ~ @request.auth.setor || setor = @request.auth.setor)))",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh')",
+        "delete": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh')"
+      },
+      "fields": [
+        {
+          "name": "titulo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "descricao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "link",
+          "type": "url",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "nivel",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["essencial", "recomendado", "complementar"]
+        },
+        {
+          "name": "setor",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "setores"
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_cursos_setor ON cursos (setor)",
+        "CREATE INDEX idx_cursos_nivel ON cursos (nivel)",
+        "CREATE INDEX idx_cursos_ativo ON cursos (ativo)"
+      ]
+    },
+    {
+      "name": "colaborador_cursos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.setor != '' && colaborador.setor ~ @request.auth.setor))",
+        "view": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.setor != '' && colaborador.setor ~ @request.auth.setor))",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh')",
+        "delete": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh')"
+      },
+      "fields": [
+        {
+          "name": "colaborador",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "onboardings"
+        },
+        {
+          "name": "curso",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "cursos"
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["pendente", "em_andamento", "concluido"]
+        },
+        {
+          "name": "atribuido_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "concluido_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "atribuido_por",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "concluido_por",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_colab_cursos_colab ON colaborador_cursos (colaborador)",
+        "CREATE INDEX idx_colab_cursos_curso ON colaborador_cursos (curso)",
+        "CREATE INDEX idx_colab_cursos_status ON colaborador_cursos (status)"
       ]
     }
   ]

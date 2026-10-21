@@ -668,6 +668,88 @@ export interface CertificadoColaborador {
   }
 }
 
+export type NivelCurso = 'essencial' | 'recomendado' | 'complementar'
+export type StatusColaboradorCurso = 'pendente' | 'em_andamento' | 'concluido'
+
+export interface Curso {
+  id: string
+  titulo: string
+  descricao?: string
+  link: string
+  nivel: NivelCurso
+  setor: string
+  ativo?: boolean
+  created: string
+  updated: string
+  expand?: {
+    setor?: SetorModel
+  }
+}
+
+export interface ColaboradorCurso {
+  id: string
+  colaborador: string
+  curso: string
+  status: StatusColaboradorCurso
+  atribuido_em?: string
+  concluido_em?: string
+  observacao?: string
+  atribuido_por?: string
+  concluido_por?: string
+  created: string
+  updated: string
+  expand?: {
+    colaborador?: Onboarding
+    curso?: Curso
+  }
+}
+
+export const NIVEIS_CURSO_INFO: Record<
+  NivelCurso,
+  {
+    label: string
+    badgeClass: string
+    dotClass: string
+  }
+> = {
+  essencial: {
+    label: 'Essencial',
+    badgeClass: 'bg-red-50 text-red-700 border-red-200 font-bold',
+    dotClass: 'bg-red-500',
+  },
+  recomendado: {
+    label: 'Recomendado',
+    badgeClass: 'bg-amber-50 text-amber-800 border-amber-300 font-semibold',
+    dotClass: 'bg-amber-500',
+  },
+  complementar: {
+    label: 'Complementar',
+    badgeClass: 'bg-blue-50 text-blue-700 border-blue-200 font-medium',
+    dotClass: 'bg-blue-500',
+  },
+}
+
+export const STATUS_COLABORADOR_CURSO_INFO: Record<
+  StatusColaboradorCurso,
+  {
+    label: string
+    badgeClass: string
+  }
+> = {
+  pendente: {
+    label: 'Pendente',
+    badgeClass: 'bg-slate-100 text-slate-700 border-slate-200',
+  },
+  em_andamento: {
+    label: 'Em andamento',
+    badgeClass: 'bg-blue-50 text-blue-700 border-blue-200',
+  },
+  concluido: {
+    label: 'Concluído',
+    badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold',
+  },
+}
+
 export const STATUS_INFO: Record<
   OnboardingStatus,
   {

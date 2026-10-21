@@ -20,6 +20,7 @@ import {
   FileText,
   BookOpen,
   Trash2,
+  GraduationCap,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -48,6 +49,12 @@ const navItems: NavItem[] = [
     label: 'Modelos de Tarefas',
     path: '/modelos',
     icon: Layers,
+    allowedRoles: ['admin', 'rh', 'gestao'],
+  },
+  {
+    label: 'Grade de Cursos',
+    path: '/grade-cursos',
+    icon: GraduationCap,
     allowedRoles: ['admin', 'rh', 'gestao'],
   },
   { label: 'Avaliações', path: '/avaliacoes', icon: ClipboardCheck },
@@ -85,6 +92,7 @@ export default function Layout() {
     if (p.startsWith('/colaboradores/')) return 'Perfil do Colaborador'
     if (p.startsWith('/colaboradores')) return 'Colaboradores em Onboarding'
     if (p.startsWith('/modelos')) return 'Modelos de Tarefas por Setor'
+    if (p.startsWith('/grade-cursos')) return 'Grade de Cursos por Departamento'
     if (p.startsWith('/avaliacoes')) return 'Avaliações Finais dos Gestores'
     if (p.startsWith('/manual')) return 'Manual do Sistema'
     if (p.startsWith('/logs')) return 'Logs de Auditoria'

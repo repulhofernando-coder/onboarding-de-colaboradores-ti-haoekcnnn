@@ -40,6 +40,14 @@ export interface SecaoCertificadosProps {
   onboarding: Onboarding
   todosOnboardings?: Onboarding[]
   onCertificadoAlterado?: () => void
+  modalNovoAbertoExterno?: boolean
+  dadosPreenchimentoExterno?: {
+    titulo?: string
+    emissor?: string
+    dataEmissao?: string
+    observacoes?: string
+  } | null
+  onFecharModalExterno?: () => void
 }
 
 interface ValidadeInfo {
@@ -99,6 +107,9 @@ export function SecaoCertificados({
   onboarding,
   todosOnboardings = [],
   onCertificadoAlterado,
+  modalNovoAbertoExterno = false,
+  dadosPreenchimentoExterno = null,
+  onFecharModalExterno,
 }: SecaoCertificadosProps) {
   const { user, isAdmin, isRH } = useAuth()
   // Regra LGPD restrita: Exclusivo de RH e Admin
@@ -167,6 +178,23 @@ export function SecaoCertificados({
   useEffect(() => {
     carregarCertificados()
   }, [idsColaborador, podeGerenciar])
+
+  // Tratar abertura e pré-preenchimento externo (ex.: vindo de atalho "Lançar como Certificado")
+  useEffect(() => {
+    if (modalNovoAbertoExterno) {
+      setEditandoCertificado(null)
+      setTitulo(dadosPreenchimentoExterno?.titulo || '')
+      setEmissor(dadosPreenchimentoExterno?.emissor || '')
+      setDataEmissao(
+        dadosPreenchimentoExterno?.dataEmissao || new Date().toISOString().split('T')[0],
+      )
+      setDataValidade('')
+      setObservacoes(dadosPreenchimentoExterno?.observacoes || '')
+      setArquivo(null)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      setModalFormOpen(true)
+    }
+  }, [modalNovoAbertoExterno, dadosPreenchimentoExterno])
 
   const abrirModalNovo = () => {
     setEditandoCertificado(null)
@@ -588,7 +616,15 @@ export function SecaoCertificados({
       </CardContent>
 
       {/* Modal Formulário (Novo / Edição) */}
-      <Dialog open={modalFormOpen} onOpenChange={setModalFormOpen}>
+      <Dialog
+        open={modalFormOpen}
+        onOpenChange={(aberto) => {
+          setModalFormOpen(aberto)
+          if (!aberto && onFecharModalExterno) {
+            onFecharModalExterno()
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-gray-900 flex items-center gap-2">

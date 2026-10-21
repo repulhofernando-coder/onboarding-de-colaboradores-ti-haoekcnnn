@@ -16,6 +16,7 @@ import OnboardingsList from './pages/OnboardingsList'
 import NovoOnboarding from './pages/NovoOnboarding'
 import DetalheOnboarding from './pages/DetalheOnboarding'
 import ModelosTarefas from './pages/ModelosTarefas'
+import GradeCursos from './pages/GradeCursos'
 import Avaliacoes from './pages/Avaliacoes'
 import Colaboradores from './pages/Colaboradores'
 import Usuarios from './pages/Usuarios'
@@ -64,6 +65,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['admin', 'rh', 'gestao']}>
                   <ModelosTarefas />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/grade-cursos"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'rh', 'gestao']}>
+                  <GradeCursos />
                 </ProtectedRoute>
               }
             />
