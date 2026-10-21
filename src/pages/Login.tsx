@@ -13,8 +13,8 @@ export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const [email, setEmail] = useState('projetos@mundoopen.com.br')
-  const [password, setPassword] = useState('Skip@Pass')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
 
@@ -153,16 +153,6 @@ export default function Login() {
               )}
             </Button>
           </form>
-
-          {/* Seed credentials hint */}
-          <div className="mt-6 pt-5 border-t border-gray-100 text-xs text-gray-500">
-            <span className="font-semibold text-gray-700">Acesso padrão de teste:</span>
-            <div className="mt-1 space-y-0.5 text-[11px] font-mono text-gray-600 bg-gray-50 p-2 rounded border border-gray-200">
-              <div>Admin: projetos@mundoopen.com.br / Skip@Pass</div>
-              <div>RH: rh@empresa.com.br / Skip@Pass</div>
-              <div>Gestor: gestor@empresa.com.br / Skip@Pass</div>
-            </div>
-          </div>
         </div>
       </div>
     </div>

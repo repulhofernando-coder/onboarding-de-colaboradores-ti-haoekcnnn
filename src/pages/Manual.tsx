@@ -793,6 +793,24 @@ export default function Manual() {
               prova sorteada (padrão 20), status ativo/inativo e seu respectivo banco de questões
               com alternativas, gabarito e comentário explicativo de auditoria.
             </p>
+            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed mt-2">
+              <strong>Botão de Impressão & Vias Escolhíveis (Versão 0.0.65):</strong> Cada
+              questionário conta com a opção de impressão dedicada (formato A4 para papel/PDF) com
+              duas vias disponíveis:
+              <br />• <strong>Via com Gabarito:</strong> Título do questionário, setor, todas as
+              questões numeradas em sequência, alternativas destacando visualmente a resposta
+              correta (com selo e cor verde), comentários e gabarito oficial esperado nas
+              dissertativas, além de rodapé com data, hora e identificação do usuário emissor.
+              <br />• <strong>Prova em Branco (Caderno de Prova):</strong> Questões numeradas e
+              alternativas completas sem nenhuma resposta assinalada e com linhas pautadas para
+              redação das dissertativas, pronta para aplicação presencial ou arquivamento em pasta
+              física.
+              <br />
+              <em>Regras de acesso ao botão de impressão:</em> Admin e RH têm acesso integral às
+              duas vias em todos os setores. Usuários do papel Gestão só visualizam o botão de
+              imprimir caso tenham a permissão <code>pode_editar_questionarios</code> ativa na sua
+              conta e exclusivamente para questionários do seu próprio setor.
+            </p>
 
             {/* Subseção: Banco de Questões com Sorteio */}
             <div className="mt-3 p-3.5 bg-purple-50/70 border border-purple-200 rounded-xl space-y-2 text-xs text-purple-950">
@@ -1526,6 +1544,12 @@ export default function Manual() {
                   desativada, os botões de edição são ocultados e o servidor PocketBase bloqueia
                   operações de escrita (RLS). A concessão/revogação da chave e todas as edições em
                   questionários geram logs formais de auditoria com autor e data.
+                  <br className="my-1" />
+                  <strong>Regra de Impressão (Vias com Gabarito e em Branco):</strong> Como a
+                  impressão da via com gabarito permite extrair as respostas da prova, o botão de
+                  impressão segue a mesma regra: Admin e RH podem imprimir qualquer questionário;
+                  gestores só visualizam o botão caso possuam a chave ativa e somente para
+                  questionários do seu setor.
                 </p>
               </div>
             </div>
@@ -1711,6 +1735,7 @@ export default function Manual() {
               'Perfil do Colaborador (/colaboradores/:id): acessar via card de /colaboradores e validar o cabeçalho consolidado com avatar, setor, gestor, datas e contador de onboardings;',
               'Validar as 5 abas do Perfil: Trajetória, Onboarding, Certificados (RH/Admin), Dossiê de Avaliações e Histórico & Auditoria;',
               'Aba Trajetória: validar ordenação decrescente (do mais recente ao mais antigo) unificando contratação, onboardings (com links entre processos), mudanças de área, avaliações e certificações;',
+              'Impressão de Questionários: abrir questionário e emitir Via com Gabarito (respostas destacadas + rodapé com usuário e data) e Prova em Branco (linhas pautadas sem respostas); validar bloqueio para gestores sem permissão pode_editar_questionarios ou de outros setores;',
               'Edição de dados funcionais: RH/Admin alteram cargo/setor/gestor pelo botão "Editar Perfil" → registro em auditoria com detalhe de transição (antigo → novo); Gestão não visualiza o botão;',
               'Certificados (RH/Admin): adicionar certificado com título, emissor, data de emissão, validade e anexo (PDF/imagem até 50MB);',
               'Visualizador de Certificado: abrir modal de visualização interna e testar download do documento anexo;',

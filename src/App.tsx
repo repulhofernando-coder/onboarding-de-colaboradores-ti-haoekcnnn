@@ -27,6 +27,7 @@ import CandidatoProvaPublica from './pages/CandidatoProvaPublica'
 import { ColaboradorAvaliacaoPublica } from './pages/ColaboradorAvaliacaoPublica'
 import PreSelecionados from './pages/PreSelecionados'
 import LimpezaAmbiente from './pages/LimpezaAmbiente'
+import ImpressaoQuestionario from './pages/ImpressaoQuestionario'
 import NotFound from './pages/NotFound'
 
 const App = () => (
@@ -36,6 +37,16 @@ const App = () => (
         <Toaster />
         <Sonner position="top-right" richColors />
         <Routes>
+          {/* Rota Protegida de Impressão Dedicada (sem layout/sidebar para print A4 perfeito) */}
+          <Route
+            path="/avaliacoes/impressao/:id"
+            element={
+              <ProtectedRoute allowedRoles={['admin', 'rh', 'gestao']}>
+                <ImpressaoQuestionario />
+              </ProtectedRoute>
+            }
+          />
+
           {/* Rotas Públicas */}
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />

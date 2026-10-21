@@ -22,7 +22,17 @@ import {
   FileQuestion,
   Info,
   AlertTriangle,
+  Printer,
+  FileText,
 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -128,6 +138,18 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
       itemSetor: qSetor,
       setoresCadastrados: setoresList,
     })
+  }
+
+  // Regra de impressão:
+  // - Admin e RH sempre podem imprimir (ambas as vias).
+  // - Gestão só pode imprimir se tiver pode_editar_questionarios ativo E pertencer ao mesmo setor.
+  // Equivalente à regra de podeModificarQuestionario:
+  const podeImprimirQuestionario = (qSetor?: string) => {
+    return podeModificarQuestionario(qSetor)
+  }
+
+  const handleAbrirImpressao = (qId: string, via: 'gabarito' | 'branco') => {
+    window.open(`/avaliacoes/impressao/${qId}?via=${via}`, '_blank')
   }
 
   const carregarQuestionarios = async () => {
@@ -496,7 +518,51 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {podeImprimirQuestionario(selectedQuestionario.setor) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs font-semibold border-gray-300 text-gray-700 hover:text-brand-700 hover:border-brand-300 shadow-xs"
+                    title="Imprimir questionário (com gabarito ou prova em branco)"
+                  >
+                    <Printer className="w-3.5 h-3.5 mr-1.5 text-brand-600" />
+                    Imprimir
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 text-xs">
+                  <DropdownMenuLabel className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">
+                    Opções de Impressão
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => handleAbrirImpressao(selectedQuestionario.id, 'gabarito')}
+                    className="cursor-pointer py-2"
+                  >
+                    <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-600" />
+                    <div>
+                      <div className="font-semibold text-gray-900">Via com Gabarito</div>
+                      <div className="text-[10px] text-gray-500">Respostas corretas destacadas</div>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => handleAbrirImpressao(selectedQuestionario.id, 'branco')}
+                    className="cursor-pointer py-2"
+                  >
+                    <FileText className="w-4 h-4 mr-2 text-blue-600" />
+                    <div>
+                      <div className="font-semibold text-gray-900">Prova em Branco</div>
+                      <div className="text-[10px] text-gray-500">
+                        Para aplicação física no papel
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
             {podeModificarQuestionario(selectedQuestionario.setor) && (
               <Button
                 onClick={handleOpenNovaQuestao}
@@ -1029,41 +1095,88 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
                       : 'Ver Questões (Leitura)'}
                   </Button>
 
-                  {podeModificarQuestionario(q.setor) && (
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenEditarQ(q)}
-                        className="h-8 w-8 text-gray-500 hover:text-gray-800"
-                        title="Editar questionário"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleToggleAtivoQ(q)}
-                        className="h-8 w-8 text-gray-500 hover:text-gray-800"
-                        title={q.ativo ? 'Desativar questionário' : 'Ativar questionário'}
-                      >
-                        {q.ativo ? (
-                          <XCircle className="w-3.5 h-3.5 text-amber-600" />
-                        ) : (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setDeleteQItem(q)}
-                        className="h-8 w-8 text-gray-400 hover:text-red-600"
-                        title="Excluir questionário"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1">
+                    {podeImprimirQuestionario(q.setor) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-gray-500 hover:text-brand-700"
+                            title="Imprimir questionário"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56 text-xs">
+                          <DropdownMenuLabel className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">
+                            Imprimir Questionário
+                          </DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => handleAbrirImpressao(q.id, 'gabarito')}
+                            className="cursor-pointer py-2"
+                          >
+                            <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-600" />
+                            <div>
+                              <div className="font-semibold text-gray-900">Via com Gabarito</div>
+                              <div className="text-[10px] text-gray-500">
+                                Respostas corretas e critérios
+                              </div>
+                            </div>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleAbrirImpressao(q.id, 'branco')}
+                            className="cursor-pointer py-2"
+                          >
+                            <FileText className="w-4 h-4 mr-2 text-blue-600" />
+                            <div>
+                              <div className="font-semibold text-gray-900">Prova em Branco</div>
+                              <div className="text-[10px] text-gray-500">
+                                Folha de prova para o papel
+                              </div>
+                            </div>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+
+                    {podeModificarQuestionario(q.setor) && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenEditarQ(q)}
+                          className="h-8 w-8 text-gray-500 hover:text-gray-800"
+                          title="Editar questionário"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleToggleAtivoQ(q)}
+                          className="h-8 w-8 text-gray-500 hover:text-gray-800"
+                          title={q.ativo ? 'Desativar questionário' : 'Ativar questionário'}
+                        >
+                          {q.ativo ? (
+                            <XCircle className="w-3.5 h-3.5 text-amber-600" />
+                          ) : (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDeleteQItem(q)}
+                          className="h-8 w-8 text-gray-400 hover:text-red-600"
+                          title="Excluir questionário"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             )

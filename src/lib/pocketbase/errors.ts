@@ -29,17 +29,14 @@ export function getErrorMessage(error: unknown): string {
 }
 
 export function isNetworkError(error: unknown): boolean {
-  if (error instanceof ClientResponseError) {
-    return error.status === 0 || error.isAbort
-  }
-  if (error instanceof Error) {
-    const msg = error.message.toLowerCase()
-    return (
-      msg.includes('network') ||
-      msg.includes('fetch') ||
-      msg.includes('failed to fetch') ||
-      msg.includes('econnrefused')
-    )
+  if (!error) return false
+  if (error instanceof ClientResponseError && error.status === 0) return true
+  if (error instanceof TypeError && error.message.toLowerCase().includes('fetch')) return true
+  if (
+    error instanceof Error &&
+    (error.message.includes('NetworkError') || error.message.includes('Failed to fetch'))
+  ) {
+    return true
   }
   return false
 }
