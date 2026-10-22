@@ -420,7 +420,7 @@ export function SecaoDocumentosComplementares({
                         <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
                           {material?.tipo === 'video' ? (
                             <Video className="w-4 h-4" />
-                          ) : material?.tipo === 'link' ? (
+                          ) : (material?.tipo as string) === 'link' ? (
                             <LinkIcon className="w-4 h-4" />
                           ) : (
                             <File className="w-4 h-4" />

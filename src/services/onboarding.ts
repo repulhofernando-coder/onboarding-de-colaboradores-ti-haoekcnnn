@@ -2518,16 +2518,14 @@ export const colaboradorDocumentoService = {
   async confirmarLeituraViaHook(
     token: string,
   ): Promise<{ success: boolean; confirmado_em: string; message: string }> {
-    const res = await fetch('/backend/v1/colaborador/documento/confirmar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      throw new Error(data.error || 'Erro ao registrar confirmação do documento.')
-    }
-    return data
+    return await pb.send<{ success: boolean; confirmado_em: string; message: string }>(
+      '/backend/v1/colaborador/documento/confirmar',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      },
+    )
   },
 
   async desassociar(dados: {

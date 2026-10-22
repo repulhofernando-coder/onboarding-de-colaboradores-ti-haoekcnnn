@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { pb } from '@/lib/pocketbase/client'
 import { colaboradorDocumentoService } from '@/services/onboarding'
 import { MundoOpenLogo } from '@/components/MundoOpenLogo'
 import { formatDateTime } from '@/lib/dateUtils'
@@ -77,17 +78,15 @@ export function ColaboradorDocumentoPublico() {
       setCarregando(true)
       setErro(null)
 
-      const res = await fetch(
+      const json = await pb.send<DadosDocumentoPublico>(
         `/backend/v1/colaborador/documento/publico?token=${encodeURIComponent(token)}`,
+        {
+          method: 'GET',
+        },
       )
-      const json = await res.json()
-
-      if (!res.ok) {
-        throw new Error(json.error || 'Documento não encontrado ou indisponível.')
-      }
 
       setDados(json)
-      if (json.status === 'confirmado') {
+      if (json && json.status === 'confirmado') {
         setConfirmadoSucesso(true)
         setDataConfirmacao(json.confirmado_em || null)
       }
