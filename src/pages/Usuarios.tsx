@@ -366,6 +366,10 @@ export default function Usuarios() {
       console.error(err)
       const errorObj = err as {
         status?: number
+        response?: {
+          data?: Record<string, { code?: string; message?: string }>
+          message?: string
+        }
         data?: {
           data?: Record<string, { code?: string; message?: string }>
           message?: string
@@ -373,18 +377,28 @@ export default function Usuarios() {
         message?: string
       }
 
-      const emailError = errorObj?.data?.data?.email
+      const validationData =
+        errorObj?.response?.data ||
+        errorObj?.data?.data ||
+        (errorObj?.data as unknown as Record<string, { code?: string; message?: string }>)
+
+      const emailError = validationData?.email
       const isMismatchOrEmailAuthError =
         emailError?.code === 'validation_values_mismatch' ||
         (emailError?.message && emailError.message.toLowerCase().includes("values don't match"))
 
-      const oldPasswordError = errorObj?.data?.data?.oldPassword
+      const oldPasswordError = validationData?.oldPassword
       const isOldPasswordError =
         oldPasswordError?.code === 'validation_required' ||
         oldPasswordError?.code === 'validation_values_mismatch' ||
         (oldPasswordError?.message &&
           (oldPasswordError.message.toLowerCase().includes('blank') ||
             oldPasswordError.message.toLowerCase().includes('match')))
+
+      const verifiedError = validationData?.verified
+      const passwordError = validationData?.password || validationData?.passwordConfirm
+      const nameError = validationData?.name
+      const roleError = validationData?.role
 
       if (isOldPasswordError) {
         toast.error(
@@ -393,9 +407,29 @@ export default function Usuarios() {
         )
       } else if (isMismatchOrEmailAuthError) {
         toast.error(
-          'Não foi possível salvar: a alteração de e-mail requer confirmação por senha — recrie o usuário ou contate o administrador',
+          'Não foi possível salvar: a alteração de e-mail requer confirmação por senha — recrie o usuário ou contate o administrador.',
           { duration: 6000 },
         )
+      } else if (
+        emailError?.code === 'validation_not_unique' ||
+        (emailError?.message &&
+          (emailError.message.toLowerCase().includes('unique') ||
+            emailError.message.toLowerCase().includes('already')))
+      ) {
+        toast.error('Este e-mail já está cadastrado no sistema.')
+      } else if (
+        emailError?.code === 'validation_is_email' ||
+        (emailError?.message && emailError.message.toLowerCase().includes('valid email'))
+      ) {
+        toast.error('Informe um endereço de e-mail válido.')
+      } else if (passwordError) {
+        toast.error('A senha deve conter no mínimo 8 caracteres e coincidir com a confirmação.')
+      } else if (verifiedError) {
+        toast.error('Erro de validação do status do usuário no servidor.')
+      } else if (nameError) {
+        toast.error('Preencha o nome completo do usuário.')
+      } else if (roleError) {
+        toast.error('Selecione um papel de acesso válido.')
       } else if (
         emailError ||
         (errorObj?.message && errorObj.message.toLowerCase().includes('email'))
@@ -404,8 +438,8 @@ export default function Usuarios() {
       } else {
         toast.error(
           editingUser
-            ? 'Não foi possível atualizar o usuário. Verifique os dados.'
-            : 'Não foi possível criar o usuário. Verifique os dados.',
+            ? 'Não foi possível atualizar o usuário. Verifique os dados informados.'
+            : 'Não foi possível criar o usuário. Verifique os dados informados.',
         )
       }
     } finally {

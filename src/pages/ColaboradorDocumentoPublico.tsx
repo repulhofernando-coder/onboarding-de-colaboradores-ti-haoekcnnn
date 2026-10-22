@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { pb } from '@/lib/pocketbase/client'
+import pb from '@/lib/pocketbase/client'
 import { colaboradorDocumentoService } from '@/services/onboarding'
 import { MundoOpenLogo } from '@/components/MundoOpenLogo'
 import { formatDateTime } from '@/lib/dateUtils'

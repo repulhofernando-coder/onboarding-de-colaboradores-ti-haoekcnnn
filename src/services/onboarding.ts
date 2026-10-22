@@ -185,7 +185,6 @@ export const userService = {
       ativo: data.ativo ?? true,
       pode_editar_questionarios: Boolean(data.pode_editar_questionarios),
       emailVisibility: true,
-      verified: true,
     })
   },
 
