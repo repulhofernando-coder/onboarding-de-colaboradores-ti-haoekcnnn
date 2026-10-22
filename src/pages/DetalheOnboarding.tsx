@@ -262,6 +262,7 @@ export default function DetalheOnboarding() {
   // Modal de Avaliação do Gestor (Etapa 3)
   const [decisaoAvaliacao, setDecisaoAvaliacao] = useState<'apto' | 'nao_apto' | null>(null)
   const [observacoesAvaliacao, setObservacoesAvaliacao] = useState('')
+  const [feedbackColaboradorAvaliacao, setFeedbackColaboradorAvaliacao] = useState('')
   const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false)
 
   // Estados do Teste de Conhecimento (Etapa 3)
@@ -1313,6 +1314,7 @@ export default function DetalheOnboarding() {
         avaliadorId: user.id,
         decisao: decisaoAvaliacao,
         observacoes: observacoesAvaliacao.trim(),
+        feedbackColaborador: feedbackColaboradorAvaliacao.trim(),
         faseRetornoId: decisaoAvaliacao === 'nao_apto' ? faseRetornoId : undefined,
         prazoSuplementarDias: decisaoAvaliacao === 'nao_apto' ? prazoSuplementarDias : undefined,
         definitivo: decisaoAvaliacao === 'nao_apto' ? atingiuTeto || naoAptoDefinitivo : false,
@@ -4001,16 +4003,91 @@ export default function DetalheOnboarding() {
                     )}
                   </div>
 
+                  {/* Anotações Internas Registradas */}
                   {avaliacao.observacoes && (
                     <div className="mt-2 pt-2 border-t border-gray-200">
-                      <span className="text-xs font-semibold text-gray-700 block mb-1">
-                        Parecer do Gestor:
-                      </span>
-                      <p className="text-xs text-gray-600 italic bg-white p-2.5 rounded border border-gray-200">
-                        "{avaliacao.observacoes}"
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold text-gray-700">
+                          Anotações Internas do Gestor:
+                        </span>
+                        <span className="text-[10px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded font-medium">
+                          Confidencial (Interno)
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 bg-white p-2.5 rounded border border-gray-200">
+                        {avaliacao.observacoes}
                       </p>
                     </div>
                   )}
+
+                  {/* Feedback Oficial ao Colaborador (Link Público) */}
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-blue-900 uppercase tracking-wide">
+                          Feedback para o Colaborador
+                        </span>
+                        {avaliacao.feedback_colaborador ? (
+                          <Badge className="bg-blue-100 text-blue-800 border-blue-300 text-[10px] font-semibold">
+                            Feedback publicado
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="text-gray-500 border-gray-300 text-[10px]"
+                          >
+                            Sem feedback publicado
+                          </Badge>
+                        )}
+                      </div>
+
+                      {avaliacao.feedback_token && avaliacao.feedback_colaborador && (
+                        <div className="flex items-center gap-2">
+                          {avaliacao.feedback_lido_em ? (
+                            <span className="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              Lido em {formatDate(avaliacao.feedback_lido_em)}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-amber-700 font-medium flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5 text-amber-600" />
+                              Aguardando leitura do colaborador
+                            </span>
+                          )}
+
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const url = `${window.location.origin}/feedback-avaliacao/${avaliacao.feedback_token}`
+                              navigator.clipboard.writeText(url)
+                              toast.success('Link do feedback copiado com sucesso!')
+                            }}
+                            className="h-7 text-xs border-blue-300 text-blue-800 hover:bg-blue-50 font-semibold gap-1"
+                          >
+                            <Copy className="w-3 h-3 text-blue-600" />
+                            <span>Copiar link do feedback</span>
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {avaliacao.feedback_colaborador ? (
+                      <div className="bg-blue-50/70 border border-blue-200 p-3 rounded-lg text-xs text-blue-950 space-y-1">
+                        <p className="whitespace-pre-wrap">{avaliacao.feedback_colaborador}</p>
+                        <p className="text-[10px] text-blue-600 font-mono pt-1 border-t border-blue-200/60">
+                          Link público: {window.location.origin}/feedback-avaliacao/
+                          {avaliacao.feedback_token}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-gray-500 italic">
+                        O gestor não registrou mensagem de feedback para o colaborador nesta
+                        avaliação. Nenhum link ativo foi gerado.
+                      </p>
+                    )}
+                  </div>
                 </div>
               ) : (
                 /* Formulário de Avaliação (Gestão tem permissão de escrita; RH vê modo leitura) */
@@ -4181,16 +4258,47 @@ export default function DetalheOnboarding() {
                         </div>
                       )}
 
-                      <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1.5">
-                          Observações do Gestor (Opcional)
-                        </label>
+                      {/* Anotações Internas do Gestor */}
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700">
+                            Anotações Internas do Gestor (Uso Exclusivo da Gestão / RH)
+                          </label>
+                          <span className="text-[10px] font-semibold text-slate-500 bg-slate-200/60 px-2 py-0.5 rounded">
+                            Confidencial • Colaborador NÃO vê
+                          </span>
+                        </div>
                         <Textarea
-                          rows={3}
-                          placeholder="Ex.: Colaborador demonstrou bom domínio em roteamento, boa comunicação e postura com o cliente..."
+                          rows={2}
+                          placeholder="Anotações confidenciais para acompanhamento do RH e liderança..."
                           value={observacoesAvaliacao}
                           onChange={(e) => setObservacoesAvaliacao(e.target.value)}
-                          className="text-xs border-gray-300 resize-none"
+                          className="text-xs border-gray-300 bg-white resize-none"
+                        />
+                      </div>
+
+                      {/* Feedback Oficial para o Colaborador (Link Público) */}
+                      <div className="p-3.5 rounded-xl bg-blue-50/70 border-2 border-blue-200 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-xs font-bold uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-blue-600" />
+                            Feedback para o Colaborador (Texto Oficial de Devolutiva)
+                          </label>
+                          <span className="text-[10px] font-bold text-blue-800 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded">
+                            Visível ao Colaborador via Link Público
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-blue-700 leading-relaxed">
+                          Texto que será exposto no link público{' '}
+                          <code>/feedback-avaliacao/:token</code> (sem login). Se deixado vazio,
+                          nenhum token será gerado e nada será publicado ao técnico.
+                        </p>
+                        <Textarea
+                          rows={3}
+                          placeholder="Escreva aqui a devolutiva formal que o técnico lerá (pontos fortes, postura profissional, recomendações técnicas)..."
+                          value={feedbackColaboradorAvaliacao}
+                          onChange={(e) => setFeedbackColaboradorAvaliacao(e.target.value)}
+                          className="text-xs border-blue-300 bg-white focus:border-blue-500 resize-none"
                         />
                       </div>
 

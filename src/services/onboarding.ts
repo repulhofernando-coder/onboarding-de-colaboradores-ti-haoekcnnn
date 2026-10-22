@@ -1542,6 +1542,7 @@ export const avaliacaoService = {
     avaliadorId: string
     decisao: AvaliacaoDecisao
     observacoes?: string
+    feedbackColaborador?: string
     faseRetornoId?: string
     prazoSuplementarDias?: number
     definitivo?: boolean
@@ -1552,12 +1553,25 @@ export const avaliacaoService = {
     const reavaliacoesAtuais = onb.reavaliacoes_count || 0
     const ciclo = reavaliacoesAtuais + 1
 
+    // Se o gestor preencheu texto de feedback para o colaborador, gerar token único seguro
+    const textoFeedback = (params.feedbackColaborador || '').trim()
+    let feedbackToken = ''
+    if (textoFeedback) {
+      const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+      feedbackToken = 'fb_'
+      for (let i = 0; i < 28; i++) {
+        feedbackToken += chars.charAt(Math.floor(Math.random() * chars.length))
+      }
+    }
+
     // Cria registro de avaliacao preservando histórico
     const avaliacao = await pb.collection('avaliacoes').create<Avaliacao>({
       onboarding_id: params.onboardingId,
       avaliador_id: params.avaliadorId,
       decisao: params.decisao,
       observacoes: params.observacoes || '',
+      feedback_colaborador: textoFeedback,
+      feedback_token: feedbackToken,
       ciclo,
       fase_retorno_id: params.faseRetornoId || '',
       prazo_suplementar_dias: params.prazoSuplementarDias || 0,
@@ -1614,6 +1628,49 @@ export const avaliacaoService = {
       .update<Onboarding>(params.onboardingId, updatePayload)
 
     return { avaliacao, onboarding }
+  },
+
+  async atualizarFeedback(avaliacaoId: string, novoTextoFeedback: string): Promise<Avaliacao> {
+    const textoLimpo = (novoTextoFeedback || '').trim()
+    const avaliacaoAtual = await pb.collection('avaliacoes').getOne<Avaliacao>(avaliacaoId)
+
+    const updatePayload: Record<string, unknown> = {
+      feedback_colaborador: textoLimpo,
+    }
+
+    if (textoLimpo) {
+      // Se não tinha token antes, gerar novo token persistente; se já tinha, reutilizar o mesmo token!
+      if (!avaliacaoAtual.feedback_token) {
+        const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+        let token = 'fb_'
+        for (let i = 0; i < 28; i++) {
+          token += chars.charAt(Math.floor(Math.random() * chars.length))
+        }
+        updatePayload.feedback_token = token
+      }
+    } else {
+      // Se o gestor apagou o texto, desativar token para nada ficar exposto
+      updatePayload.feedback_token = ''
+      updatePayload.feedback_lido_em = null
+      updatePayload.feedback_lido_ip = ''
+    }
+
+    const atualizada = await pb
+      .collection('avaliacoes')
+      .update<Avaliacao>(avaliacaoId, updatePayload, {
+        expand: 'avaliador_id,onboarding_id',
+      })
+
+    return atualizada
+  },
+}
+
+export const feedbackAvaliacaoPublicoService = {
+  async getFeedback(token: string): Promise<import('@/types/onboarding').FeedbackAvaliacaoPublico> {
+    return await pb.send<import('@/types/onboarding').FeedbackAvaliacaoPublico>(
+      `/backend/v1/colaborador/feedback-avaliacao/publico?token=${encodeURIComponent(token)}`,
+      { method: 'GET' },
+    )
   },
 }
 

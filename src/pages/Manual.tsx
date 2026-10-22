@@ -1767,6 +1767,60 @@ export default function Manual() {
                 </li>
               </ul>
             </div>
+
+            {/* Subseção: Feedback ao Colaborador via Link Público */}
+            <div className="bg-blue-50/70 rounded-xl p-4 sm:p-5 border border-blue-200 space-y-3">
+              <h3 className="text-sm font-bold text-blue-900 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-blue-600" />
+                Feedback Oficial ao Colaborador (Link Público sem Login)
+              </h3>
+              <p className="text-xs sm:text-sm text-blue-950 leading-relaxed">
+                Diferente das <em>Anotações Internas do Gestor</em> (que são estritamente
+                confidenciais e restritas à gestão e RH), o sistema disponibiliza o campo oficial{' '}
+                <strong>"Feedback para o Colaborador"</strong> no momento da conclusão do onboarding
+                ou reavaliação.
+              </p>
+              <ul className="text-xs text-blue-900 space-y-1.5 list-disc pl-5">
+                <li>
+                  <strong>Visibilidade Clara no Formulário:</strong> Na Etapa 3 e no módulo de
+                  Avaliações, o formulário separa visualmente as{' '}
+                  <em>Anotações Internas (Confidenciais)</em> do{' '}
+                  <em>Feedback para o Colaborador (Texto Oficial de Devolutiva)</em>.
+                </li>
+                <li>
+                  <strong>Regra "Só quando houver texto":</strong> Se o gestor deixar o campo de
+                  feedback em branco ao registrar a decisão, nenhum token público é gerado e nada é
+                  exposto ao colaborador. O status no perfil permanece como{' '}
+                  <em>"Sem feedback publicado"</em>.
+                </li>
+                <li>
+                  <strong>Acesso por Link Público com Token:</strong> Quando o gestor redige o
+                  feedback, um token único e seguro é criado. O colaborador acessa a página{' '}
+                  <code>/feedback-avaliacao/:token</code> sem necessidade de login corporativo, no
+                  mesmo padrão visual e institucional das provas e documentos complementares Mundo
+                  Open.
+                </li>
+                <li>
+                  <strong>Privacidade e Conteúdo Mínimo:</strong> A página pública exibe somente o
+                  essencial para a devolutiva do colaborador: nome, resultado do onboarding (Apto ou
+                  Não Apto), data da avaliação, nome do gestor autor e o texto de feedback redigido.{' '}
+                  <strong>Nunca</strong> exibe anotações internas confidenciais, notas por questão
+                  ou gabaritos.
+                </li>
+                <li>
+                  <strong>Carimbo de Leitura e Auditoria:</strong> Ao abrir a página pública pela
+                  primeira vez, o sistema grava automaticamente a data/hora e o endereço IP de
+                  leitura, exibindo o status <em>"Lido em [data/hora]"</em> para a gestão e
+                  registrando evento na auditoria.
+                </li>
+                <li>
+                  <strong>Compartilhamento no Perfil:</strong> No Perfil do Colaborador (seção da
+                  Etapa 3 e histórico), o gestor e RH contam com o status de publicação e um botão
+                  dedicado para copiar o link público e enviar diretamente ao colaborador via
+                  WhatsApp ou e-mail corporativo.
+                </li>
+              </ul>
+            </div>
           </div>
         </section>
 
@@ -1842,6 +1896,11 @@ export default function Manual() {
               'Status de Leitura: conferir mudança de status para Confirmado em tempo real com data, hora e registro na Trajetória e Auditoria;',
               'Anotações do Gestor: cadastrar Feedback 1:1, Avaliação e Observação Geral no Perfil com privacidade estrita (colaborador não visualiza nem no link público);',
               'Anotação automática na Avaliação: gerar link de avaliação com motivo preenchido e verificar gravação de anotação correspondente no histórico confidencial.',
+              'Feedback ao Colaborador: preencher texto no campo "Feedback para o Colaborador" ao avaliar na Etapa 3 ou Avaliações → verificar geração do link público /feedback-avaliacao/:token;',
+              'Página Pública de Feedback: acessar sem login e conferir layout Mundo Open, nome, resultado (Apto/Não Apto), data, texto e autor;',
+              'Carimbo de Leitura: primeiro acesso registra data/hora e IP na avaliação e log na auditoria → perfil exibe "Lido em [data/hora]";',
+              'Regra de feedback vazio: ao registrar avaliação sem preencher o texto de feedback, confirmar que nenhum link ativo é gerado e perfil mostra "Sem feedback publicado";',
+              'Botão "Copiar link do feedback" no Perfil do Colaborador copia URL funcional para envio ao técnico via WhatsApp/e-mail.',
             ].map((item, idx) => (
               <div
                 key={idx}

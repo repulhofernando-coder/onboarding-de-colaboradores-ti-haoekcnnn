@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-22T00:39:32.557Z",
+  "generatedAt": "2026-10-22T00:59:12.180Z",
   "collections": [
     {
       "name": "users",
@@ -650,9 +650,42 @@
           "type": "bool",
           "required": false,
           "system": false
+        },
+        {
+          "name": "feedback_colaborador",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "feedback_token",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "feedback_lido_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "feedback_lido_ip",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "feedback_acessos_count",
+          "type": "number",
+          "required": false,
+          "system": false
         }
       ],
-      "indexes": ["CREATE INDEX idx_avaliacoes_avaliador_id ON avaliacoes (avaliador_id)"]
+      "indexes": [
+        "CREATE INDEX idx_avaliacoes_avaliador_id ON avaliacoes (avaliador_id)",
+        "CREATE INDEX `idx_avaliacoes_feedback_token` ON `avaliacoes` (feedback_token)"
+      ]
     },
     {
       "name": "materiais",

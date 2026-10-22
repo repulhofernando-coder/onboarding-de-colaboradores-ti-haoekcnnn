@@ -374,10 +374,29 @@ export interface Avaliacao extends RecordModel {
   fase_retorno_id?: string
   prazo_suplementar_dias?: number
   definitivo?: boolean
+  feedback_colaborador?: string
+  feedback_token?: string
+  feedback_lido_em?: string
+  feedback_lido_ip?: string
+  feedback_acessos_count?: number
   expand?: {
     avaliador_id?: User
     onboarding_id?: Onboarding
   }
+}
+
+export interface FeedbackAvaliacaoPublico {
+  id: string
+  colaboradorNome: string
+  cargo: string
+  setor: string
+  decisao: AvaliacaoDecisao
+  dataAvaliacao: string
+  gestorNome: string
+  feedbackTexto: string
+  lidoEm: string
+  primeiraLeitura: boolean
+  totalAcessos: number
 }
 export const SETORES_INFO: Record<
   string,

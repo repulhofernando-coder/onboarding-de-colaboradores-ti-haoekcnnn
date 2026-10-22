@@ -52,6 +52,7 @@ export default function Avaliacoes() {
   const [selectedOnboarding, setSelectedOnboarding] = useState<Onboarding | null>(null)
   const [decisao, setDecisao] = useState<AvaliacaoDecisao | null>(null)
   const [observacoes, setObservacoes] = useState('')
+  const [feedbackColaborador, setFeedbackColaborador] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   // Estado para fluxo Não Apto
@@ -166,6 +167,7 @@ export default function Avaliacoes() {
     setSelectedOnboarding(item)
     setDecisao(null)
     setObservacoes('')
+    setFeedbackColaborador('')
     setFaseRetornoId('')
     setPrazoSuplementarDias(5)
     setNaoAptoDefinitivo(false)
@@ -205,6 +207,7 @@ export default function Avaliacoes() {
         avaliadorId: user.id,
         decisao,
         observacoes: observacoes.trim(),
+        feedbackColaborador: feedbackColaborador.trim(),
         faseRetornoId: decisao === 'nao_apto' ? faseRetornoId : undefined,
         prazoSuplementarDias: decisao === 'nao_apto' ? prazoSuplementarDias : undefined,
         definitivo: decisao === 'nao_apto' ? atingiuTeto || naoAptoDefinitivo : false,
@@ -838,16 +841,48 @@ export default function Avaliacoes() {
                 </div>
               )}
 
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1.5">
-                  Observações e Feedback do Gestor (Opcional)
-                </label>
+              {/* Anotações Internas do Gestor */}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700">
+                    Anotações Internas do Gestor (Uso Exclusivo da Gestão / RH)
+                  </label>
+                  <span className="text-[10px] font-semibold text-slate-500 bg-slate-200/60 px-2 py-0.5 rounded">
+                    Confidencial • Colaborador NÃO vê
+                  </span>
+                </div>
                 <Textarea
-                  rows={3}
-                  placeholder="Registre pontos fortes, observações sobre a conduta em atendimento ou recomendações futuras..."
+                  rows={2}
+                  placeholder="Pontos de atenção internos, justificativas para a chefia imediata e RH..."
                   value={observacoes}
                   onChange={(e) => setObservacoes(e.target.value)}
-                  className="text-xs border-gray-300"
+                  className="text-xs border-gray-300 bg-white"
+                  disabled={submitting}
+                />
+              </div>
+
+              {/* Feedback Oficial para o Colaborador (Link Público) */}
+              <div className="p-3.5 rounded-xl bg-blue-50/70 border-2 border-blue-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-blue-600" />
+                    Feedback para o Colaborador (Texto Oficial de Devolutiva)
+                  </label>
+                  <span className="text-[10px] font-bold text-blue-800 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded">
+                    Visível ao Colaborador via Link Público
+                  </span>
+                </div>
+                <p className="text-[11px] text-blue-700 leading-relaxed">
+                  Texto que será exposto no link público <code>/feedback-avaliacao/:token</code>{' '}
+                  (sem login). Se deixado em branco, nada será publicado e o técnico não receberá
+                  link de feedback.
+                </p>
+                <Textarea
+                  rows={3}
+                  placeholder="Escreva a devolutiva construtiva para o colaborador ler (pontos fortes demonstrados no onboarding, postura com clientes, evolução técnica e orientações para o trabalho solo)..."
+                  value={feedbackColaborador}
+                  onChange={(e) => setFeedbackColaborador(e.target.value)}
+                  className="text-xs border-blue-300 bg-white focus:border-blue-500"
                   disabled={submitting}
                 />
               </div>

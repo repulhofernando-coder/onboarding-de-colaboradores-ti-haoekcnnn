@@ -26,6 +26,7 @@ import ColaboradorPublico from './pages/ColaboradorPublico'
 import CandidatoProvaPublica from './pages/CandidatoProvaPublica'
 import { ColaboradorAvaliacaoPublica } from './pages/ColaboradorAvaliacaoPublica'
 import { ColaboradorDocumentoPublico } from './pages/ColaboradorDocumentoPublico'
+import { ColaboradorFeedbackPublico } from './pages/ColaboradorFeedbackPublico'
 import PreSelecionados from './pages/PreSelecionados'
 import LimpezaAmbiente from './pages/LimpezaAmbiente'
 import ImpressaoQuestionario from './pages/ImpressaoQuestionario'
@@ -57,6 +58,7 @@ const App = () => (
           <Route path="/candidato/prova/:token" element={<CandidatoProvaPublica />} />
           <Route path="/avaliacao/:token" element={<ColaboradorAvaliacaoPublica />} />
           <Route path="/documento-complementar/:token" element={<ColaboradorDocumentoPublico />} />
+          <Route path="/feedback-avaliacao/:token" element={<ColaboradorFeedbackPublico />} />
 
           {/* Rotas Protegidas (Exigem Login) */}
           <Route

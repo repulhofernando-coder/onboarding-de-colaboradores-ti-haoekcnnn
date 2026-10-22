@@ -351,21 +351,21 @@ export function SecaoTrajetoria({
       })
     })
 
-    // 7. Anotações & Feedbacks do Gestor (Uso interno na Trajetória)
+    // 7. Anotações & Feedbacks Internos do Gestor (Uso exclusivo interno)
     anotacoes.forEach((anot) => {
       const tipoLabel =
         anot.tipo === 'feedback_1_1'
-          ? 'Feedback 1:1'
+          ? 'Anotação Interna (1:1)'
           : anot.tipo === 'avaliacao'
-            ? 'Avaliação'
-            : 'Observação Geral'
+            ? 'Anotação Interna (Avaliação)'
+            : 'Observação Interna'
 
       lista.push({
         id: `anot-${anot.id}`,
         dataHora: anot.created,
         tipo: 'anotacao_gestor',
-        titulo: `Anotação do Gestor (${tipoLabel})`,
-        subtitulo: `Registrado por ${anot.autor_nome || anot.expand?.autor?.name || 'Gestão'} (Confidencial)`,
+        titulo: `Anotação Interna do Gestor (${tipoLabel})`,
+        subtitulo: `Registrado por ${anot.autor_nome || anot.expand?.autor?.name || 'Gestão'} (Confidencial / Interno)`,
         detalhes: anot.texto,
         autorNome: anot.autor_nome || anot.expand?.autor?.name || 'Gestor',
         autorRole: anot.autor_role || 'Gestão',

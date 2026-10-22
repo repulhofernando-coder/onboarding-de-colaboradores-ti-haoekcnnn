@@ -28,44 +28,16 @@ export function getErrorMessage(error: unknown): string {
   return msgs.length > 0 ? msgs.join(' ') : error.message || 'An unexpected error occurred.'
 }
 
-/**
- * Identifica falhas de conexão de rede ou indisponibilidade do backend PocketBase.
- * Trata erros do ClientResponseError com status 0 (conexão recusada / sem rede / CORS / timeout),
- * exceções de fetch ('Failed to fetch', 'NetworkError', 'Load failed', 'ECONNREFUSED'),
- * e navegadores offline (navigator.onLine === false).
- */
 export function isNetworkError(error: unknown): boolean {
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return true
-  }
-
   if (error instanceof ClientResponseError) {
-    // PocketBase seta status 0 quando a requisição falha antes de obter resposta HTTP
-    if (error.status === 0) return true
-    const orig = error.originalError
-    if (orig && typeof orig === 'object' && 'name' in orig) {
-      const name = String((orig as { name?: unknown }).name || '').toLowerCase()
-      if (name.includes('network') || name.includes('aborterror')) return true
-    }
+    return error.status === 0 || error.isAbort
   }
-
   if (error instanceof Error) {
-    const msg = error.message.toLowerCase()
-    const name = error.name.toLowerCase()
-    if (
-      msg.includes('failed to fetch') ||
-      msg.includes('networkerror') ||
-      msg.includes('network error') ||
-      msg.includes('connection refused') ||
-      msg.includes('econnrefused') ||
-      msg.includes('load failed') ||
-      msg.includes('net::err') ||
-      name.includes('networkerror') ||
-      (name.includes('typeerror') && msg.includes('fetch'))
-    ) {
-      return true
-    }
+    return (
+      error.message.toLowerCase().includes('network') ||
+      error.message.toLowerCase().includes('failed to fetch') ||
+      error.message.toLowerCase().includes('connection')
+    )
   }
-
   return false
 }
