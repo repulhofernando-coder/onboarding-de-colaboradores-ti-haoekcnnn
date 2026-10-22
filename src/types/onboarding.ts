@@ -172,6 +172,8 @@ export interface LogAuditoria extends RecordModel {
   metadata?: Record<string, unknown>
 }
 
+export type TipoEventoAcesso = 'login' | 'falha_login' | 'logout'
+
 export interface ModeloTarefa extends RecordModel {
   setor?: Setor
   setor_ref?: string

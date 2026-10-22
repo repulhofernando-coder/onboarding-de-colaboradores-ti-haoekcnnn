@@ -11,7 +11,7 @@ interface AuthContextType {
   isRH: boolean
   isGestao: boolean
   login: (email: string, pass: string) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
   refreshUser: () => Promise<void>
 }
 
@@ -74,7 +74,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(res.record)
   }
 
-  const logout = () => {
+  const logout = async () => {
+    // Registrar na auditoria ANTES de limpar a sessão local
+    const currentUser = user || (pb.authStore.record as unknown as User) || null
+    if (currentUser) {
+      try {
+        const { auditoriaService } = await import('@/services/onboarding')
+        await auditoriaService.registrarLogout({
+          id: currentUser.id,
+          email: currentUser.email,
+          name: currentUser.name,
+          role: currentUser.role,
+        })
+      } catch (err) {
+        console.warn('Falha silenciosa ao registrar logout na auditoria:', err)
+      }
+    }
     pb.authStore.clear()
     setUser(null)
   }

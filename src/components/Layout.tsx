@@ -77,9 +77,12 @@ export default function Layout() {
     return setor ? `${papel} · ${setor}` : papel
   })()
 
-  const handleLogout = () => {
-    logout()
-    navigate('/login')
+  const handleLogout = async () => {
+    try {
+      await logout()
+    } finally {
+      navigate('/login')
+    }
   }
 
   // Obter título da página dinamicamente

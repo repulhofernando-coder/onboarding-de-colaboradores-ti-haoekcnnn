@@ -18,6 +18,10 @@ import {
   Layers,
   ArrowUpDown,
   RefreshCw,
+  LogIn,
+  LogOut,
+  ShieldAlert,
+  KeyRound,
 } from 'lucide-react'
 
 export default function Logs() {
@@ -30,6 +34,7 @@ export default function Logs() {
   const [search, setSearch] = useState('')
   const [filtroColaborador, setFiltroColaborador] = useState<string>('todos')
   const [filtroGestor, setFiltroGestor] = useState<string>('todos')
+  const [filtroTipoEvento, setFiltroTipoEvento] = useState<string>('todos')
   const [somenteForaPrazo, setSomenteForaPrazo] = useState(false)
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
 
@@ -106,6 +111,32 @@ export default function Logs() {
           if (log.gestor_nome !== filtroGestor) return false
         }
 
+        // Filtro por tipo de evento
+        if (filtroTipoEvento !== 'todos') {
+          const acaoLower = (log.acao || '').toLowerCase()
+          if (filtroTipoEvento === 'acesso_todos') {
+            const isAcesso =
+              acaoLower.includes('login') ||
+              acaoLower.includes('logout') ||
+              acaoLower.includes('sessão') ||
+              acaoLower.includes('falha de login')
+            if (!isAcesso) return false
+          } else if (filtroTipoEvento === 'login') {
+            if (!acaoLower.includes('login realizado') && acaoLower !== 'login') return false
+          } else if (filtroTipoEvento === 'falha_login') {
+            if (!acaoLower.includes('falha') || !acaoLower.includes('login')) return false
+          } else if (filtroTipoEvento === 'logout') {
+            if (!acaoLower.includes('logout')) return false
+          } else if (filtroTipoEvento === 'onboarding') {
+            const isAcesso =
+              acaoLower.includes('login') ||
+              acaoLower.includes('logout') ||
+              acaoLower.includes('sessão') ||
+              acaoLower.includes('falha de login')
+            if (isAcesso) return false
+          }
+        }
+
         // Filtro fora do prazo
         if (somenteForaPrazo && !log.fora_prazo) {
           return false
@@ -118,7 +149,7 @@ export default function Logs() {
         const timeB = new Date(b.created).getTime()
         return sortOrder === 'desc' ? timeB - timeA : timeA - timeB
       })
-  }, [logs, search, filtroColaborador, filtroGestor, somenteForaPrazo, sortOrder])
+  }, [logs, search, filtroColaborador, filtroGestor, filtroTipoEvento, somenteForaPrazo, sortOrder])
 
   // Formatação de data
   const formatDate = (iso: string) => {
@@ -145,11 +176,13 @@ export default function Logs() {
     const headers = [
       'Data/Hora',
       'Acao',
+      'Tipo/Categoria',
       'Colaborador',
       'Gestor Responsavel',
       'Executado Por',
       'Papel',
       'Fora do Prazo',
+      'IP / Origem',
       'Destaque de Prazo',
       'Detalhes',
     ]
@@ -157,11 +190,13 @@ export default function Logs() {
     const rows = logsFiltrados.map((log) => [
       `"${formatDate(log.created)}"`,
       `"${(log.acao || '').replace(/"/g, '""')}"`,
+      `"${isEventoAcesso(log.acao) ? 'Acesso ao Sistema' : 'Onboarding / Operacional'}"`,
       `"${(log.colaborador_nome || '').replace(/"/g, '""')}"`,
       `"${(log.gestor_nome || '').replace(/"/g, '""')}"`,
       `"${(log.usuario_nome || '').replace(/"/g, '""')}"`,
       `"${(log.usuario_role || '').replace(/"/g, '""')}"`,
       `"${log.fora_prazo ? 'SIM' : 'NAO'}"`,
+      `"${(extrairIpDoLog(log) || '').replace(/"/g, '""')}"`,
       `"${(log.destaque_prazo || '').replace(/"/g, '""')}"`,
       `"${(log.detalhes || '').replace(/"/g, '""')}"`,
     ])
@@ -191,12 +226,15 @@ export default function Logs() {
     txtContent += `================================================================================\n\n`
 
     logsFiltrados.forEach((log, index) => {
+      const ip = extrairIpDoLog(log)
       txtContent += `[Registro #${index + 1}]\n`
       txtContent += `Data/Hora: ${formatDate(log.created)}\n`
       txtContent += `Acao: ${log.acao}\n`
+      txtContent += `Categoria: ${isEventoAcesso(log.acao) ? 'Segurança & Acesso' : 'Onboarding / Operacional'}\n`
       txtContent += `Colaborador: ${log.colaborador_nome || '-'}\n`
       txtContent += `Gestor: ${log.gestor_nome || '-'}\n`
       txtContent += `Executado por: ${log.usuario_nome || '-'} (${log.usuario_role || '-'})\n`
+      if (ip) txtContent += `IP: ${ip}\n`
       txtContent += `Conformidade: ${log.fora_prazo ? 'FORA DO PRAZO' : 'No Prazo'} ${log.destaque_prazo ? `(${log.destaque_prazo})` : ''}\n`
       txtContent += `Detalhes: ${log.detalhes || '-'}\n`
       txtContent += `--------------------------------------------------------------------------------\n`
@@ -213,6 +251,59 @@ export default function Logs() {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+  }
+
+  // Identificação e estilização de eventos de acesso
+  const isEventoAcesso = (acao?: string) => {
+    if (!acao) return false
+    const a = acao.toLowerCase()
+    return a.includes('login') || a.includes('logout') || a.includes('acesso')
+  }
+
+  const extrairIpDoLog = (log: LogAuditoria): string | null => {
+    if (log.metadata && typeof log.metadata === 'object' && 'ip' in log.metadata) {
+      const val = (log.metadata as { ip?: string }).ip
+      if (val && val !== 'Não identificado') return val
+    }
+    const match = (log.detalhes || '').match(/\bIP:?\s*([0-9a-fA-F.:]+)\b/i)
+    if (match) return match[1]
+    return null
+  }
+
+  const renderBadgeAcao = (log: LogAuditoria) => {
+    const acaoLower = (log.acao || '').toLowerCase()
+
+    if (acaoLower.includes('login realizado') || acaoLower === 'login') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+          <LogIn className="w-3.5 h-3.5 text-emerald-600" />
+          <span>Login realizado</span>
+        </span>
+      )
+    }
+
+    if (
+      acaoLower.includes('falha de login') ||
+      (acaoLower.includes('falha') && acaoLower.includes('login'))
+    ) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300">
+          <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+          <span>Falha de login</span>
+        </span>
+      )
+    }
+
+    if (acaoLower.includes('logout') || acaoLower.includes('encerramento de sessão')) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300">
+          <LogOut className="w-3.5 h-3.5 text-slate-500" />
+          <span>Logout</span>
+        </span>
+      )
+    }
+
+    return <span className="font-bold text-gray-900 block">{log.acao}</span>
   }
 
   return (
@@ -286,16 +377,32 @@ export default function Logs() {
 
       {/* Barra de Filtros */}
       <div className="bg-white p-5 rounded-xl border border-gray-200/90 shadow-sm space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {/* Busca por texto */}
           <div className="relative">
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <Input
-              placeholder="Buscar por ação, usuário..."
+              placeholder="Buscar por ação, usuário, IP..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 h-9 text-xs border-gray-300"
             />
+          </div>
+
+          {/* Filtro por Tipo de Evento / Categoria */}
+          <div>
+            <select
+              value={filtroTipoEvento}
+              onChange={(e) => setFiltroTipoEvento(e.target.value)}
+              className="w-full h-9 text-xs border border-gray-300 rounded-md px-2.5 bg-white text-gray-700 font-medium"
+            >
+              <option value="todos">Todos os Tipos de Eventos</option>
+              <option value="acesso_todos">🔐 Todos os Eventos de Acesso</option>
+              <option value="login">🟢 Login realizado</option>
+              <option value="falha_login">⚠️ Falha de login</option>
+              <option value="logout">🚪 Logout</option>
+              <option value="onboarding">📋 Onboarding & Conclusões</option>
+            </select>
           </div>
 
           {/* Filtro Colaborador */}
@@ -330,33 +437,35 @@ export default function Logs() {
             </select>
           </div>
 
-          {/* Toggle Somente Fora do Prazo */}
-          <div className="flex items-center justify-between sm:justify-end gap-3 px-1">
+          {/* Toggle Somente Fora do Prazo / Ordenação */}
+          <div className="flex items-center justify-between sm:justify-end gap-2 px-1">
             <label
               htmlFor="chkForaPrazo"
-              className="flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer select-none"
+              className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 cursor-pointer select-none"
             >
               <input
                 type="checkbox"
                 id="chkForaPrazo"
                 checked={somenteForaPrazo}
                 onChange={(e) => setSomenteForaPrazo(e.target.checked)}
-                className="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500"
+                className="w-3.5 h-3.5 text-brand-600 rounded border-gray-300 focus:ring-brand-500"
               />
-              <span className="flex items-center gap-1 text-red-700">
+              <span className="flex items-center gap-1 text-red-700 text-[11px]">
                 <AlertCircle className="w-3.5 h-3.5" />
-                Somente fora do prazo
+                Fora prazo
               </span>
             </label>
 
             <button
               type="button"
               onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
-              className="p-1.5 rounded hover:bg-gray-100 text-gray-500 text-xs flex items-center gap-1 border border-gray-200"
+              className="p-1.5 rounded hover:bg-gray-100 text-gray-500 text-xs flex items-center gap-1 border border-gray-200 shrink-0"
               title="Inverter ordenação"
             >
               <ArrowUpDown className="w-3.5 h-3.5" />
-              <span>{sortOrder === 'desc' ? 'Mais recentes' : 'Mais antigos'}</span>
+              <span className="hidden sm:inline">
+                {sortOrder === 'desc' ? 'Recentes' : 'Antigos'}
+              </span>
             </button>
           </div>
         </div>
@@ -366,6 +475,7 @@ export default function Logs() {
             Mostrando <strong>{logsFiltrados.length}</strong> de {logs.length} registros
           </span>
           {(search ||
+            filtroTipoEvento !== 'todos' ||
             filtroColaborador !== 'todos' ||
             filtroGestor !== 'todos' ||
             somenteForaPrazo) && (
@@ -373,6 +483,7 @@ export default function Logs() {
               type="button"
               onClick={() => {
                 setSearch('')
+                setFiltroTipoEvento('todos')
                 setFiltroColaborador('todos')
                 setFiltroGestor('todos')
                 setSomenteForaPrazo(false)
@@ -420,9 +531,7 @@ export default function Logs() {
                     </td>
 
                     {/* Ação */}
-                    <td className="py-3 px-4">
-                      <span className="font-bold text-gray-900 block">{log.acao}</span>
-                    </td>
+                    <td className="py-3 px-4">{renderBadgeAcao(log)}</td>
 
                     {/* Colaborador */}
                     <td className="py-3 px-4">
@@ -434,8 +543,8 @@ export default function Logs() {
                           {log.colaborador_nome || 'Colaborador'}
                         </Link>
                       ) : (
-                        <span className="font-medium text-gray-800">
-                          {log.colaborador_nome || '-'}
+                        <span className="font-medium text-gray-500">
+                          {log.colaborador_nome || (isEventoAcesso(log.acao) ? '—' : '-')}
                         </span>
                       )}
                     </td>
@@ -451,11 +560,23 @@ export default function Logs() {
                     </td>
 
                     {/* Gestor Responsável */}
-                    <td className="py-3 px-4 text-gray-700">{log.gestor_nome || '-'}</td>
+                    <td className="py-3 px-4 text-gray-700">
+                      {log.gestor_nome || (isEventoAcesso(log.acao) ? '—' : '-')}
+                    </td>
 
-                    {/* Conformidade de Prazo */}
+                    {/* Conformidade de Prazo / IP */}
                     <td className="py-3 px-4 whitespace-nowrap">
-                      {log.fora_prazo ? (
+                      {isEventoAcesso(log.acao) ? (
+                        (() => {
+                          const ip = extrairIpDoLog(log)
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[10px] border border-slate-200">
+                              <KeyRound className="w-3 h-3 text-slate-500" />
+                              {ip ? `IP ${ip}` : 'Acesso web'}
+                            </span>
+                          )
+                        })()
+                      ) : log.fora_prazo ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800 border border-red-200">
                           <AlertCircle className="w-3 h-3 text-red-600" />
                           Fora do Prazo

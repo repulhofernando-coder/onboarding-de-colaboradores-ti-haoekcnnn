@@ -728,17 +728,49 @@ export default function Manual() {
               </p>
               <p>
                 Tela <strong>&quot;Logs&quot;</strong> (menu lateral, exclusiva do Admin): todos os
-                onboardings, com filtros por colaborador, gestor e &quot;somente fora do
-                prazo&quot;.
+                registros de auditoria do sistema, com filtros por colaborador, gestor, tipo de
+                evento (Eventos de Acesso: Login, Falha de Login, Logout vs. Onboarding &
+                Conclusões) e &quot;somente fora do prazo&quot;.
               </p>
+              <div className="p-3.5 bg-brand-50/70 border border-brand-200 rounded-lg space-y-2 text-xs text-brand-950">
+                <div className="font-bold text-xs uppercase tracking-wide text-brand-900 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-brand-700" />
+                  <span>Auditoria de Eventos de Acesso ao Sistema (Login, Falha e Logout):</span>
+                </div>
+                <p className="leading-relaxed">
+                  Para garantir total conformidade e rastreabilidade de segurança da informação,
+                  todos os eventos de autenticação e encerramento de sessão são registrados de forma
+                  imutável:
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-brand-900 pl-1">
+                  <li>
+                    <strong>Login realizado:</strong> Registra usuário autenticado (nome e e-mail),
+                    papel funcional no sistema (Administrador, RH ou Gestão), data/hora precisa e
+                    endereço IP público/real capturado pelo servidor.
+                  </li>
+                  <li>
+                    <strong>Falha de login:</strong> Registra tentativas recusadas com o e-mail
+                    informado, data/hora, endereço IP de origem e o motivo detalhado (ex.:
+                    credenciais inválidas ou conta desativada). Erros de rede do navegador
+                    (&quot;Failed to fetch&quot;) são descartados para evitar falsos positivos de
+                    segurança.
+                  </li>
+                  <li>
+                    <strong>Logout:</strong> Registra encerramento voluntário de sessão pelo usuário
+                    antes da destruição dos tokens de autenticação local.
+                  </li>
+                </ul>
+              </div>
               <p>
-                <strong>Exportação:</strong> botões para baixar os logs filtrados em CSV ou TXT.
+                <strong>Exportação:</strong> botões para baixar os logs filtrados em CSV ou TXT,
+                contendo ações, papéis, identificação de IP e detalhes de segurança.
               </p>
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
                 <p>
                   <strong>Política de Retenção de 6 meses (180 dias):</strong> todos os registros de
-                  auditoria são conservados integralmente pelo período regulamentar de 6 meses para
-                  fins de compliance e histórico trabalhista.
+                  auditoria (tanto operacionais quanto de acesso/login) são conservados
+                  integralmente pelo período regulamentar de 6 meses para fins de compliance e
+                  histórico trabalhista.
                 </p>
                 <p className="text-xs text-slate-500">
                   Um <strong>job cron diário automatizado</strong> executa pontualmente às{' '}

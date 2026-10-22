@@ -2067,6 +2067,116 @@ export const auditoriaService = {
       return []
     }
   },
+
+  /**
+   * Registra eventos de ACESSO (Login realizado, Falha de login, Logout)
+   * Tenta primariamente o endpoint seguro no backend para carimbar o IP real detectado pelo servidor.
+   * Caso o endpoint falhe (fallback), registra diretamente na coleção logs_auditoria.
+   * Não bloqueia e não quebra a UX em hipótese alguma (fire-and-forget / try-catch seguro).
+   */
+  async registrarEventoAcesso(dados: {
+    tipo: 'login' | 'falha_login' | 'logout'
+    email?: string
+    usuarioId?: string
+    usuarioNome?: string
+    usuarioRole?: string
+    motivo?: string
+    detalhes?: string
+  }): Promise<void> {
+    try {
+      // 1. Tentar via endpoint backend seguro com captura de IP do servidor
+      try {
+        await pb.send('/backend/v1/auditoria/acesso', {
+          method: 'POST',
+          body: {
+            tipo: dados.tipo,
+            email: dados.email || '',
+            usuario_id: dados.usuarioId || '',
+            usuario_nome: dados.usuarioNome || '',
+            usuario_role: dados.usuarioRole || '',
+            motivo: dados.motivo || '',
+            detalhes: dados.detalhes || '',
+          },
+        })
+        return
+      } catch (endpointErr) {
+        console.warn('Aviso ao registrar evento de acesso via endpoint backend:', endpointErr)
+      }
+
+      // 2. Fallback direto no SDK caso o endpoint não responda
+      let acao = 'Acesso ao Sistema'
+      let detalhes = ''
+      const metadata: Record<string, unknown> = {
+        tipo_evento_acesso: dados.tipo,
+        email: dados.email || '',
+        data_hora: new Date().toISOString(),
+      }
+
+      if (dados.tipo === 'login') {
+        acao = 'Login realizado'
+        const roleStr = dados.usuarioRole ? ` (${dados.usuarioRole.toUpperCase()})` : ''
+        detalhes = `Autenticação bem-sucedida do usuário ${dados.usuarioNome || dados.email || 'usuário'}${roleStr}.${dados.detalhes ? ` ${dados.detalhes}` : ''}`
+      } else if (dados.tipo === 'falha_login') {
+        acao = 'Falha de login'
+        detalhes = `Tentativa de login com o e-mail "${dados.email || 'não informado'}" foi recusada.${dados.motivo ? ` Motivo: ${dados.motivo}.` : ''}`
+        metadata.motivo = dados.motivo
+      } else if (dados.tipo === 'logout') {
+        acao = 'Logout'
+        const roleStr = dados.usuarioRole ? ` (${dados.usuarioRole.toUpperCase()})` : ''
+        detalhes = `Encerramento de sessão realizado pelo usuário ${dados.usuarioNome || dados.email || 'usuário'}${roleStr}.${dados.detalhes ? ` ${dados.detalhes}` : ''}`
+      }
+
+      await auditoriaService.registrar({
+        usuarioId: dados.usuarioId,
+        usuarioNome: dados.usuarioNome || dados.email,
+        usuarioRole: dados.usuarioRole,
+        acao,
+        detalhes,
+        foraPrazo: false,
+        metadata,
+      })
+    } catch (err) {
+      console.warn('Aviso: falha silenciosa ao registrar evento de acesso na auditoria:', err)
+    }
+  },
+
+  async registrarLogin(usuario: {
+    id: string
+    email: string
+    name?: string
+    role?: string
+  }): Promise<void> {
+    await this.registrarEventoAcesso({
+      tipo: 'login',
+      email: usuario.email,
+      usuarioId: usuario.id,
+      usuarioNome: usuario.name || usuario.email,
+      usuarioRole: usuario.role || 'gestao',
+    })
+  },
+
+  async registrarFalhaLogin(email: string, motivo: string): Promise<void> {
+    await this.registrarEventoAcesso({
+      tipo: 'falha_login',
+      email: email.trim(),
+      motivo: motivo.trim(),
+    })
+  },
+
+  async registrarLogout(usuario: {
+    id?: string
+    email?: string
+    name?: string
+    role?: string
+  }): Promise<void> {
+    await this.registrarEventoAcesso({
+      tipo: 'logout',
+      email: usuario.email,
+      usuarioId: usuario.id,
+      usuarioNome: usuario.name || usuario.email,
+      usuarioRole: usuario.role || 'gestao',
+    })
+  },
 }
 
 import type {

@@ -1952,18 +1952,40 @@ export default function DetalheOnboarding() {
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-xs text-gray-900">{log.acao}</span>
-                      {log.fora_prazo ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-100 text-red-800 border border-red-200 inline-flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 text-red-600" />
-                          Fora do Prazo
+                      {log.acao?.toLowerCase().includes('login realizado') ? (
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          Login realizado
+                        </span>
+                      ) : log.acao?.toLowerCase().includes('falha de login') ? (
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-300 inline-flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 text-amber-600" />
+                          Falha de login
+                        </span>
+                      ) : log.acao?.toLowerCase().includes('logout') ? (
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300 inline-flex items-center gap-1">
+                          Logout
                         </span>
                       ) : (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                          No Prazo
-                        </span>
+                        <span className="font-bold text-xs text-gray-900">{log.acao}</span>
                       )}
+
+                      {!log.acao?.toLowerCase().includes('login') &&
+                        !log.acao?.toLowerCase().includes('logout') && (
+                          <>
+                            {log.fora_prazo ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-100 text-red-800 border border-red-200 inline-flex items-center gap-1">
+                                <AlertCircle className="w-3 h-3 text-red-600" />
+                                Fora do Prazo
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                No Prazo
+                              </span>
+                            )}
+                          </>
+                        )}
                       {log.destaque_prazo && (
                         <span className="text-[11px] text-gray-500 font-medium">
                           • {log.destaque_prazo}

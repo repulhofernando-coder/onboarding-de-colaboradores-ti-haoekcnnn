@@ -7,6 +7,9 @@ import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import MundoOpenLogo from '@/components/MundoOpenLogo'
 import { isNetworkError } from '@/lib/pocketbase/errors'
+import { auditoriaService } from '@/services/onboarding'
+import pb from '@/lib/pocketbase/client'
+import type { User } from '@/types/onboarding'
 
 export default function Login() {
   const { login } = useAuth()
@@ -24,31 +27,63 @@ export default function Login() {
     e.preventDefault()
     setErrorMsg('')
 
-    if (!email.trim() || !password) {
+    const emailDigitado = email.trim()
+
+    if (!emailDigitado || !password) {
       setErrorMsg('Campos obrigatórios: preencha e-mail e senha.')
       return
     }
 
     try {
       setLoading(true)
-      await login(email.trim(), password)
+      await login(emailDigitado, password)
+
+      // Registrar evento de auditoria: LOGIN REALIZADO
+      const loggedUser = pb.authStore.record as unknown as User | null
+      if (loggedUser) {
+        auditoriaService
+          .registrarLogin({
+            id: loggedUser.id,
+            email: loggedUser.email || emailDigitado,
+            name: loggedUser.name,
+            role: loggedUser.role,
+          })
+          .catch((auditErr) => {
+            console.warn('Falha silenciosa ao registrar login na auditoria:', auditErr)
+          })
+      }
+
       toast.success('Login realizado com sucesso!')
       navigate(from, { replace: true })
     } catch (err: unknown) {
       console.error('Erro ao realizar login:', err)
+
+      let motivoAuditoria = ''
+      const isRede = isNetworkError(err)
+
       if (
         (err instanceof Error && err.name === 'AccountDisabledError') ||
         (err instanceof Error && err.message.includes('desativada'))
       ) {
         setErrorMsg('Sua conta está desativada. Fale com o RH.')
         toast.error('Sua conta está desativada. Fale com o RH.')
-      } else if (isNetworkError(err)) {
+        motivoAuditoria = 'Conta de usuário desativada'
+      } else if (isRede) {
         const netMsg = 'Falha de conexão com o servidor. Tente novamente em instantes.'
         setErrorMsg(netMsg)
         toast.error(netMsg)
+        // Erro de rede ("Failed to fetch") NÃO deve gerar falso registro de senha incorreta
       } else {
         setErrorMsg('E-mail ou senha incorretos. Verifique suas credenciais.')
         toast.error('Não foi possível entrar. Verifique os dados informados.')
+        motivoAuditoria = 'Credenciais inválidas (e-mail ou senha incorretos)'
+      }
+
+      // Registrar auditoria para falhas de autenticação reais (não para erro de rede)
+      if (motivoAuditoria && !isRede) {
+        auditoriaService.registrarFalhaLogin(emailDigitado, motivoAuditoria).catch((auditErr) => {
+          console.warn('Falha silenciosa ao registrar falha de login na auditoria:', auditErr)
+        })
       }
     } finally {
       setLoading(false)
