@@ -25,19 +25,5 @@ export function getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : 'An unexpected error occurred.'
   }
   const msgs = Object.values(extractFieldErrors(error))
-  return msgs.length > 0 ? msgs.join(' ') : error.message || 'An unexpected error occurred.'
-}
-
-export function isNetworkError(error: unknown): boolean {
-  if (error instanceof ClientResponseError) {
-    return error.status === 0 || error.isAbort
-  }
-  if (error instanceof Error) {
-    return (
-      error.message.toLowerCase().includes('network') ||
-      error.message.toLowerCase().includes('failed to fetch') ||
-      error.message.toLowerCase().includes('connection')
-    )
-  }
-  return false
+  return msgs.length > 0 ? msgs.join(' ') : (error.message || 'An unexpected error occurred.')
 }
