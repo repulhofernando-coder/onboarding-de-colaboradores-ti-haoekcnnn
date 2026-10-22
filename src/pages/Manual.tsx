@@ -1682,15 +1682,104 @@ export default function Manual() {
         </section>
 
         {/* ========================================================= */}
-        {/* SEÇÃO 13 — Checklist rápido de homologação */}
+        {/* SEÇÃO 13 — Documentos Complementares & Anotações do Gestor */}
         {/* ========================================================= */}
-        <section className="mb-10 avoid-break page-break-before">
+        <section className="mb-10 avoid-break">
           <div className="flex items-center gap-2.5 mb-4 border-b border-gray-200 pb-2">
             <div className="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
               13
             </div>
             <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
-              SEÇÃO 13 — Checklist rápido de homologação
+              SEÇÃO 13 — Documentos Complementares & Anotações do Gestor (Versão 0.0.66)
+            </h2>
+          </div>
+
+          <p className="text-xs sm:text-sm text-gray-600 leading-relaxed mb-4">
+            Duas funcionalidades que ampliam a capacitação contínua e a governança de gestão de
+            pessoas dentro da <strong>ficha única do colaborador</strong>:
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            {/* Bloco 1: Documentos Complementares */}
+            <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/40 space-y-2">
+              <h4 className="text-xs font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-blue-600" />
+                1. Documentos Complementares (Biblioteca Única)
+              </h4>
+              <p className="text-xs text-gray-700 leading-relaxed">
+                Permite enviar materiais de estudo, normas técnicas e arquivos específicos
+                diretamente ao colaborador utilizando o{' '}
+                <strong>mesmo acervo central da Etapa 1</strong>:
+              </p>
+              <ul className="text-xs text-gray-600 list-disc list-inside space-y-1">
+                <li>
+                  <strong>Acervo Central Unificado:</strong> Sem duplicação de bibliotecas.
+                  Materiais cadastrados no acervo geral podem ser reutilizados em onboardings ou
+                  atribuídos a colaboradores em 1 clique.
+                </li>
+                <li>
+                  <strong>Upload Pontual Integrado:</strong> Documentos específicos enviados na
+                  ficha do colaborador são salvos no acervo central e associados instantaneamente.
+                </li>
+                <li>
+                  <strong>Link Público + Confirmação de Leitura:</strong> O colaborador acessa a
+                  página pública por token único (sem precisar de login) e confirma a leitura
+                  marcando <em>"Confirmo que li/assisti"</em> com carimbo oficial de data, hora e
+                  IP.
+                </li>
+                <li>
+                  <strong>Acompanhamento & Trajetória:</strong> RH e Gestão acompanham no perfil se
+                  o documento está <em>Pendente</em> ou <em>Confirmado em [data/hora]</em>,
+                  alimentando a Trajetória cronológica.
+                </li>
+              </ul>
+            </div>
+
+            {/* Bloco 2: Anotações & Feedbacks do Gestor */}
+            <div className="p-4 rounded-xl border border-purple-200 bg-purple-50/40 space-y-2">
+              <h4 className="text-xs font-bold text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-purple-600" />
+                2. Anotações do Gestor (Confidencialidade Estrita)
+              </h4>
+              <p className="text-xs text-gray-700 leading-relaxed">
+                Espaço confidencial para registro contínuo do desenvolvimento profissional e
+                reuniões de alinhamento:
+              </p>
+              <ul className="text-xs text-gray-600 list-disc list-inside space-y-1">
+                <li>
+                  <strong>Classificação por Tipo:</strong> Registros categorizados como{' '}
+                  <em>Feedback 1:1</em>, <em>Avaliação</em> ou <em>Observação Geral</em>.
+                </li>
+                <li>
+                  <strong>No Envio de Avaliações / Provas:</strong> Observações digitadas ao gerar o
+                  link de avaliação avulsa são automaticamente salvas como anotação interna do tipo
+                  Avaliação.
+                </li>
+                <li>
+                  <strong>Privacidade Absoluta:</strong> Conteúdo <strong>100% interno</strong>. O
+                  colaborador <strong>NUNCA</strong> tem acesso às anotações, com regras estritas de
+                  backend (RLS no PocketBase) permitindo acesso apenas ao gestor do setor, RH e
+                  Admin.
+                </li>
+                <li>
+                  <strong>Trilha de Auditoria:</strong> Criações, edições e exclusões são
+                  devidamente registradas com autor e data.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* ========================================================= */}
+        {/* SEÇÃO 14 — Checklist rápido de homologação */}
+        {/* ========================================================= */}
+        <section className="mb-10 avoid-break page-break-before">
+          <div className="flex items-center gap-2.5 mb-4 border-b border-gray-200 pb-2">
+            <div className="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+              14
+            </div>
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+              SEÇÃO 14 — Checklist rápido de homologação
             </h2>
           </div>
 
@@ -1748,6 +1837,11 @@ export default function Manual() {
               'Perfil do Colaborador — Aba Cursos da Grade: RH/Admin associam um curso ao colaborador com observação opcional;',
               'Transição de Status & Conclusão de Curso: alterar status para Em andamento e Concluído (grava data, usuário no histórico de auditoria e na linha do tempo da Trajetória);',
               'Atalho "Lançar como Certificado": clicar no botão em um curso concluído e verificar abertura do formulário de Certificados com título e emissor pré-preenchidos.',
+              'Documentos Complementares (Perfil): associar material da biblioteca central com 1 clique e realizar upload pontual com acervo integrado;',
+              'Link Público de Documento: abrir rota pública /documento-complementar/:token, validar conteúdo (vídeo/link/arquivo) e marcar caixa de confirmação de leitura;',
+              'Status de Leitura: conferir mudança de status para Confirmado em tempo real com data, hora e registro na Trajetória e Auditoria;',
+              'Anotações do Gestor: cadastrar Feedback 1:1, Avaliação e Observação Geral no Perfil com privacidade estrita (colaborador não visualiza nem no link público);',
+              'Anotação automática na Avaliação: gerar link de avaliação com motivo preenchido e verificar gravação de anotação correspondente no histórico confidencial.',
             ].map((item, idx) => (
               <div
                 key={idx}

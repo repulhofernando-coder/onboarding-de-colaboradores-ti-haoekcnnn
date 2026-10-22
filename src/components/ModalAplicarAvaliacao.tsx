@@ -30,7 +30,11 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from '@/hooks/use-toast'
-import { questionarioService, avaliacaoColaboradorService } from '@/services/onboarding'
+import {
+  questionarioService,
+  avaliacaoColaboradorService,
+  colaboradorAnotacaoService,
+} from '@/services/onboarding'
 import type { Onboarding, Questionario, AvaliacaoColaborador } from '@/types/onboarding'
 
 export interface ModalAplicarAvaliacaoProps {
@@ -116,6 +120,27 @@ export function ModalAplicarAvaliacao({
         aplicadaPorId: user?.id,
         observacoes: observacoes.trim(),
       })
+
+      // Se o gestor preencheu observações/anotações na aplicação da avaliação,
+      // registrar também como anotação interna do tipo 'avaliacao' no histórico confidencial
+      if (observacoes.trim() && user?.id) {
+        try {
+          const questNome = questionarioSelecionado?.nome || 'Avaliação'
+          await colaboradorAnotacaoService.criar({
+            colaboradorId: onboarding.id,
+            colaboradorNome: onboarding.colaborador_nome,
+            tipo: 'avaliacao',
+            texto: `[Envio da Prova: ${questNome}] ${observacoes.trim()}`,
+            autor: {
+              id: user.id,
+              nome: user.name || user.email || 'Gestor',
+              role: user.role || 'gestao',
+            },
+          })
+        } catch (anotErr) {
+          console.warn('[ModalAplicarAvaliacao] Falha ao registrar anotação da avaliação:', anotErr)
+        }
+      }
 
       setAvaliacaoCriada(nova)
       if (onSucesso) {

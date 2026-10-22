@@ -76,6 +76,8 @@ import { SecaoAvaliacoesColaborador } from '@/components/SecaoAvaliacoesColabora
 import { SecaoTrajetoria } from '@/components/SecaoTrajetoria'
 import { SecaoCertificados } from '@/components/SecaoCertificados'
 import { SecaoCursosColaborador } from '@/components/SecaoCursosColaborador'
+import { SecaoDocumentosComplementares } from '@/components/SecaoDocumentosComplementares'
+import { SecaoAnotacoesColaborador } from '@/components/SecaoAnotacoesColaborador'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
@@ -92,11 +94,15 @@ import type {
   AvaliacaoColaborador,
   CertificadoColaborador,
   ColaboradorCurso,
+  ColaboradorDocumento,
+  ColaboradorAnotacao,
 } from '@/types/onboarding'
 import {
   avaliacaoColaboradorService,
   certificadoService,
   colaboradorCursoService,
+  colaboradorDocumentoService,
+  colaboradorAnotacaoService,
 } from '@/services/onboarding'
 
 import { podeVisualizarSetor } from '@/lib/gestaoVisibility'
@@ -143,11 +149,22 @@ export default function DetalheOnboarding() {
   const [obsTemp, setObsTemp] = useState('')
   const [salvandoObs, setSalvandoObs] = useState(false)
 
-  // Abas do Perfil do Colaborador: 'trajetoria', 'onboarding', 'cursos', 'certificados', 'avaliacoes', 'auditoria'
+  // Abas do Perfil do Colaborador: 'trajetoria', 'onboarding', 'cursos', 'certificados', 'documentos', 'anotacoes', 'avaliacoes', 'auditoria'
   const [abaAtiva, setAbaAtiva] = useState<
-    'trajetoria' | 'onboarding' | 'cursos' | 'certificados' | 'avaliacoes' | 'auditoria'
+    | 'trajetoria'
+    | 'onboarding'
+    | 'cursos'
+    | 'certificados'
+    | 'documentos'
+    | 'anotacoes'
+    | 'avaliacoes'
+    | 'auditoria'
   >('trajetoria')
   const [cursosColaboradorList, setCursosColaboradorList] = useState<ColaboradorCurso[]>([])
+  const [documentosComplementaresList, setDocumentosComplementaresList] = useState<
+    ColaboradorDocumento[]
+  >([])
+  const [anotacoesGestorList, setAnotacoesGestorList] = useState<ColaboradorAnotacao[]>([])
   const [logsAuditoria, setLogsAuditoria] = useState<LogAuditoria[]>([])
   const [loadingLogs, setLoadingLogs] = useState(false)
   const [carregandoCertificadosAba, setCarregandoCertificadosAba] = useState(false)
@@ -184,6 +201,28 @@ export default function DetalheOnboarding() {
       carregarLogs()
     } catch (e) {
       console.warn('Erro ao atualizar cursos do colaborador no perfil:', e)
+    }
+  }
+
+  const recarregarDocumentosPerfil = async () => {
+    if (!onboarding) return
+    try {
+      const docs = await colaboradorDocumentoService.listarPorColaborador(onboarding.id)
+      setDocumentosComplementaresList(docs)
+      carregarLogs()
+    } catch (e) {
+      console.warn('Erro ao atualizar documentos complementares no perfil:', e)
+    }
+  }
+
+  const recarregarAnotacoesPerfil = async () => {
+    if (!onboarding) return
+    try {
+      const anots = await colaboradorAnotacaoService.listarPorColaborador(onboarding.id)
+      setAnotacoesGestorList(anots)
+      carregarLogs()
+    } catch (e) {
+      console.warn('Erro ao atualizar anotações do gestor no perfil:', e)
     }
   }
 
@@ -346,6 +385,22 @@ export default function DetalheOnboarding() {
         } catch {
           setCursosColaboradorList([])
         }
+
+        // Buscar documentos complementares
+        try {
+          const docsColab = await colaboradorDocumentoService.listarPorColaborador(onb.id)
+          setDocumentosComplementaresList(docsColab)
+        } catch {
+          setDocumentosComplementaresList([])
+        }
+
+        // Buscar anotações & feedbacks do gestor
+        try {
+          const anotsColab = await colaboradorAnotacaoService.listarPorColaborador(onb.id)
+          setAnotacoesGestorList(anotsColab)
+        } catch {
+          setAnotacoesGestorList([])
+        }
       }
     } catch (err) {
       console.error(err)
@@ -376,6 +431,10 @@ export default function DetalheOnboarding() {
     // Carregar logs também quando abrir auditoria ou trajetória
     if (abaAtiva === 'auditoria' || abaAtiva === 'trajetoria') {
       carregarLogs()
+    }
+    if (abaAtiva === 'trajetoria' && onboarding) {
+      recarregarDocumentosPerfil()
+      recarregarAnotacoesPerfil()
     }
   }, [abaAtiva, id])
 
@@ -1651,6 +1710,58 @@ export default function DetalheOnboarding() {
             </button>
           )}
 
+          {/* Aba Documentos Complementares */}
+          <button
+            type="button"
+            onClick={() => {
+              setAbaAtiva('documentos')
+              recarregarDocumentosPerfil()
+            }}
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
+              abaAtiva === 'documentos'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Documentos Complementares</span>
+            {documentosComplementaresList.length > 0 && (
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  abaAtiva === 'documentos' ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'
+                }`}
+              >
+                {documentosComplementaresList.length}
+              </span>
+            )}
+          </button>
+
+          {/* Aba Anotações & Feedbacks do Gestor (Interno / Confidencial) */}
+          <button
+            type="button"
+            onClick={() => {
+              setAbaAtiva('anotacoes')
+              recarregarAnotacoesPerfil()
+            }}
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
+              abaAtiva === 'anotacoes'
+                ? 'bg-purple-600 text-white shadow-xs'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>Anotações & Feedbacks</span>
+            {anotacoesGestorList.length > 0 && (
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  abaAtiva === 'anotacoes' ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'
+                }`}
+              >
+                {anotacoesGestorList.length}
+              </span>
+            )}
+          </button>
+
           {/* Aba 4: Dossiê de Avaliações */}
           <button
             type="button"
@@ -1709,6 +1820,8 @@ export default function DetalheOnboarding() {
             avaliacoes={avaliacoesDossie}
             certificados={certificadosList}
             cursos={cursosColaboradorList}
+            documentos={documentosComplementaresList}
+            anotacoes={anotacoesGestorList}
           />
         </div>
       )}
@@ -1755,6 +1868,32 @@ export default function DetalheOnboarding() {
             }}
             onCertificadoAlterado={() => {
               recarregarCertificadosPerfil()
+            }}
+          />
+        </div>
+      )}
+
+      {/* ABA Documentos Complementares (Acervo Central + Upload Pontual + Link Público) */}
+      {abaAtiva === 'documentos' && (
+        <div className="space-y-6">
+          <SecaoDocumentosComplementares
+            onboarding={onboarding}
+            todosOnboardings={todosOnboardings}
+            onDocumentoAlterado={() => {
+              recarregarDocumentosPerfil()
+            }}
+          />
+        </div>
+      )}
+
+      {/* ABA Anotações & Feedbacks do Gestor (Confidencial / Interno) */}
+      {abaAtiva === 'anotacoes' && (
+        <div className="space-y-6">
+          <SecaoAnotacoesColaborador
+            onboarding={onboarding}
+            todosOnboardings={todosOnboardings}
+            onAnotacaoAlterada={() => {
+              recarregarAnotacoesPerfil()
             }}
           />
         </div>

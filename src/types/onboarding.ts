@@ -750,6 +750,90 @@ export const STATUS_COLABORADOR_CURSO_INFO: Record<
   },
 }
 
+export type StatusDocumentoComplementar = 'pendente' | 'confirmado'
+
+export interface ColaboradorDocumento {
+  id: string
+  colaborador: string
+  material: string
+  token: string
+  status: StatusDocumentoComplementar
+  confirmado_em?: string
+  confirmado_ip?: string
+  observacao?: string
+  atribuido_por?: string
+  atribuido_em?: string
+  created: string
+  updated: string
+  expand?: {
+    colaborador?: Onboarding
+    material?: MaterialBiblioteca
+  }
+}
+
+export const STATUS_DOCUMENTO_COMPLEMENTAR_INFO: Record<
+  StatusDocumentoComplementar,
+  {
+    label: string
+    badgeClass: string
+    dotClass: string
+  }
+> = {
+  pendente: {
+    label: 'Pendente',
+    badgeClass: 'bg-amber-50 text-amber-800 border-amber-300 font-medium',
+    dotClass: 'bg-amber-500',
+  },
+  confirmado: {
+    label: 'Confirmado',
+    badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold',
+    dotClass: 'bg-emerald-500',
+  },
+}
+
+export type TipoAnotacaoColaborador = 'feedback_1_1' | 'avaliacao' | 'observacao_geral'
+
+export interface ColaboradorAnotacao {
+  id: string
+  colaborador: string
+  tipo: TipoAnotacaoColaborador
+  texto: string
+  autor: string
+  autor_nome?: string
+  autor_role?: string
+  created: string
+  updated: string
+  expand?: {
+    colaborador?: Onboarding
+    autor?: User
+  }
+}
+
+export const TIPO_ANOTACAO_INFO: Record<
+  TipoAnotacaoColaborador,
+  {
+    label: string
+    badgeClass: string
+    descricao: string
+  }
+> = {
+  feedback_1_1: {
+    label: 'Feedback 1:1',
+    badgeClass: 'bg-purple-50 text-purple-700 border-purple-200 font-semibold',
+    descricao: 'Reunião individual de alinhamento e acompanhamento',
+  },
+  avaliacao: {
+    label: 'Avaliação',
+    badgeClass: 'bg-blue-50 text-blue-700 border-blue-200 font-semibold',
+    descricao: 'Anotação vinculada a prova, avaliação ou reciclagem',
+  },
+  observacao_geral: {
+    label: 'Observação Geral',
+    badgeClass: 'bg-slate-100 text-slate-700 border-slate-300 font-medium',
+    descricao: 'Registro livre do gestor sobre o desempenho ou rotina',
+  },
+}
+
 export const STATUS_INFO: Record<
   OnboardingStatus,
   {

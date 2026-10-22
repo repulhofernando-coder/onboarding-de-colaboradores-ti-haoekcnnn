@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-21T15:45:31.575Z",
+  "generatedAt": "2026-10-22T00:39:32.557Z",
   "collections": [
     {
       "name": "users",
@@ -1928,6 +1928,167 @@
         "CREATE INDEX idx_colab_cursos_colab ON colaborador_cursos (colaborador)",
         "CREATE INDEX idx_colab_cursos_curso ON colaborador_cursos (curso)",
         "CREATE INDEX idx_colab_cursos_status ON colaborador_cursos (status)"
+      ]
+    },
+    {
+      "name": "colaborador_documentos",
+      "type": "base",
+      "apiRules": {
+        "list": "",
+        "view": "",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh')",
+        "update": "",
+        "delete": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh')"
+      },
+      "fields": [
+        {
+          "name": "colaborador",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "onboardings"
+        },
+        {
+          "name": "material",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "materiais"
+        },
+        {
+          "name": "token",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["pendente", "confirmado"]
+        },
+        {
+          "name": "confirmado_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "confirmado_ip",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "atribuido_por",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "atribuido_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_colab_docs_token ON colaborador_documentos (token)",
+        "CREATE INDEX idx_colab_docs_colaborador ON colaborador_documentos (colaborador)",
+        "CREATE INDEX idx_colab_docs_material ON colaborador_documentos (material)",
+        "CREATE INDEX idx_colab_docs_status ON colaborador_documentos (status)"
+      ]
+    },
+    {
+      "name": "colaborador_anotacoes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.setor != '' && colaborador.setor ~ @request.auth.setor))",
+        "view": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.setor != '' && colaborador.setor ~ @request.auth.setor))",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.setor != '' && colaborador.setor ~ @request.auth.setor))",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || autor = @request.auth.id)",
+        "delete": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || autor = @request.auth.id)"
+      },
+      "fields": [
+        {
+          "name": "colaborador",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "onboardings"
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["feedback_1_1", "avaliacao", "observacao_geral"]
+        },
+        {
+          "name": "texto",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "autor",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "autor_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "autor_role",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_colab_anot_colaborador ON colaborador_anotacoes (colaborador)",
+        "CREATE INDEX idx_colab_anot_tipo ON colaborador_anotacoes (tipo)",
+        "CREATE INDEX idx_colab_anot_autor ON colaborador_anotacoes (autor)"
       ]
     }
   ]

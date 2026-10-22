@@ -26,6 +26,8 @@ import type {
   AvaliacaoColaborador,
   CertificadoColaborador,
   ColaboradorCurso,
+  ColaboradorDocumento,
+  ColaboradorAnotacao,
 } from '@/types/onboarding'
 
 export interface SecaoTrajetoriaProps {
@@ -35,6 +37,8 @@ export interface SecaoTrajetoriaProps {
   avaliacoes: AvaliacaoColaborador[]
   certificados: CertificadoColaborador[]
   cursos?: ColaboradorCurso[]
+  documentos?: ColaboradorDocumento[]
+  anotacoes?: ColaboradorAnotacao[]
   onNavegarOnboarding?: (id: string) => void
 }
 
@@ -48,6 +52,8 @@ export type TipoEventoTrajetoria =
   | 'avaliacao_dossie'
   | 'certificado'
   | 'curso_grade'
+  | 'documento_complementar'
+  | 'anotacao_gestor'
   | 'auditoria_geral'
 
 export interface EventoTrajetoria {
@@ -72,6 +78,8 @@ export function SecaoTrajetoria({
   avaliacoes,
   certificados,
   cursos = [],
+  documentos = [],
+  anotacoes = [],
   onNavegarOnboarding,
 }: SecaoTrajetoriaProps) {
   // Unificação cronológica (mais recentes primeiro)
@@ -307,9 +315,73 @@ export function SecaoTrajetoria({
       })
     })
 
+    // 6. Documentos Complementares (Associação e Confirmação de Leitura)
+    documentos.forEach((doc) => {
+      const docTitulo = doc.expand?.material?.titulo || 'Documento Complementar'
+      const tipoMat = (doc.expand?.material?.tipo || 'arquivo').toUpperCase()
+
+      // Confirmação de leitura pelo colaborador (se confirmada)
+      if (doc.status === 'confirmado' && doc.confirmado_em) {
+        lista.push({
+          id: `doc-confirmado-${doc.id}`,
+          dataHora: doc.confirmado_em,
+          tipo: 'documento_complementar',
+          titulo: `Leitura Confirmada: ${docTitulo}`,
+          subtitulo: `Confirmação registrada via link público pelo colaborador`,
+          detalhes: `Colaborador marcou "Confirmo que li/assisti" com carimbo oficial de data e hora.`,
+          autorNome: colaboradorAtual.colaborador_nome,
+          autorRole: 'Colaborador',
+          badgeLabel: 'Documento Lido',
+          badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold',
+        })
+      }
+
+      // Evento de Associação / Envio pelo RH/Gestor
+      lista.push({
+        id: `doc-associado-${doc.id}`,
+        dataHora: doc.atribuido_em || doc.created,
+        tipo: 'documento_complementar',
+        titulo: `Documento Complementar: ${docTitulo}`,
+        subtitulo: `Material complementar do acervo central (${tipoMat})`,
+        detalhes: `Documento associado ao perfil com link público de confirmação.${doc.observacao ? ` Instruções: ${doc.observacao}` : ''}`,
+        autorNome: doc.atribuido_por || 'RH/Admin',
+        autorRole: 'RH',
+        badgeLabel: 'Doc Complementar',
+        badgeColor: 'bg-blue-50 text-blue-700 border-blue-200 font-semibold',
+      })
+    })
+
+    // 7. Anotações & Feedbacks do Gestor (Uso interno na Trajetória)
+    anotacoes.forEach((anot) => {
+      const tipoLabel =
+        anot.tipo === 'feedback_1_1'
+          ? 'Feedback 1:1'
+          : anot.tipo === 'avaliacao'
+            ? 'Avaliação'
+            : 'Observação Geral'
+
+      lista.push({
+        id: `anot-${anot.id}`,
+        dataHora: anot.created,
+        tipo: 'anotacao_gestor',
+        titulo: `Anotação do Gestor (${tipoLabel})`,
+        subtitulo: `Registrado por ${anot.autor_nome || anot.expand?.autor?.name || 'Gestão'} (Confidencial)`,
+        detalhes: anot.texto,
+        autorNome: anot.autor_nome || anot.expand?.autor?.name || 'Gestor',
+        autorRole: anot.autor_role || 'Gestão',
+        badgeLabel: tipoLabel,
+        badgeColor:
+          anot.tipo === 'feedback_1_1'
+            ? 'bg-purple-50 text-purple-700 border-purple-200 font-semibold'
+            : anot.tipo === 'avaliacao'
+              ? 'bg-blue-50 text-blue-700 border-blue-200 font-semibold'
+              : 'bg-slate-100 text-slate-700 border-slate-300 font-semibold',
+      })
+    })
+
     // Ordenação decrescente: do evento mais recente para o mais antigo
     return lista.sort((a, b) => new Date(b.dataHora).getTime() - new Date(a.dataHora).getTime())
-  }, [todosOnboardings, logsAuditoria, avaliacoes, certificados, cursos])
+  }, [todosOnboardings, logsAuditoria, avaliacoes, certificados, cursos, documentos, anotacoes])
 
   const getIconeEvento = (tipo: TipoEventoTrajetoria) => {
     switch (tipo) {
@@ -329,6 +401,10 @@ export function SecaoTrajetoria({
         return <Award className="w-4 h-4 text-blue-600" />
       case 'curso_grade':
         return <GraduationCap className="w-4 h-4 text-emerald-600" />
+      case 'documento_complementar':
+        return <FileCheck2 className="w-4 h-4 text-blue-600" />
+      case 'anotacao_gestor':
+        return <GitCommit className="w-4 h-4 text-purple-600" />
       default:
         return <GitCommit className="w-4 h-4 text-gray-500" />
     }
@@ -352,6 +428,10 @@ export function SecaoTrajetoria({
         return 'border-blue-300 bg-blue-50 text-blue-700'
       case 'curso_grade':
         return 'border-emerald-300 bg-emerald-50 text-emerald-700'
+      case 'documento_complementar':
+        return 'border-blue-300 bg-blue-50 text-blue-700'
+      case 'anotacao_gestor':
+        return 'border-purple-300 bg-purple-50 text-purple-700'
       default:
         return 'border-gray-300 bg-gray-50 text-gray-700'
     }

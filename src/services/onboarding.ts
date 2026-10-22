@@ -2016,6 +2016,9 @@ import type {
   ColaboradorCurso,
   NivelCurso,
   StatusColaboradorCurso,
+  ColaboradorDocumento,
+  ColaboradorAnotacao,
+  TipoAnotacaoColaborador,
 } from '@/types/onboarding'
 
 export const avaliacaoColaboradorService = {
@@ -2385,6 +2388,303 @@ export const cursoService = {
         },
       })
     }
+
+    return res
+  },
+}
+
+// ---------------------------------------------------------------------------
+// colaboradorDocumentoService: Documentos Complementares no perfil do colaborador
+// Usa UMA BIBLIOTECA ÚNICA (materiais da Etapa 1) e gera link público de confirmação.
+// ---------------------------------------------------------------------------
+export const colaboradorDocumentoService = {
+  async listarPorColaborador(colaboradorId: string): Promise<ColaboradorDocumento[]> {
+    try {
+      const records = await pb
+        .collection('colaborador_documentos')
+        .getFullList<ColaboradorDocumento>({
+          filter: `colaborador = '${colaboradorId}'`,
+          sort: '-created',
+          expand: 'material,colaborador',
+        })
+      return records
+    } catch (err) {
+      console.error('[colaboradorDocumentoService.listarPorColaborador] Erro:', err)
+      return []
+    }
+  },
+
+  async buscarPorToken(token: string): Promise<ColaboradorDocumento | null> {
+    try {
+      const record = await pb
+        .collection('colaborador_documentos')
+        .getFirstListItem<ColaboradorDocumento>(`token = '${token}'`, {
+          expand: 'material,colaborador',
+        })
+      return record
+    } catch (_) {
+      return null
+    }
+  },
+
+  async associarDaBiblioteca(dados: {
+    colaboradorId: string
+    colaboradorNome: string
+    materialId: string
+    materialTitulo: string
+    observacao?: string
+    autor: { id: string; nome: string; role: string }
+  }): Promise<ColaboradorDocumento> {
+    const token = crypto.randomUUID().replace(/-/g, '')
+    const agoraIso = new Date().toISOString()
+
+    const payload = {
+      colaborador: dados.colaboradorId,
+      material: dados.materialId,
+      token,
+      status: 'pendente' as const,
+      observacao: dados.observacao?.trim() || '',
+      atribuido_por: dados.autor.nome,
+      atribuido_em: agoraIso,
+    }
+
+    const record = await pb
+      .collection('colaborador_documentos')
+      .create<ColaboradorDocumento>(payload, {
+        expand: 'material,colaborador',
+      })
+
+    await auditoriaService.registrar({
+      onboardingId: dados.colaboradorId,
+      colaboradorNome: dados.colaboradorNome,
+      usuarioId: dados.autor.id,
+      usuarioNome: dados.autor.nome,
+      usuarioRole: dados.autor.role,
+      acao: 'Associação de Documento Complementar',
+      detalhes: `Documento complementar "${dados.materialTitulo}" associado ao colaborador a partir do acervo central por ${dados.autor.nome}.`,
+      metadata: {
+        colaborador_documento_id: record.id,
+        material_id: dados.materialId,
+        material_titulo: dados.materialTitulo,
+        token,
+      },
+    })
+
+    return record
+  },
+
+  async uploadPontualEAssociar(dados: {
+    colaboradorId: string
+    colaboradorNome: string
+    setor: string
+    titulo: string
+    descricao?: string
+    tipo: 'arquivo' | 'link' | 'video'
+    url?: string
+    arquivo?: File
+    observacao?: string
+    autor: { id: string; nome: string; role: string }
+  }): Promise<ColaboradorDocumento> {
+    // 1. Cadastra o material no acervo único (biblioteca central de materiais)
+    const formData = new FormData()
+    formData.append('titulo', dados.titulo.trim())
+    formData.append('tipo', dados.tipo)
+    formData.append('descricao', dados.descricao?.trim() || 'Documento pontual anexado ao perfil')
+    formData.append('setor_origem', dados.setor || 'Geral')
+    formData.append('obrigatorio', 'false')
+    formData.append('duracao_estimada', '0')
+    formData.append('ordem', '999')
+
+    if (dados.url && (dados.tipo === 'link' || dados.tipo === 'video')) {
+      formData.append('url', dados.url.trim())
+    }
+    if (dados.arquivo && dados.tipo === 'arquivo') {
+      formData.append('arquivo', dados.arquivo)
+    }
+
+    const materialCriado = await pb.collection('materiais').create<MaterialBiblioteca>(formData)
+
+    // 2. Associa imediatamente ao colaborador
+    return await this.associarDaBiblioteca({
+      colaboradorId: dados.colaboradorId,
+      colaboradorNome: dados.colaboradorNome,
+      materialId: materialCriado.id,
+      materialTitulo: materialCriado.titulo,
+      observacao: dados.observacao,
+      autor: dados.autor,
+    })
+  },
+
+  async confirmarLeituraViaHook(
+    token: string,
+  ): Promise<{ success: boolean; confirmado_em: string; message: string }> {
+    const res = await fetch('/backend/v1/colaborador/documento/confirmar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.error || 'Erro ao registrar confirmação do documento.')
+    }
+    return data
+  },
+
+  async desassociar(dados: {
+    id: string
+    colaboradorId: string
+    colaboradorNome: string
+    documentoTitulo: string
+    autor: { id: string; nome: string; role: string }
+  }): Promise<boolean> {
+    const res = await pb.collection('colaborador_documentos').delete(dados.id)
+
+    await auditoriaService.registrar({
+      onboardingId: dados.colaboradorId,
+      colaboradorNome: dados.colaboradorNome,
+      usuarioId: dados.autor.id,
+      usuarioNome: dados.autor.nome,
+      usuarioRole: dados.autor.role,
+      acao: 'Desassociação de Documento Complementar',
+      detalhes: `Documento complementar "${dados.documentoTitulo}" desassociado do colaborador por ${dados.autor.nome}.`,
+      metadata: {
+        colaborador_documento_id: dados.id,
+        documento_titulo: dados.documentoTitulo,
+      },
+    })
+
+    return res
+  },
+
+  obterLinkPublico(token: string): string {
+    const origin = window.location.origin
+    return `${origin}/documento-complementar/${token}`
+  },
+}
+
+// ---------------------------------------------------------------------------
+// colaboradorAnotacaoService: Anotações & Feedbacks do Gestor (Privacidade Restrita)
+// Registros internos: colaborador NUNCA visualiza.
+// ---------------------------------------------------------------------------
+export const colaboradorAnotacaoService = {
+  async listarPorColaborador(colaboradorId: string): Promise<ColaboradorAnotacao[]> {
+    try {
+      const records = await pb
+        .collection('colaborador_anotacoes')
+        .getFullList<ColaboradorAnotacao>({
+          filter: `colaborador = '${colaboradorId}'`,
+          sort: '-created',
+          expand: 'autor,colaborador',
+        })
+      return records
+    } catch (err) {
+      console.error('[colaboradorAnotacaoService.listarPorColaborador] Erro:', err)
+      return []
+    }
+  },
+
+  async criar(dados: {
+    colaboradorId: string
+    colaboradorNome: string
+    tipo: TipoAnotacaoColaborador
+    texto: string
+    autor: { id: string; nome: string; role: string }
+  }): Promise<ColaboradorAnotacao> {
+    const payload = {
+      colaborador: dados.colaboradorId,
+      tipo: dados.tipo,
+      texto: dados.texto.trim(),
+      autor: dados.autor.id,
+      autor_nome: dados.autor.nome,
+      autor_role: dados.autor.role,
+    }
+
+    const record = await pb
+      .collection('colaborador_anotacoes')
+      .create<ColaboradorAnotacao>(payload, {
+        expand: 'autor,colaborador',
+      })
+
+    const tipoLabel =
+      dados.tipo === 'feedback_1_1'
+        ? 'Feedback 1:1'
+        : dados.tipo === 'avaliacao'
+          ? 'Avaliação'
+          : 'Observação Geral'
+
+    await auditoriaService.registrar({
+      onboardingId: dados.colaboradorId,
+      colaboradorNome: dados.colaboradorNome,
+      usuarioId: dados.autor.id,
+      usuarioNome: dados.autor.nome,
+      usuarioRole: dados.autor.role,
+      acao: `Registro de Anotação (${tipoLabel})`,
+      detalhes: `Anotação do tipo "${tipoLabel}" registrada no perfil por ${dados.autor.nome}: "${dados.texto.slice(0, 100)}${dados.texto.length > 100 ? '...' : ''}"`,
+      metadata: {
+        anotacao_id: record.id,
+        tipo: dados.tipo,
+      },
+    })
+
+    return record
+  },
+
+  async atualizar(dados: {
+    id: string
+    colaboradorId: string
+    colaboradorNome: string
+    tipo: TipoAnotacaoColaborador
+    texto: string
+    autor: { id: string; nome: string; role: string }
+  }): Promise<ColaboradorAnotacao> {
+    const payload = {
+      tipo: dados.tipo,
+      texto: dados.texto.trim(),
+    }
+
+    const record = await pb
+      .collection('colaborador_anotacoes')
+      .update<ColaboradorAnotacao>(dados.id, payload, {
+        expand: 'autor,colaborador',
+      })
+
+    await auditoriaService.registrar({
+      onboardingId: dados.colaboradorId,
+      colaboradorNome: dados.colaboradorNome,
+      usuarioId: dados.autor.id,
+      usuarioNome: dados.autor.nome,
+      usuarioRole: dados.autor.role,
+      acao: 'Edição de Anotação do Gestor',
+      detalhes: `Anotação atualizada por ${dados.autor.nome}.`,
+      metadata: {
+        anotacao_id: dados.id,
+        tipo: dados.tipo,
+      },
+    })
+
+    return record
+  },
+
+  async excluir(dados: {
+    id: string
+    colaboradorId: string
+    colaboradorNome: string
+    autor: { id: string; nome: string; role: string }
+  }): Promise<boolean> {
+    const res = await pb.collection('colaborador_anotacoes').delete(dados.id)
+
+    await auditoriaService.registrar({
+      onboardingId: dados.colaboradorId,
+      colaboradorNome: dados.colaboradorNome,
+      usuarioId: dados.autor.id,
+      usuarioNome: dados.autor.nome,
+      usuarioRole: dados.autor.role,
+      acao: 'Exclusão de Anotação do Gestor',
+      detalhes: `Anotação removida do perfil por ${dados.autor.nome}.`,
+      metadata: {
+        anotacao_id: dados.id,
+      },
+    })
 
     return res
   },
