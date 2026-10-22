@@ -8,6 +8,7 @@ import { SETORES_INFO, getSetorVisual, setorToString } from '@/types/onboarding'
 import { calcularDiasRestantes, formatShortDate, formatDateTime } from '@/lib/dateUtils'
 import { podeVisualizarSetor } from '@/lib/gestaoVisibility'
 import { AvisoSetorGestor } from '@/components/AvisoSetorGestor'
+import { avaliarStatusFerias } from '@/services/ferias'
 import {
   Clock,
   CheckCircle2,
@@ -20,6 +21,7 @@ import {
   Flame,
   Activity,
   Layers,
+  Palmtree,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -83,6 +85,39 @@ export default function Index() {
   const concluidos = onboardings.filter((o) => o.status === 'concluido').length
   const aguardandoAvaliacao = onboardings.filter((o) => o.status === 'avaliacao_pendente').length
   const naoAptos = onboardings.filter((o) => o.status === 'nao_apto').length
+
+  // Métricas do Banner de Férias (visível para Admin, RH e Gestão)
+  // Agrupa onboardings por colaborador único (email ou nome) para evitar contagem duplicada
+  const metricasFerias = useMemo(() => {
+    const mapColabs: Record<string, Onboarding> = {}
+    for (const o of onboardings) {
+      const chave = (o.colaborador_email || o.colaborador_nome).trim().toLowerCase()
+      if (!mapColabs[chave]) {
+        mapColabs[chave] = o
+      } else {
+        const dExistente = new Date(
+          mapColabs[chave].data_inicio || mapColabs[chave].created,
+        ).getTime()
+        const dAtual = new Date(o.data_inicio || o.created).getTime()
+        if (dAtual > dExistente) {
+          mapColabs[chave] = o
+        }
+      }
+    }
+
+    let vencidas = 0
+    let vencendo30d = 0
+    let emDia = 0
+
+    for (const o of Object.values(mapColabs)) {
+      const st = avaliarStatusFerias(o)
+      if (st.status === 'vencido') vencidas++
+      else if (st.status === 'vencendo') vencendo30d++
+      else if (st.status === 'em_dia') emDia++
+    }
+
+    return { vencidas, vencendo30d, emDia, total: Object.keys(mapColabs).length }
+  }, [onboardings])
 
   // Lista unificada de setores para o gráfico (da coleção com fallback, filtrada se Gestão)
   const setoresAtivosGrafico = useMemo(() => {
@@ -260,6 +295,114 @@ export default function Index() {
     <div className="space-y-7">
       {/* Aviso de setor para papel Gestão */}
       <AvisoSetorGestor setoresList={setoresList} moduloNome="onboardings" />
+
+      {/* ALERTA DE FÉRIAS NA VISÃO GERAL (Visível para Admin, RH e Gestão) */}
+      {(metricasFerias.vencidas > 0 || metricasFerias.vencendo30d > 0) && (
+        <div className="bg-linear-to-r from-amber-50 via-orange-50 to-red-50 border border-amber-200/90 rounded-2xl p-4 sm:p-5 shadow-xs">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Palmtree className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                    <span>Atenção ao Período Aquisitivo de Férias (CLT)</span>
+                  </h3>
+                  <span className="text-[10px] font-bold uppercase tracking-wider bg-white/80 text-gray-700 border border-amber-200 px-2 py-0.5 rounded-full">
+                    Visão Geral • Gestão, RH & Admin
+                  </span>
+                </div>
+                <p className="text-xs text-gray-700 leading-relaxed">
+                  {metricasFerias.vencidas > 0 && metricasFerias.vencendo30d > 0 ? (
+                    <>
+                      Existem{' '}
+                      <strong className="text-red-700">
+                        {metricasFerias.vencidas}{' '}
+                        {metricasFerias.vencidas === 1
+                          ? 'colaborador com férias vencidas'
+                          : 'colaboradores com férias vencidas'}
+                      </strong>{' '}
+                      e{' '}
+                      <strong className="text-amber-800">
+                        {metricasFerias.vencendo30d}{' '}
+                        {metricasFerias.vencendo30d === 1
+                          ? 'com férias a vencer em menos de 30 dias'
+                          : 'com férias a vencer em menos de 30 dias'}
+                      </strong>
+                      .
+                    </>
+                  ) : metricasFerias.vencidas > 0 ? (
+                    <>
+                      Existem{' '}
+                      <strong className="text-red-700">
+                        {metricasFerias.vencidas}{' '}
+                        {metricasFerias.vencidas === 1
+                          ? 'colaborador com férias vencidas'
+                          : 'colaboradores com férias vencidas'}
+                      </strong>{' '}
+                      necessitando de concessão prioritária pelo RH.
+                    </>
+                  ) : (
+                    <>
+                      Existem{' '}
+                      <strong className="text-amber-800">
+                        {metricasFerias.vencendo30d}{' '}
+                        {metricasFerias.vencendo30d === 1
+                          ? 'colaborador com férias a vencer em menos de 30 dias'
+                          : 'colaboradores com férias a vencer em menos de 30 dias'}
+                      </strong>
+                      . Planeje a concessão junto à equipe.
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {/* Ações Clicáveis para Filtrar */}
+            <div className="flex items-center gap-2 shrink-0 self-end md:self-center flex-wrap">
+              {metricasFerias.vencidas > 0 && (
+                <Button
+                  asChild
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs font-bold bg-white text-red-700 border-red-300 hover:bg-red-50 shadow-2xs gap-1.5"
+                >
+                  <Link to="/colaboradores?ferias=vencido">
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                    <span>Ver {metricasFerias.vencidas} vencido(s)</span>
+                  </Link>
+                </Button>
+              )}
+
+              {metricasFerias.vencendo30d > 0 && (
+                <Button
+                  asChild
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs font-bold bg-white text-amber-800 border-amber-300 hover:bg-amber-50 shadow-2xs gap-1.5"
+                >
+                  <Link to="/colaboradores?ferias=vencendo">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    <span>Ver {metricasFerias.vencendo30d} a vencer</span>
+                  </Link>
+                </Button>
+              )}
+
+              <Button
+                asChild
+                size="sm"
+                className="h-8 text-xs font-semibold bg-gray-900 hover:bg-black text-white shadow-2xs gap-1"
+              >
+                <Link to="/colaboradores">
+                  <span>Abrir Colaboradores</span>
+                  <ArrowRight className="w-3 h-3" />
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Top Banner / Welcome */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200/90 shadow-sm">

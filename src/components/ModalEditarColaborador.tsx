@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Loader2, UserCog, AlertCircle, ArrowRight, BookOpen } from 'lucide-react'
+import { Loader2, UserCog, AlertCircle, BookOpen, Palmtree, Lock } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from '@/hooks/use-toast'
 import {
@@ -27,6 +27,8 @@ import {
   setorService,
   questionarioService,
 } from '@/services/onboarding'
+import { calcularVencimentoFerias } from '@/services/ferias'
+import { formatShortDate } from '@/lib/dateUtils'
 import pb from '@/lib/pocketbase/client'
 import type { Onboarding, User, SetorModel, Questionario } from '@/types/onboarding'
 
@@ -50,10 +52,18 @@ export function ModalEditarColaborador({
   onSucesso,
   onSugerirProvaMudancaSetor,
 }: ModalEditarColaboradorProps) {
-  const { user } = useAuth()
+  const { user, isAdmin, isRH } = useAuth()
+  const podeEditarAdmissao = isAdmin || isRH
   const [cargo, setCargo] = useState(onboarding.cargo || '')
   const [setor, setSetor] = useState(onboarding.setor || '')
   const [gestorId, setGestorId] = useState(onboarding.gestor_id || '')
+  const [dataAdmissao, setDataAdmissao] = useState(
+    onboarding.data_admissao
+      ? onboarding.data_admissao.slice(0, 10)
+      : onboarding.data_inicio
+        ? onboarding.data_inicio.slice(0, 10)
+        : '',
+  )
 
   const [gestores, setGestores] = useState<User[]>([])
   const [setoresDisponiveis, setSetoresDisponiveis] = useState<SetorModel[]>([])
@@ -67,6 +77,13 @@ export function ModalEditarColaborador({
       setCargo(onboarding.cargo || '')
       setSetor(onboarding.setor || '')
       setGestorId(onboarding.gestor_id || '')
+      setDataAdmissao(
+        onboarding.data_admissao
+          ? onboarding.data_admissao.slice(0, 10)
+          : onboarding.data_inicio
+            ? onboarding.data_inicio.slice(0, 10)
+            : '',
+      )
       setErro(null)
 
       setCarregandoDados(true)
@@ -127,6 +144,21 @@ export function ModalEditarColaborador({
       alteracoes.push({ campo: 'Gestor Responsável', antigo: gAntigo, novo: gNovo })
     }
 
+    const antigaAdmissao = onboarding.data_admissao
+      ? onboarding.data_admissao.slice(0, 10)
+      : onboarding.data_inicio
+        ? onboarding.data_inicio.slice(0, 10)
+        : ''
+    const novaAdmissao = dataAdmissao ? dataAdmissao.slice(0, 10) : ''
+    const admissaoMudou = podeEditarAdmissao && novaAdmissao && antigaAdmissao !== novaAdmissao
+    if (admissaoMudou) {
+      alteracoes.push({
+        campo: 'Data de Admissão',
+        antigo: antigaAdmissao ? formatShortDate(antigaAdmissao) : '(não definida)',
+        novo: formatShortDate(novaAdmissao),
+      })
+    }
+
     if (alteracoes.length === 0) {
       toast({
         title: 'Nenhuma alteração',
@@ -139,11 +171,22 @@ export function ModalEditarColaborador({
     setSalvando(true)
     try {
       // 1. Atualizar o onboarding no backend
-      const dadosAtualizados = await onboardingService.update(onboarding.id, {
+      const payloadUpdate: Partial<Onboarding> = {
         cargo: novoCargo,
         setor: novoSetor,
         gestor_id: novoGestorId,
-      })
+      }
+      if (admissaoMudou) {
+        payloadUpdate.data_admissao = novaAdmissao
+        payloadUpdate.ferias_vencimento = calcularVencimentoFerias(novaAdmissao)
+      }
+
+      const dadosAtualizados = await onboardingService.update(onboarding.id, payloadUpdate)
+
+      // Se admissão mudou, auditar via feriasService para enriquecer detalhes
+      if (admissaoMudou) {
+        // auditoria de férias já inclusa na lista geral abaixo
+      }
 
       // 2. Registrar no Histórico & Auditoria (logs_auditoria) cada mudança com valor antigo → novo
       const agoraIso = new Date().toISOString()
@@ -341,9 +384,50 @@ export function ModalEditarColaborador({
             </Select>
           </div>
 
+          {/* Data de Contratação (Admissão) - SOMENTE RH E ADMIN PODEM EDITAR */}
+          <div className="space-y-1.5 p-3 rounded-lg border border-emerald-100 bg-emerald-50/30">
+            <div className="flex items-center justify-between">
+              <Label
+                htmlFor="edit-admissao"
+                className="text-xs font-semibold text-emerald-950 flex items-center gap-1.5"
+              >
+                <Palmtree className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Data de Contratação (Admissão)</span>
+              </Label>
+              {!podeEditarAdmissao && (
+                <span className="text-[10px] text-gray-500 flex items-center gap-1">
+                  <Lock className="w-3 h-3 text-gray-400" />
+                  Somente RH/Admin
+                </span>
+              )}
+            </div>
+
+            <Input
+              id="edit-admissao"
+              type="date"
+              value={dataAdmissao}
+              onChange={(e) => setDataAdmissao(e.target.value)}
+              disabled={!podeEditarAdmissao || salvando || carregandoDados}
+              className="text-sm bg-white"
+            />
+
+            <div className="text-[11px] text-emerald-800 space-y-0.5 pt-0.5">
+              <p>
+                <strong>Vencimento de Férias:</strong> Calculado automaticamente pelo sistema como{' '}
+                <strong>12 meses após a admissão</strong> (período aquisitivo). Nunca digitável.
+              </p>
+              {dataAdmissao && (
+                <p className="font-semibold text-emerald-900">
+                  Novo vencimento previsto:{' '}
+                  {formatShortDate(calcularVencimentoFerias(dataAdmissao))}
+                </p>
+              )}
+            </div>
+          </div>
+
           <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-600">
-            <strong>Trilha de Auditoria:</strong> Cada alteração de cargo, setor ou gestor é
-            registrada permanentemente no Histórico & Auditoria com valores anteriores e novos.
+            <strong>Trilha de Auditoria:</strong> Cada alteração de cargo, setor, gestor ou admissão
+            é registrada permanentemente no Histórico & Auditoria com valores anteriores e novos.
           </div>
 
           <DialogFooter className="gap-2 pt-2">

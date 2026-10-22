@@ -266,12 +266,30 @@ export interface Onboarding extends RecordModel {
   teste_tentativas_count?: number
   questionarios_vinculados?: string[] | { id: string; nome?: string }[]
   questionario_id?: string
+  data_admissao?: string
+  ferias_vencimento?: string
   expand?: {
     gestor_id?: User
     etapa1_concluida_por?: User
     etapa2_concluida_por?: User
     setor_ref?: SetorModel
     questionario_id?: QuestionarioModel
+  }
+}
+
+export type TipoConcessaoFerias = 'integral' | 'fracionada'
+
+export interface FeriasConcessaoModel extends RecordModel {
+  onboarding: string
+  colaborador_setor?: string
+  data_inicio: string
+  tipo: TipoConcessaoFerias
+  registrado_por?: string
+  registrado_por_nome?: string
+  observacao?: string
+  expand?: {
+    onboarding?: Onboarding
+    registrado_por?: User
   }
 }
 

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-22T14:03:08.696Z",
+  "generatedAt": "2026-10-22T17:31:54.048Z",
   "collections": [
     {
       "name": "users",
@@ -451,6 +451,18 @@
           "type": "text",
           "required": false,
           "system": false
+        },
+        {
+          "name": "data_admissao",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ferias_vencimento",
+          "type": "date",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -459,7 +471,9 @@
         "CREATE INDEX idx_onboardings_gestor ON onboardings (gestor_id)",
         "CREATE INDEX idx_onboardings_data_fim ON onboardings (data_fim)",
         "CREATE INDEX `idx_onboardings_setor_ref` ON `onboardings` (setor_ref)",
-        "CREATE INDEX `idx_onboardings_token_acesso` ON `onboardings` (token_acesso_colaborador)"
+        "CREATE INDEX `idx_onboardings_token_acesso` ON `onboardings` (token_acesso_colaborador)",
+        "CREATE INDEX `idx_onboardings_data_admissao` ON `onboardings` (data_admissao)",
+        "CREATE INDEX `idx_onboardings_ferias_venc` ON `onboardings` (ferias_vencimento)"
       ]
     },
     {
@@ -2122,6 +2136,83 @@
         "CREATE INDEX idx_colab_anot_colaborador ON colaborador_anotacoes (colaborador)",
         "CREATE INDEX idx_colab_anot_tipo ON colaborador_anotacoes (tipo)",
         "CREATE INDEX idx_colab_anot_autor ON colaborador_anotacoes (autor)"
+      ]
+    },
+    {
+      "name": "ferias_concessoes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.setor != '' && onboarding.setor ~ @request.auth.setor))",
+        "view": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh' || (@request.auth.role = 'gestao' && @request.auth.setor != '' && onboarding.setor ~ @request.auth.setor))",
+        "create": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh')",
+        "update": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh')",
+        "delete": "@request.auth.id != '' && (@request.auth.role = 'admin' || @request.auth.role = 'rh')"
+      },
+      "fields": [
+        {
+          "name": "onboarding",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "onboardings"
+        },
+        {
+          "name": "colaborador_setor",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_inicio",
+          "type": "date",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["integral", "fracionada"]
+        },
+        {
+          "name": "registrado_por",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "registrado_por_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_ferias_conc_onboarding ON ferias_concessoes (onboarding)",
+        "CREATE INDEX idx_ferias_conc_setor ON ferias_concessoes (colaborador_setor)",
+        "CREATE INDEX idx_ferias_conc_data_inicio ON ferias_concessoes (data_inicio)"
       ]
     }
   ]

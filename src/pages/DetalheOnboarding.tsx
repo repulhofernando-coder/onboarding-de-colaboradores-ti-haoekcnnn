@@ -78,6 +78,8 @@ import { SecaoCertificados } from '@/components/SecaoCertificados'
 import { SecaoCursosColaborador } from '@/components/SecaoCursosColaborador'
 import { SecaoDocumentosComplementares } from '@/components/SecaoDocumentosComplementares'
 import { SecaoAnotacoesColaborador } from '@/components/SecaoAnotacoesColaborador'
+import { SecaoFerias } from '@/components/SecaoFerias'
+import { avaliarStatusFerias, feriasService } from '@/services/ferias'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
@@ -96,6 +98,7 @@ import type {
   ColaboradorCurso,
   ColaboradorDocumento,
   ColaboradorAnotacao,
+  FeriasConcessaoModel,
 } from '@/types/onboarding'
 import {
   avaliacaoColaboradorService,
@@ -106,7 +109,7 @@ import {
 } from '@/services/onboarding'
 
 import { podeVisualizarSetor } from '@/lib/gestaoVisibility'
-import { ShieldAlert } from 'lucide-react'
+import { ShieldAlert, Palmtree } from 'lucide-react'
 
 export default function DetalheOnboarding() {
   const { id } = useParams<{ id: string }>()
@@ -149,10 +152,11 @@ export default function DetalheOnboarding() {
   const [obsTemp, setObsTemp] = useState('')
   const [salvandoObs, setSalvandoObs] = useState(false)
 
-  // Abas do Perfil do Colaborador: 'trajetoria', 'onboarding', 'cursos', 'certificados', 'documentos', 'anotacoes', 'avaliacoes', 'auditoria'
+  // Abas do Perfil do Colaborador: 'trajetoria', 'onboarding', 'ferias', 'cursos', 'certificados', 'documentos', 'anotacoes', 'avaliacoes', 'auditoria'
   const [abaAtiva, setAbaAtiva] = useState<
     | 'trajetoria'
     | 'onboarding'
+    | 'ferias'
     | 'cursos'
     | 'certificados'
     | 'documentos'
@@ -165,6 +169,7 @@ export default function DetalheOnboarding() {
     ColaboradorDocumento[]
   >([])
   const [anotacoesGestorList, setAnotacoesGestorList] = useState<ColaboradorAnotacao[]>([])
+  const [concessoesFeriasList, setConcessoesFeriasList] = useState<FeriasConcessaoModel[]>([])
   const [logsAuditoria, setLogsAuditoria] = useState<LogAuditoria[]>([])
   const [loadingLogs, setLoadingLogs] = useState(false)
   const [carregandoCertificadosAba, setCarregandoCertificadosAba] = useState(false)
@@ -223,6 +228,16 @@ export default function DetalheOnboarding() {
       carregarLogs()
     } catch (e) {
       console.warn('Erro ao atualizar anotações do gestor no perfil:', e)
+    }
+  }
+
+  const recarregarFeriasPerfil = async () => {
+    if (!onboarding) return
+    try {
+      const concs = await feriasService.listByOnboarding(onboarding.id)
+      setConcessoesFeriasList(concs)
+    } catch (e) {
+      console.warn('Erro ao atualizar concessões de férias:', e)
     }
   }
 
@@ -402,6 +417,14 @@ export default function DetalheOnboarding() {
         } catch {
           setAnotacoesGestorList([])
         }
+
+        // Buscar histórico de concessões de férias para a trajetória
+        try {
+          const concs = await feriasService.listByOnboarding(onb.id)
+          setConcessoesFeriasList(concs)
+        } catch {
+          setConcessoesFeriasList([])
+        }
       }
     } catch (err) {
       console.error(err)
@@ -436,6 +459,7 @@ export default function DetalheOnboarding() {
     if (abaAtiva === 'trajetoria' && onboarding) {
       recarregarDocumentosPerfil()
       recarregarAnotacoesPerfil()
+      recarregarFeriasPerfil()
     }
   }, [abaAtiva, id])
 
@@ -1656,6 +1680,30 @@ export default function DetalheOnboarding() {
             <span>Onboarding ({progressoPercent}%)</span>
           </button>
 
+          {/* Aba Férias & Admissão (CLT / Período Aquisitivo) */}
+          <button
+            type="button"
+            onClick={() => setAbaAtiva('ferias')}
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
+              abaAtiva === 'ferias'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <Palmtree className="w-3.5 h-3.5" />
+            <span>Férias</span>
+            {(() => {
+              if (!onboarding) return null
+              const info = avaliarStatusFerias(onboarding)
+              return (
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${info.corDot}`}
+                  title={info.labelBadge}
+                />
+              )
+            })()}
+          </button>
+
           {/* Aba Cursos da Grade (Uso Contínuo na Jornada) */}
           <button
             type="button"
@@ -1824,6 +1872,22 @@ export default function DetalheOnboarding() {
             cursos={cursosColaboradorList}
             documentos={documentosComplementaresList}
             anotacoes={anotacoesGestorList}
+            concessoesFerias={concessoesFeriasList}
+          />
+        </div>
+      )}
+
+      {/* ABA Férias & Admissão (Cálculo Aquisitivo + Concessões) */}
+      {abaAtiva === 'ferias' && (
+        <div className="space-y-6">
+          <SecaoFerias
+            onboarding={onboarding}
+            todosOnboardings={todosOnboardings}
+            onFeriasAlterada={() => {
+              fetchData()
+              recarregarFeriasPerfil()
+              carregarLogs()
+            }}
           />
         </div>
       )}

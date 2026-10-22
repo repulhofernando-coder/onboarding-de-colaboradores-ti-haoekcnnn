@@ -28,7 +28,10 @@ import type {
   ColaboradorCurso,
   ColaboradorDocumento,
   ColaboradorAnotacao,
+  FeriasConcessaoModel,
 } from '@/types/onboarding'
+import { Palmtree } from 'lucide-react'
+import { calcularVencimentoFerias } from '@/services/ferias'
 
 export interface SecaoTrajetoriaProps {
   colaboradorAtual: Onboarding
@@ -39,6 +42,7 @@ export interface SecaoTrajetoriaProps {
   cursos?: ColaboradorCurso[]
   documentos?: ColaboradorDocumento[]
   anotacoes?: ColaboradorAnotacao[]
+  concessoesFerias?: FeriasConcessaoModel[]
   onNavegarOnboarding?: (id: string) => void
 }
 
@@ -54,6 +58,7 @@ export type TipoEventoTrajetoria =
   | 'curso_grade'
   | 'documento_complementar'
   | 'anotacao_gestor'
+  | 'ferias_concessao'
   | 'auditoria_geral'
 
 export interface EventoTrajetoria {
@@ -80,11 +85,29 @@ export function SecaoTrajetoria({
   cursos = [],
   documentos = [],
   anotacoes = [],
+  concessoesFerias = [],
   onNavegarOnboarding,
 }: SecaoTrajetoriaProps) {
   // Unificação cronológica (mais recentes primeiro)
   const eventos = useMemo<EventoTrajetoria[]>(() => {
     const lista: EventoTrajetoria[] = []
+
+    // 0. Marco Oficial da Data de Contratação (Admissão)
+    const dataAdmissaoOficial = colaboradorAtual.data_admissao || colaboradorAtual.data_inicio
+    if (dataAdmissaoOficial) {
+      const vencInicial = calcularVencimentoFerias(dataAdmissaoOficial)
+      lista.push({
+        id: `admissao-${colaboradorAtual.id}`,
+        dataHora: dataAdmissaoOficial,
+        tipo: 'contratacao',
+        titulo: 'Data Oficial de Contratação (Admissão)',
+        subtitulo: `Início do vínculo funcional e do 1º período aquisitivo de férias`,
+        detalhes: `Colaborador admitido oficialmente em ${formatShortDate(dataAdmissaoOficial)}. Vencimento inicial de férias projetado para ${formatShortDate(vencInicial)} (12 meses após a contratação).`,
+        badgeLabel: 'Admissão Oficial',
+        badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-300 font-bold',
+        linkOnboardingId: colaboradorAtual.id,
+      })
+    }
 
     // 1. Onboardings (Criação + Conclusões de cada um)
     todosOnboardings.forEach((onb, index) => {
@@ -379,9 +402,42 @@ export function SecaoTrajetoria({
       })
     })
 
+    // 8. Concessões de Férias Tiradas pelo Colaborador (Reinício de Ciclo)
+    concessoesFerias.forEach((conc) => {
+      const isIntegral = conc.tipo === 'integral'
+      const tipoLabel = isIntegral ? 'Férias Integrais (30 dias)' : 'Férias Fracionadas'
+      const novoVenc = calcularVencimentoFerias(conc.data_inicio)
+
+      lista.push({
+        id: `ferias-${conc.id}`,
+        dataHora: conc.data_inicio,
+        tipo: 'ferias_concessao',
+        titulo: `Concessão de Férias (${tipoLabel})`,
+        subtitulo: `Início do descanso em ${formatShortDate(conc.data_inicio)} • Reinício do ciclo aquisitivo`,
+        detalhes: `Período de férias gozado pelo colaborador. O sistema reiniciou o ciclo de férias com novo vencimento projetado para ${formatShortDate(novoVenc)} (12 meses após a data de início).${conc.observacao ? ` Obs: ${conc.observacao}` : ''}`,
+        autorNome: conc.registrado_por_nome || conc.expand?.registrado_por?.name || 'RH',
+        autorRole: 'RH',
+        badgeLabel: isIntegral ? 'Férias 30d' : 'Férias Fracionadas',
+        badgeColor: isIntegral
+          ? 'bg-emerald-100 text-emerald-900 border-emerald-300 font-bold'
+          : 'bg-teal-100 text-teal-900 border-teal-300 font-bold',
+        linkOnboardingId: conc.onboarding,
+      })
+    })
+
     // Ordenação decrescente: do evento mais recente para o mais antigo
     return lista.sort((a, b) => new Date(b.dataHora).getTime() - new Date(a.dataHora).getTime())
-  }, [todosOnboardings, logsAuditoria, avaliacoes, certificados, cursos, documentos, anotacoes])
+  }, [
+    todosOnboardings,
+    logsAuditoria,
+    avaliacoes,
+    certificados,
+    cursos,
+    documentos,
+    anotacoes,
+    concessoesFerias,
+    colaboradorAtual,
+  ])
 
   const getIconeEvento = (tipo: TipoEventoTrajetoria) => {
     switch (tipo) {
@@ -405,6 +461,8 @@ export function SecaoTrajetoria({
         return <FileCheck2 className="w-4 h-4 text-blue-600" />
       case 'anotacao_gestor':
         return <GitCommit className="w-4 h-4 text-purple-600" />
+      case 'ferias_concessao':
+        return <Palmtree className="w-4 h-4 text-emerald-700" />
       default:
         return <GitCommit className="w-4 h-4 text-gray-500" />
     }
@@ -432,6 +490,8 @@ export function SecaoTrajetoria({
         return 'border-blue-300 bg-blue-50 text-blue-700'
       case 'anotacao_gestor':
         return 'border-purple-300 bg-purple-50 text-purple-700'
+      case 'ferias_concessao':
+        return 'border-emerald-400 bg-emerald-100 text-emerald-800'
       default:
         return 'border-gray-300 bg-gray-50 text-gray-700'
     }

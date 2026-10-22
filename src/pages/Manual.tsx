@@ -24,6 +24,7 @@ import {
   GraduationCap,
   ShieldAlert,
   HelpCircle,
+  Palmtree,
 } from 'lucide-react'
 
 export default function Manual() {
@@ -1529,8 +1530,87 @@ export default function Manual() {
                       Não (somente leitura)
                     </td>
                   </tr>
+                  <tr className="hover:bg-slate-50/70 bg-emerald-50/40">
+                    <td className="py-2.5 px-3 font-bold text-emerald-950">
+                      Férias: Registro de Admissão & Concessão
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Sim (total)
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
+                      Sim (total)
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-semibold text-brand-800">
+                      Apenas visualiza (do próprio setor)
+                    </td>
+                  </tr>
                 </tbody>
               </table>
+            </div>
+
+            {/* Subseção Específica: Data de Contratação (Admissão) e Vencimento de Férias */}
+            <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-2 text-emerald-950 text-xs sm:text-sm">
+              <div className="flex items-center gap-2 font-bold text-emerald-900 text-xs uppercase tracking-wide">
+                <Palmtree className="w-4 h-4 text-emerald-700" />
+                <span>Regras de Negócio: Data de Contratação & Vencimento de Férias (CLT)</span>
+              </div>
+              <p>
+                O sistema gerencia de forma automatizada o período aquisitivo de férias de cada
+                técnico da equipe:
+              </p>
+              <ul className="list-disc list-inside space-y-1.5 pl-1 text-emerald-900 text-xs sm:text-sm">
+                <li>
+                  <strong>Localização do Campo de Admissão:</strong> Registrado exclusivamente na
+                  ficha cadastral do <strong>colaborador técnico</strong> (
+                  <code>/colaboradores/:id</code> e modal de edição), e <strong>NÃO</strong> nos
+                  usuários de login do sistema (<code>/usuarios</code>).
+                </li>
+                <li>
+                  <strong>Quem Registra:</strong> Apenas os papéis <strong>RH</strong> e{' '}
+                  <strong>Admin</strong> possuem permissão para registrar ou alterar a data oficial
+                  de admissão. O papel <strong>Gestão</strong> apenas visualiza.
+                </li>
+                <li>
+                  <strong>Cálculo do Vencimento:</strong> Calculado automaticamente pelo sistema
+                  como <strong>12 meses após a data de admissão</strong> (período aquisitivo). O
+                  campo de vencimento nunca pode ser digitado manualmente.
+                </li>
+                <li>
+                  <strong>Sinalização Visual por Cores (Cards, Lista e Perfil):</strong>
+                  <ul className="list-circle list-inside pl-4 mt-1 space-y-0.5 text-xs">
+                    <li>
+                      <strong className="text-emerald-700">🟢 Em dia:</strong> faltam mais de 30
+                      dias para o vencimento do período aquisitivo.
+                    </li>
+                    <li>
+                      <strong className="text-amber-700">🟡 Vencendo nos próximos 30 dias:</strong>{' '}
+                      faltam entre 0 e 30 dias para vencer.
+                    </li>
+                    <li>
+                      <strong className="text-red-700">🔴 Vencido:</strong> prazo aquisitivo
+                      ultrapassado (necessita de concessão imediata).
+                    </li>
+                  </ul>
+                </li>
+                <li>
+                  <strong>Registro de Concessão de Férias:</strong> Quando as férias são tiradas, o
+                  RH ou Admin registra a data de início e a modalidade (<strong>Integral</strong> ou{' '}
+                  <strong>Fracionada</strong>). O sistema{' '}
+                  <strong>reinicia automaticamente o ciclo</strong> (novo vencimento = 12 meses após
+                  a data de início registrada) e alimenta a <strong>Trajetória</strong> com badge
+                  temático.
+                </li>
+                <li>
+                  <strong>Alerta na Visão Geral:</strong> Banner no topo do Dashboard com contagem
+                  de colaboradores com férias vencidas e a vencer em 30 dias, visível para os 3
+                  papéis (Admin, RH e Gestão), com atalhos diretos de filtro.
+                </li>
+                <li>
+                  <strong>Auditoria Imutável:</strong> Tanto a alteração da data de admissão quanto
+                  o lançamento de concessões são registrados permanentemente em{' '}
+                  <code>logs_auditoria</code>.
+                </li>
+              </ul>
             </div>
 
             {/* Card Explicativo: Gestor sem setor cadastrado */}

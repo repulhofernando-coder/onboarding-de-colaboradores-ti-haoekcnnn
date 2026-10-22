@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { onboardingService } from '@/services/onboarding'
 import { useRealtime } from '@/hooks/use-realtime'
 import type { Onboarding } from '@/types/onboarding'
 import { SETORES_INFO, STATUS_INFO, getSetorVisual, setorToString } from '@/types/onboarding'
 import { formatShortDate } from '@/lib/dateUtils'
+import { avaliarStatusFerias, type FeriasStatus } from '@/services/ferias'
 import {
   Users,
   Search,
@@ -15,6 +16,8 @@ import {
   Briefcase,
   CheckCircle2,
   Trash2,
+  Palmtree,
+  Filter,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,10 +48,19 @@ export default function Colaboradores() {
   const podeExcluir = isAdmin || isRH
   const podeEditar = isAdmin || isRH // Gestão não edita
 
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filtroFeriasParam = (searchParams.get('ferias') as FeriasStatus | null) || 'todos'
+
   const [todosOnboardings, setTodosOnboardings] = useState<Onboarding[]>([])
   const [setoresList, setSetoresList] = useState<SetorModel[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [filtroFerias, setFiltroFerias] = useState<string>(filtroFeriasParam)
+
+  useEffect(() => {
+    const p = searchParams.get('ferias')
+    if (p) setFiltroFerias(p)
+  }, [searchParams])
 
   // Estado do modal de edição
   const [modalEditarOpen, setModalEditarOpen] = useState(false)
@@ -139,13 +151,35 @@ export default function Colaboradores() {
   const filtrados = useMemo(() => {
     return colaboradoresAgregados.filter((c) => {
       const q = search.toLowerCase()
-      return (
+      const matchBusca =
         c.nome.toLowerCase().includes(q) ||
         c.email.toLowerCase().includes(q) ||
         (c.cargo && c.cargo.toLowerCase().includes(q))
-      )
+
+      if (!matchBusca) return false
+
+      if (filtroFerias !== 'todos') {
+        const feriasInfo = avaliarStatusFerias(c.onboardingMaisRecente)
+        if (feriasInfo.status !== filtroFerias) return false
+      }
+
+      return true
     })
-  }, [colaboradoresAgregados, search])
+  }, [colaboradoresAgregados, search, filtroFerias])
+
+  // Contadores globais de férias para os botões de filtro rápido
+  const contadoresFerias = useMemo(() => {
+    let vencidos = 0
+    let vencendo = 0
+    let emDia = 0
+    for (const c of colaboradoresAgregados) {
+      const info = avaliarStatusFerias(c.onboardingMaisRecente)
+      if (info.status === 'vencido') vencidos++
+      else if (info.status === 'vencendo') vencendo++
+      else if (info.status === 'em_dia') emDia++
+    }
+    return { vencidos, vencendo, emDia, total: colaboradoresAgregados.length }
+  }, [colaboradoresAgregados])
 
   return (
     <div className="space-y-6">
@@ -172,20 +206,109 @@ export default function Colaboradores() {
         </Button>
       </div>
 
-      {/* Busca */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200/90 shadow-sm flex items-center justify-between gap-4">
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <Input
-            placeholder="Buscar por colaborador, e-mail ou cargo..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-10 border-gray-300 text-sm focus-visible:ring-brand-500"
-          />
+      {/* Busca & Filtro de Férias */}
+      <div className="bg-white p-4 rounded-xl border border-gray-200/90 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Input
+              placeholder="Buscar por colaborador, e-mail ou cargo..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-10 border-gray-300 text-sm focus-visible:ring-brand-500"
+            />
+          </div>
+
+          {/* Filtros rápidos de Férias 🟢🟡🔴 */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => {
+                setFiltroFerias('todos')
+                setSearchParams((p) => {
+                  p.delete('ferias')
+                  return p
+                })
+              }}
+              className={`text-xs px-2.5 py-1.5 rounded-lg font-medium border transition-colors ${
+                filtroFerias === 'todos'
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              Todos ({contadoresFerias.total})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const novo = filtroFerias === 'vencido' ? 'todos' : 'vencido'
+                setFiltroFerias(novo)
+                setSearchParams((p) => {
+                  if (novo === 'todos') p.delete('ferias')
+                  else p.set('ferias', 'vencido')
+                  return p
+                })
+              }}
+              className={`text-xs px-2.5 py-1.5 rounded-lg font-semibold border inline-flex items-center gap-1.5 transition-colors ${
+                filtroFerias === 'vencido'
+                  ? 'bg-red-600 text-white border-red-600 shadow-2xs'
+                  : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+              }`}
+              title="Filtrar colaboradores com férias vencidas"
+            >
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              <span>Vencidos ({contadoresFerias.vencidos})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const novo = filtroFerias === 'vencendo' ? 'todos' : 'vencendo'
+                setFiltroFerias(novo)
+                setSearchParams((p) => {
+                  if (novo === 'todos') p.delete('ferias')
+                  else p.set('ferias', 'vencendo')
+                  return p
+                })
+              }}
+              className={`text-xs px-2.5 py-1.5 rounded-lg font-semibold border inline-flex items-center gap-1.5 transition-colors ${
+                filtroFerias === 'vencendo'
+                  ? 'bg-amber-500 text-white border-amber-500 shadow-2xs'
+                  : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+              }`}
+              title="Filtrar colaboradores com férias a vencer nos próximos 30 dias"
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              <span>Vencendo em 30d ({contadoresFerias.vencendo})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const novo = filtroFerias === 'em_dia' ? 'todos' : 'em_dia'
+                setFiltroFerias(novo)
+                setSearchParams((p) => {
+                  if (novo === 'todos') p.delete('ferias')
+                  else p.set('ferias', 'em_dia')
+                  return p
+                })
+              }}
+              className={`text-xs px-2.5 py-1.5 rounded-lg font-semibold border inline-flex items-center gap-1.5 transition-colors ${
+                filtroFerias === 'em_dia'
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                  : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+              }`}
+              title="Filtrar colaboradores com férias em dia"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span>Em dia ({contadoresFerias.emDia})</span>
+            </button>
+          </div>
         </div>
 
-        <span className="text-xs text-gray-500 font-medium shrink-0">
-          Total: {filtrados.length} colaboradores
+        <span className="text-xs text-gray-500 font-medium shrink-0 self-end md:self-center">
+          Exibindo: {filtrados.length} colaboradores
         </span>
       </div>
 
@@ -200,11 +323,18 @@ export default function Colaboradores() {
             const setor = getSetorVisual(item.setor, item.onboardingMaisRecente.expand?.setor_ref)
             const status = STATUS_INFO[item.onboardingMaisRecente.status]
             const onb = item.onboardingMaisRecente
+            const feriasInfo = avaliarStatusFerias(onb)
 
             let progresso = 0
             if (onb.etapa1_concluida) progresso += 33
             if (onb.etapa2_concluida) progresso += 33
             if (onb.etapa3_concluida) progresso += 34
+
+            const dataAdmissaoFormatada = onb.data_admissao
+              ? formatShortDate(onb.data_admissao)
+              : onb.data_inicio
+                ? formatShortDate(onb.data_inicio)
+                : 'Não definida'
 
             return (
               <div
@@ -232,6 +362,35 @@ export default function Colaboradores() {
                     </span>
                   </div>
 
+                  {/* Badge Visual de Férias 🟢 🟡 🔴 com Tooltip/Data */}
+                  <div className="pt-0.5">
+                    <div
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${feriasInfo.corBg}`}
+                      title={`Data de admissão: ${dataAdmissaoFormatada} • ${feriasInfo.descricao}`}
+                    >
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${feriasInfo.corDot}`} />
+                      <Palmtree className="w-3 h-3 shrink-0 opacity-70" />
+                      <span className="truncate">
+                        {feriasInfo.status === 'vencido' && (
+                          <span className="font-bold">
+                            Férias Vencidas ({feriasInfo.vencimentoFormatado})
+                          </span>
+                        )}
+                        {feriasInfo.status === 'vencendo' && (
+                          <span>
+                            Vence em {feriasInfo.vencimentoFormatado} ({feriasInfo.diasRestantes}d)
+                          </span>
+                        )}
+                        {feriasInfo.status === 'em_dia' && (
+                          <span>Férias: {feriasInfo.vencimentoFormatado}</span>
+                        )}
+                        {feriasInfo.status === 'sem_admissao' && (
+                          <span>Sem admissão cadastrada</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
                   <div className="space-y-1.5 text-xs text-gray-600 pt-1">
                     <div className="flex items-center gap-2">
                       <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
@@ -240,8 +399,7 @@ export default function Colaboradores() {
                     <div className="flex items-center gap-2">
                       <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                       <span>
-                        Início: {formatShortDate(onb.data_inicio)} • Prazo:{' '}
-                        {formatShortDate(onb.data_fim)}
+                        Admissão: {dataAdmissaoFormatada} • Onb: {formatShortDate(onb.data_fim)}
                       </span>
                     </div>
                   </div>
