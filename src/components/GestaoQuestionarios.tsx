@@ -5,6 +5,7 @@ import type {
   QuestionarioModel,
   TesteQuestaoModel,
   TipoDeUsoQuestionario,
+  TipoQuestao,
   SetorModel,
 } from '@/types/onboarding'
 import {
@@ -101,12 +102,13 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
   const [formQAtivo, setFormQAtivo] = useState(true)
   const [submittingQ, setSubmittingQ] = useState(false)
   const [contagemQuestoes, setContagemQuestoes] = useState<
-    Record<string, { total: number; objetivas: number }>
+    Record<string, { total: number; objetivas: number; dissertativas: number }>
   >({})
 
   // Modal Questão
   const [modalQuestaoOpen, setModalQuestaoOpen] = useState(false)
   const [editingQuestao, setEditingQuestao] = useState<TesteQuestaoModel | null>(null)
+  const [qTipo, setQTipo] = useState<TipoQuestao>('objetiva')
   const [qEnunciado, setQEnunciado] = useState('')
   const [qAlternativas, setQAlternativas] = useState<string[]>(['', '', '', ''])
   const [qCorretaIndex, setQCorretaIndex] = useState(0)
@@ -174,12 +176,15 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
         const todas = await pb.collection('teste_questoes').getFullList<TesteQuestaoModel>({
           filter: 'ativo = true',
         })
-        const counts: Record<string, { total: number; objetivas: number }> = {}
+        const counts: Record<string, { total: number; objetivas: number; dissertativas: number }> =
+          {}
         todas.forEach((q) => {
           const qid = q.questionario_id || 'sem_id'
-          if (!counts[qid]) counts[qid] = { total: 0, objetivas: 0 }
+          if (!counts[qid]) counts[qid] = { total: 0, objetivas: 0, dissertativas: 0 }
           counts[qid].total++
-          if (q.tipo !== 'dissertativa') {
+          if (q.tipo === 'dissertativa') {
+            counts[qid].dissertativas++
+          } else {
             counts[qid].objetivas++
           }
         })
@@ -376,6 +381,7 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
       return
     }
     setEditingQuestao(null)
+    setQTipo('objetiva')
     setQEnunciado('')
     setQAlternativas(['', '', '', ''])
     setQCorretaIndex(0)
@@ -396,8 +402,13 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
       return
     }
     setEditingQuestao(q)
+    setQTipo(q.tipo === 'dissertativa' ? 'dissertativa' : 'objetiva')
     setQEnunciado(q.enunciado)
-    setQAlternativas(Array.isArray(q.alternativas) ? [...q.alternativas] : ['', '', '', ''])
+    setQAlternativas(
+      Array.isArray(q.alternativas) && q.alternativas.length > 0
+        ? [...q.alternativas]
+        : ['', '', '', ''],
+    )
     setQCorretaIndex(q.correta_index || 0)
     setQComentario(q.gabarito_comentario || '')
     setQTema(q.tema || '')
@@ -413,41 +424,65 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
       toast.error('O enunciado da questão é obrigatório.')
       return
     }
-    const validadas = qAlternativas.map((a) => a.trim())
-    if (validadas.some((a) => !a)) {
-      toast.error('Preencha todas as alternativas da questão.')
-      return
+
+    const isDissertativa = qTipo === 'dissertativa'
+
+    if (isDissertativa) {
+      if (!qComentario.trim()) {
+        toast.error(
+          'A resposta esperada / critério de avaliação é obrigatória para questões dissertativas.',
+        )
+        return
+      }
+    } else {
+      const validadas = qAlternativas.map((a) => a.trim())
+      if (validadas.some((a) => !a)) {
+        toast.error('Preencha todas as alternativas da questão objetiva.')
+        return
+      }
     }
+
+    const validadas = isDissertativa ? [] : qAlternativas.map((a) => a.trim())
 
     try {
       setSubmittingQuestao(true)
       if (editingQuestao) {
         const updated = await questionarioService.updateQuestao(editingQuestao.id, {
+          tipo: qTipo,
           enunciado: qEnunciado,
           alternativas: validadas,
-          correta_index: qCorretaIndex,
+          correta_index: isDissertativa ? 0 : qCorretaIndex,
           gabarito_comentario: qComentario,
           tema: qTema,
           ordem: qOrdem,
           ativo: qAtivo,
         })
         setQuestoes((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
-        toast.success('Questão atualizada!')
+        toast.success(
+          isDissertativa ? 'Questão dissertativa atualizada!' : 'Questão objetiva atualizada!',
+        )
       } else {
         const created = await questionarioService.createQuestao({
           questionario_id: selectedQuestionario.id,
+          tipo: qTipo,
           enunciado: qEnunciado,
           alternativas: validadas,
-          correta_index: qCorretaIndex,
+          correta_index: isDissertativa ? 0 : qCorretaIndex,
           gabarito_comentario: qComentario,
           tema: qTema,
           ordem: qOrdem,
           ativo: qAtivo,
         })
         setQuestoes((prev) => [...prev, created])
-        toast.success('Questão adicionada ao questionário!')
+        toast.success(
+          isDissertativa
+            ? 'Questão dissertativa adicionada ao questionário!'
+            : 'Questão objetiva adicionada ao questionário!',
+        )
       }
       setModalQuestaoOpen(false)
+      // Atualiza contagem no card
+      carregarQuestionarios()
     } catch (err) {
       console.error(err)
       toast.error('Erro ao salvar questão.')
@@ -684,6 +719,15 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
                       </span>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                              q.tipo === 'dissertativa'
+                                ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                : 'bg-blue-50 text-blue-700 border-blue-200'
+                            }`}
+                          >
+                            {q.tipo === 'dissertativa' ? 'Dissertativa' : 'Objetiva'}
+                          </span>
                           <span className="text-xs font-bold text-gray-900">
                             {q.tema ? `[${q.tema}] ` : ''}
                             {q.enunciado}
@@ -695,36 +739,60 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
                           )}
                         </div>
 
-                        {/* Alternativas */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-2">
-                          {(q.alternativas || []).map((alt, aIdx) => {
-                            const isCorreta = aIdx === q.correta_index
-                            return (
-                              <div
-                                key={aIdx}
-                                className={`text-xs p-2 rounded border flex items-start gap-2 ${
-                                  isCorreta
-                                    ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-medium'
-                                    : 'bg-white border-gray-200 text-gray-600'
-                                }`}
-                              >
-                                <span className="font-bold text-[11px] shrink-0">
-                                  {String.fromCharCode(65 + aIdx)})
-                                </span>
-                                <span className="flex-1">{alt}</span>
-                                {isCorreta && (
-                                  <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                        {/* Bloco específico de exibição: Dissertativa vs Objetiva */}
+                        {q.tipo === 'dissertativa' ? (
+                          <div className="mt-2 space-y-2">
+                            <div className="p-3 bg-purple-50/50 border border-purple-200 rounded-lg text-xs space-y-1">
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-purple-900 block">
+                                Resposta esperada / Critério de avaliação (Gabarito do Gestor):
+                              </span>
+                              <p className="text-purple-950 whitespace-pre-wrap leading-relaxed text-[11px]">
+                                {q.gabarito_comentario || (
+                                  <span className="italic text-gray-400">
+                                    Nenhum critério detalhado.
+                                  </span>
                                 )}
-                              </div>
-                            )
-                          })}
-                        </div>
-
-                        {q.gabarito_comentario && (
-                          <div className="mt-2 text-[11px] bg-blue-50 border border-blue-200 text-blue-900 p-2 rounded">
-                            <span className="font-semibold">Comentário do Gabarito:</span>{' '}
-                            {q.gabarito_comentario}
+                              </p>
+                            </div>
+                            <div className="text-[11px] text-gray-500 italic">
+                              * Questão dissertativa: sempre presente na prova, fora do sorteio e
+                              sem peso na nota automática.
+                            </div>
                           </div>
+                        ) : (
+                          <>
+                            {/* Alternativas */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-2">
+                              {(q.alternativas || []).map((alt, aIdx) => {
+                                const isCorreta = aIdx === q.correta_index
+                                return (
+                                  <div
+                                    key={aIdx}
+                                    className={`text-xs p-2 rounded border flex items-start gap-2 ${
+                                      isCorreta
+                                        ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-medium'
+                                        : 'bg-white border-gray-200 text-gray-600'
+                                    }`}
+                                  >
+                                    <span className="font-bold text-[11px] shrink-0">
+                                      {String.fromCharCode(65 + aIdx)})
+                                    </span>
+                                    <span className="flex-1">{alt}</span>
+                                    {isCorreta && (
+                                      <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+
+                            {q.gabarito_comentario && (
+                              <div className="mt-2 text-[11px] bg-blue-50 border border-blue-200 text-blue-900 p-2 rounded">
+                                <span className="font-semibold">Comentário do Gabarito:</span>{' '}
+                                {q.gabarito_comentario}
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
@@ -768,6 +836,48 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
             </DialogHeader>
 
             <form onSubmit={handleSalvarQuestao} className="space-y-4 py-2">
+              {/* Seletor do Tipo da Questão */}
+              <div>
+                <label className="text-xs font-semibold text-gray-700 block mb-1.5">
+                  Tipo da Questão *
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setQTipo('objetiva')}
+                    className={`py-2 px-3 rounded-lg border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                      qTipo === 'objetiva'
+                        ? 'border-brand-600 bg-brand-50 text-brand-700 ring-2 ring-brand-200'
+                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <ListOrdered className="w-4 h-4" />
+                    <span>Objetiva (Múltipla Escolha)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setQTipo('dissertativa')}
+                    className={`py-2 px-3 rounded-lg border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                      qTipo === 'dissertativa'
+                        ? 'border-purple-600 bg-purple-50 text-purple-700 ring-2 ring-purple-200'
+                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>Dissertativa (Estudo de Caso / Vivência)</span>
+                  </button>
+                </div>
+
+                {qTipo === 'dissertativa' && (
+                  <p className="text-[11px] text-purple-800 mt-1.5 bg-purple-50 p-2 rounded border border-purple-200 leading-relaxed">
+                    <strong>Regra do Motor:</strong> Questões dissertativas estão sempre presentes
+                    na prova (ficam fora do sorteio), não têm peso na nota automática e servem como
+                    critério qualitativo para avaliação do Gestor/RH.
+                  </p>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-gray-700 block mb-1">
@@ -799,7 +909,11 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
                   Enunciado da Questão *
                 </label>
                 <Textarea
-                  placeholder="Escreva a pergunta clara para o colaborador..."
+                  placeholder={
+                    qTipo === 'dissertativa'
+                      ? 'Descreva o cenário prático, problema ou pergunta que o candidato deve argumentar...'
+                      : 'Escreva a pergunta clara para o colaborador...'
+                  }
                   value={qEnunciado}
                   onChange={(e) => setQEnunciado(e.target.value)}
                   className="text-xs min-h-[70px]"
@@ -807,54 +921,75 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-gray-700 block mb-1.5">
-                  Alternativas e Gabarito Correto * (selecione o botão de rádio da correta)
-                </label>
-                <div className="space-y-2">
-                  {qAlternativas.map((alt, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setQCorretaIndex(idx)}
-                        className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 transition-colors ${
-                          qCorretaIndex === idx
-                            ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-300'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                        title="Marcar como alternativa correta"
-                      >
-                        {String.fromCharCode(65 + idx)}
-                      </button>
-                      <Input
-                        placeholder={`Alternativa ${String.fromCharCode(65 + idx)}`}
-                        value={alt}
-                        onChange={(e) => {
-                          const updated = [...qAlternativas]
-                          updated[idx] = e.target.value
-                          setQAlternativas(updated)
-                        }}
-                        className={`text-xs h-9 flex-1 ${
-                          qCorretaIndex === idx ? 'border-emerald-400 bg-emerald-50/30' : ''
-                        }`}
-                        required
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
+              {/* Se Objetiva: alternativas de múltipla escolha */}
+              {qTipo === 'objetiva' ? (
+                <div>
+                  <label className="text-xs font-semibold text-gray-700 block mb-1.5">
+                    Alternativas e Gabarito Correto * (selecione o botão de rádio da correta)
+                  </label>
+                  <div className="space-y-2">
+                    {qAlternativas.map((alt, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setQCorretaIndex(idx)}
+                          className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 transition-colors ${
+                            qCorretaIndex === idx
+                              ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-300'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                          title="Marcar como alternativa correta"
+                        >
+                          {String.fromCharCode(65 + idx)}
+                        </button>
+                        <Input
+                          placeholder={`Alternativa ${String.fromCharCode(65 + idx)}`}
+                          value={alt}
+                          onChange={(e) => {
+                            const updated = [...qAlternativas]
+                            updated[idx] = e.target.value
+                            setQAlternativas(updated)
+                          }}
+                          className={`text-xs h-9 flex-1 ${
+                            qCorretaIndex === idx ? 'border-emerald-400 bg-emerald-50/30' : ''
+                          }`}
+                          required={qTipo === 'objetiva'}
+                        />
+                      </div>
+                    ))}
+                  </div>
 
-              <div>
-                <label className="text-xs font-semibold text-gray-700 block mb-1">
-                  Comentário do Gabarito (visível para Admin na auditoria)
-                </label>
-                <Textarea
-                  placeholder="Explicação do porquê esta resposta é a correta..."
-                  value={qComentario}
-                  onChange={(e) => setQComentario(e.target.value)}
-                  className="text-xs min-h-[60px]"
-                />
-              </div>
+                  <div className="mt-3">
+                    <label className="text-xs font-semibold text-gray-700 block mb-1">
+                      Comentário do Gabarito (visível na auditoria e na impressão com gabarito)
+                    </label>
+                    <Textarea
+                      placeholder="Explicação do porquê esta resposta é a correta..."
+                      value={qComentario}
+                      onChange={(e) => setQComentario(e.target.value)}
+                      className="text-xs min-h-[60px]"
+                    />
+                  </div>
+                </div>
+              ) : (
+                /* Se Dissertativa: resposta esperada / critério de avaliação */
+                <div>
+                  <label className="text-xs font-semibold text-purple-900 block mb-1">
+                    Resposta esperada / Critério de avaliação do gestor *
+                  </label>
+                  <Textarea
+                    placeholder="Descreva a expectativa de resposta técnica: conceitos-chave obrigatórios, postura esperada, raciocínio que o gestor usará para avaliar a resposta do candidato..."
+                    value={qComentario}
+                    onChange={(e) => setQComentario(e.target.value)}
+                    className="text-xs min-h-[100px] border-purple-300 focus:border-purple-500 focus:ring-purple-200"
+                    required
+                  />
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    Este texto compõe o gabarito oficial exibido ao Gestor e RH ao consultar a prova
+                    e na emissão da via com gabarito.
+                  </p>
+                </div>
+              )}
 
               <div className="flex items-center gap-2 pt-1">
                 <input
@@ -1056,9 +1191,30 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
                     </span>
                   </div>
 
-                  {/* Alerta de Banco de Questões vs. Sorteio */}
+                  {/* Contagem de questões: X objetivas / Y dissertativas */}
+                  <div className="mb-2 text-[11px] text-gray-600 flex items-center gap-1.5 flex-wrap">
+                    {(() => {
+                      const stats = contagemQuestoes[q.id] || {
+                        total: 0,
+                        objetivas: 0,
+                        dissertativas: 0,
+                      }
+                      return (
+                        <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded font-medium border border-slate-200">
+                          Questões: <strong>{stats.objetivas}</strong> objetivas /{' '}
+                          <strong>{stats.dissertativas}</strong> dissertativas
+                        </span>
+                      )
+                    })()}
+                  </div>
+
+                  {/* Alerta de Banco de Questões vs. Sorteio (olha SOMENTE as objetivas) */}
                   {(() => {
-                    const stats = contagemQuestoes[q.id] || { total: 0, objetivas: 0 }
+                    const stats = contagemQuestoes[q.id] || {
+                      total: 0,
+                      objetivas: 0,
+                      dissertativas: 0,
+                    }
                     const configurado = q.questoes_por_prova || 20
                     const falta = configurado - stats.objetivas
                     if (stats.objetivas < configurado) {
@@ -1068,7 +1224,7 @@ export function GestaoQuestionarios({ setoresList }: { setoresList: SetorModel[]
                           <span>
                             Banco tem <strong>{stats.objetivas}</strong> objetivas — a prova
                             entregará todas as {stats.objetivas} em vez de {configurado} (faltam{' '}
-                            {falta} para atingir a meta).
+                            {falta} para atingir a meta). Dissertativas ficam fora do sorteio.
                           </span>
                         </div>
                       )

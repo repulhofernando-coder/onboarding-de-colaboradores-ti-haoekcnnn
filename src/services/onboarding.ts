@@ -1461,19 +1461,22 @@ export const questionarioService = {
 
   async createQuestao(data: {
     questionario_id: string
+    tipo?: 'objetiva' | 'dissertativa'
     enunciado: string
     alternativas: string[]
-    correta_index: number
+    correta_index?: number | null
     gabarito_comentario?: string
     ordem?: number
     ativo?: boolean
     tema?: string
   }): Promise<TesteQuestaoModel> {
+    const isDissertativa = data.tipo === 'dissertativa'
     return pb.collection('teste_questoes').create<TesteQuestaoModel>({
       questionario_id: data.questionario_id,
+      tipo: isDissertativa ? 'dissertativa' : 'objetiva',
       enunciado: data.enunciado.trim(),
-      alternativas: data.alternativas,
-      correta_index: data.correta_index,
+      alternativas: isDissertativa ? [] : data.alternativas,
+      correta_index: isDissertativa ? 0 : (data.correta_index ?? 0),
       gabarito_comentario: data.gabarito_comentario?.trim() || '',
       ordem: data.ordem || 1,
       ativo: data.ativo !== false,
@@ -1485,9 +1488,10 @@ export const questionarioService = {
     id: string,
     data: Partial<{
       questionario_id: string
+      tipo: 'objetiva' | 'dissertativa'
       enunciado: string
       alternativas: string[]
-      correta_index: number
+      correta_index: number | null
       gabarito_comentario: string
       ordem: number
       ativo: boolean

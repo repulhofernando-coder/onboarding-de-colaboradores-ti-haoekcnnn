@@ -790,8 +790,18 @@ export default function Manual() {
               tipo de uso (&quot;onboarding&quot;, &quot;reciclagem&quot;, &quot;mudanca_area&quot;,
               &quot;avaliacao&quot;, &quot;contratacao&quot;). Cada questionário possui nome,
               descrição, setor, nota mínima configurável (padrão 95%), quantidade de questões por
-              prova sorteada (padrão 20), status ativo/inativo e seu respectivo banco de questões
-              com alternativas, gabarito e comentário explicativo de auditoria.
+              prova sorteada (padrão 20), status ativo/inativo e seu respectivo banco de questões.
+              <br />
+              <strong>Cadastro de Questões Objetivas e Dissertativas (Versão 0.0.66):</strong> O
+              formulário &quot;Nova/Editar Questão&quot; permite selecionar o tipo da questão entre
+              <strong>Objetiva</strong> (múltipla escolha com 4 alternativas e marcação da correta)
+              e<strong>Dissertativa</strong> (estudo de caso/vivência técnica). Ao selecionar
+              <em>Dissertativa</em>, os campos de alternativas são ocultados e abre-se o campo
+              obrigatório <strong>&quot;Resposta esperada / critério de avaliação&quot;</strong>,
+              utilizado pelo Gestor e RH como gabarito oficial qualitativo na auditoria e na
+              impressão da via com gabarito. As questões dissertativas estão sempre presentes em
+              100% das provas, ficam <em>fora do sorteio aleatório</em>, não têm peso na nota
+              automática e servem como critério de análise de postura e maturidade do candidato.
             </p>
             <p className="text-xs sm:text-sm text-gray-700 leading-relaxed mt-2">
               <strong>Botão de Impressão & Vias Escolhíveis (Versão 0.0.65):</strong> Cada
@@ -827,9 +837,19 @@ export default function Manual() {
               <ul className="list-disc list-inside space-y-1 text-purple-900 pl-1">
                 <li>
                   <strong>Dissertativas FORA do sorteio:</strong> as questões dissertativas{' '}
-                  <em>nunca entram no sorteio</em> e estão sempre presentes em 100% das provas do
-                  pré-candidato. O sorteio aleatório ocorre exclusivamente entre as questões
-                  objetivas de múltipla escolha.
+                  <em>nunca entram no sorteio</em> e estão sempre presentes em 100% das provas
+                  (cadastráveis em qualquer questionário de conhecimento das 3 categorias). O
+                  sorteio aleatório ocorre exclusivamente entre as questões objetivas de múltipla
+                  escolha.
+                </li>
+                <li>
+                  <strong>Contagem no card e alerta de banco insuficiente:</strong> os cartões de
+                  questionário discriminam detalhadamente a quantidade de questões no formato{' '}
+                  <em>&quot;X objetivas / Y dissertativas&quot;</em>. O alerta de banco insuficiente
+                  para o sorteio da prova avalia{' '}
+                  <strong>exclusivamente a quantidade de questões objetivas</strong> em relação à
+                  meta configurada, mantendo as dissertativas como insumo qualitativo fora do
+                  cômputo da folga.
                 </li>
                 <li>
                   <strong>Régua de 95% mantida com arredondamento para cima:</strong> na prova com
