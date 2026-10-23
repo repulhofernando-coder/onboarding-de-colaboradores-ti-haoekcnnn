@@ -104,7 +104,10 @@ export default function Login() {
           </div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-50 border border-brand-200/80 text-brand-800 text-xs font-semibold">
             <span className="w-2 h-2 rounded-full bg-brand-600 animate-pulse" />
-            Sistema de Onboarding de Colaboradores
+            Sistema de Gestão
+            <span>
+              de C<span>olaboradores</span>
+            </span>
           </div>
         </div>
 
