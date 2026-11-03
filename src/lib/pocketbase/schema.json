@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-22T17:31:54.048Z",
+  "generatedAt": "2026-11-03T13:34:56.798Z",
   "collections": [
     {
       "name": "users",
@@ -447,12 +447,6 @@
           "system": false
         },
         {
-          "name": "setor",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
           "name": "data_admissao",
           "type": "date",
           "required": false,
@@ -461,6 +455,12 @@
         {
           "name": "ferias_vencimento",
           "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "setor",
+          "type": "text",
           "required": false,
           "system": false
         }

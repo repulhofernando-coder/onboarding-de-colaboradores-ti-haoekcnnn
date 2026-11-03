@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import pb from '@/lib/pocketbase/client'
+import { isNetworkError } from '@/lib/pocketbase/errors'
 import type { User } from '@/types/onboarding'
 
 interface AuthContextType {
@@ -63,7 +64,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [])
 
   const login = async (email: string, pass: string) => {
-    const res = await pb.collection('users').authWithPassword<User>(email, pass)
+    let res
+    try {
+      res = await pb.collection('users').authWithPassword<User>(email, pass)
+    } catch (firstErr) {
+      // Se a falha for de rede (backend reiniciando em implantação, "Failed to fetch"),
+      // retenta automaticamente UMA vez após ~1.5–2s antes de propagar qualquer erro.
+      if (isNetworkError(firstErr)) {
+        await new Promise((resolve) => setTimeout(resolve, 1800))
+        res = await pb.collection('users').authWithPassword<User>(email, pass)
+      } else {
+        throw firstErr
+      }
+    }
+
     if (res.record && res.record.ativo === false) {
       pb.authStore.clear()
       setUser(null)

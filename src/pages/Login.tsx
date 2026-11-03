@@ -69,7 +69,8 @@ export default function Login() {
         toast.error('Sua conta está desativada. Fale com o RH.')
         motivoAuditoria = 'Conta de usuário desativada'
       } else if (isRede) {
-        const netMsg = 'Falha de conexão com o servidor. Tente novamente em instantes.'
+        const netMsg =
+          'Servidor indisponível no momento ou falha de conexão. Tente novamente em instantes.'
         setErrorMsg(netMsg)
         toast.error(netMsg)
         // Erro de rede ("Failed to fetch") NÃO deve gerar falso registro de senha incorreta
@@ -122,7 +123,8 @@ export default function Login() {
 
           {errorMsg && (
             <div className="mb-5 flex items-start gap-2.5 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs leading-relaxed animate-fade-in">
-              {errorMsg.includes('Falha de conexão') ? (
+              {errorMsg.includes('Servidor indisponível') ||
+              errorMsg.includes('Falha de conexão') ? (
                 <WifiOff className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
               ) : (
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
