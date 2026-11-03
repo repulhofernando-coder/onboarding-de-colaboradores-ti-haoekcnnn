@@ -2,7 +2,7 @@ import pb from '@/lib/pocketbase/client'
 import type { Onboarding, FeriasConcessaoModel, TipoConcessaoFerias } from '@/types/onboarding'
 import { formatShortDate } from '@/lib/dateUtils'
 
-export type FeriasStatus = 'em_dia' | 'vencendo' | 'vencido' | 'sem_admissao'
+export type FeriasStatus = 'em_dia' | 'vencendo' | 'vencido' | 'sem_admissao' | 'desligado'
 
 export interface FeriasCalculoInfo {
   dataAdmissao: string | null
@@ -48,10 +48,28 @@ export function calcularVencimentoFerias(dataBaseIsoOuYmd: string): string {
  * - 🔴 vencido: data de vencimento no passado (< 0 dias)
  */
 export function avaliarStatusFerias(
-  onboarding: Pick<Onboarding, 'data_admissao' | 'ferias_vencimento' | 'data_inicio'>,
+  onboarding: Pick<Onboarding, 'data_admissao' | 'ferias_vencimento' | 'data_inicio' | 'desligado'>,
   ultimaConcessao?: Pick<FeriasConcessaoModel, 'data_inicio'> | null,
 ): FeriasCalculoInfo {
   const admissao = onboarding.data_admissao || onboarding.data_inicio || null
+
+  // Se o colaborador estiver desligado, não entra em cálculos nem alertas de férias
+  if (onboarding.desligado) {
+    return {
+      dataAdmissao: admissao ? admissao.slice(0, 10) : null,
+      dataVencimento: null,
+      vencimentoFormatado: 'Colaborador desligado',
+      status: 'desligado',
+      diasRestantes: null,
+      labelBadge: 'Desligado',
+      corDot: 'bg-slate-400',
+      corBg: 'bg-slate-100 text-slate-600 border-slate-200',
+      corBorder: 'border-slate-300',
+      corTexto: 'text-slate-600',
+      iconeCor: 'text-slate-400',
+      descricao: 'Colaborador desligado — excluído do controle de férias ativas.',
+    }
+  }
 
   // Se houver concessão recente de férias, ela reinicia o ciclo aquisitivo (12 meses a partir do início das férias)
   let vencimento = onboarding.ferias_vencimento ? onboarding.ferias_vencimento.slice(0, 10) : null

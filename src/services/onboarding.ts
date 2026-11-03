@@ -1081,6 +1081,221 @@ export const onboardingService = {
     return updated
   },
 
+  /**
+   * Cria um colaborador técnico diretamente, sem onboarding vinculado.
+   * Restrito a papéis admin e RH.
+   * Férias são calculadas automaticamente com base na data de admissão (admissão + 12 meses).
+   * Registra log na coleção logs_auditoria.
+   */
+  async criarColaboradorSemOnboarding(params: {
+    nome: string
+    email: string
+    setor: Setor
+    setor_ref?: string
+    cargo?: string
+    data_admissao: string // YYYY-MM-DD
+    gestor_id?: string
+    autor: { id: string; nome: string; role: string }
+  }): Promise<Onboarding> {
+    const dataAdmissaoYmd = params.data_admissao.slice(0, 10)
+    const feriasVencimento = calcularVencimentoFerias(dataAdmissaoYmd)
+
+    // Resolve setor_ref se não fornecido
+    let setorRefId = params.setor_ref
+    if (!setorRefId) {
+      try {
+        const setorValLower = String(params.setor || '').toLowerCase()
+        const found = await pb
+          .collection('setores')
+          .getFirstListItem<SetorModel>(
+            `chave = '${params.setor}' || chave = '${setorValLower}' || nome = '${params.setor}' || id = '${params.setor}'`,
+          )
+        setorRefId = found.id
+      } catch {
+        /* ignore */
+      }
+    }
+
+    // Se gestor_id não foi passado, tenta usar o autor ou primeiro gestor/admin
+    let gestorId = params.gestor_id
+    if (!gestorId) {
+      gestorId = params.autor.id
+    }
+
+    const payload: Record<string, unknown> = {
+      colaborador_nome: params.nome.trim(),
+      colaborador_email: params.email.trim(),
+      cargo: params.cargo ? params.cargo.trim() : '',
+      setor: params.setor,
+      gestor_id: gestorId,
+      data_inicio: dataAdmissaoYmd,
+      data_fim: dataAdmissaoYmd,
+      status: 'sem_onboarding',
+      sem_onboarding: true,
+      desligado: false,
+      data_admissao: dataAdmissaoYmd,
+      ferias_vencimento: feriasVencimento,
+      token_acesso_colaborador: generateRandomToken(32),
+      etapa_atual: 0,
+      etapa1_concluida: false,
+      etapa2_concluida: false,
+      etapa3_concluida: false,
+      fases_concluidas: [],
+      fases_sinalizadas: [],
+      checklist_integracao: [],
+    }
+
+    if (setorRefId) {
+      payload.setor_ref = setorRefId
+    }
+
+    const record = await pb.collection('onboardings').create<Onboarding>(payload, {
+      expand: 'gestor_id,setor_ref',
+    })
+
+    // Registrar na auditoria
+    await auditoriaService.registrar({
+      onboardingId: record.id,
+      colaboradorNome: record.colaborador_nome,
+      usuarioId: params.autor.id,
+      usuarioNome: params.autor.nome,
+      usuarioRole: params.autor.role,
+      acao: 'Cadastro de Colaborador (Sem Onboarding)',
+      detalhes: `Colaborador cadastrado diretamente por ${params.autor.nome} (${params.autor.role.toUpperCase()}) com admissão em ${formatShortDate(dataAdmissaoYmd)} e vencimento de férias projetado para ${formatShortDate(feriasVencimento)}.`,
+      foraPrazo: false,
+      metadata: {
+        colaborador_id: record.id,
+        cargo: params.cargo || '',
+        setor: params.setor,
+        data_admissao: dataAdmissaoYmd,
+        ferias_vencimento: feriasVencimento,
+      },
+    })
+
+    return record
+  },
+
+  /**
+   * Registra o desligamento de um colaborador.
+   * Disponível para o gestor do setor, RH e Admin.
+   */
+  async registrarDesligamento(params: {
+    colaboradorId: string
+    colaboradorNome: string
+    dataDesligamento: string // YYYY-MM-DD
+    motivo: string
+    observacoes?: string
+    autor: { id: string; nome: string; role: string }
+  }): Promise<Onboarding> {
+    const dataYmd = params.dataDesligamento.slice(0, 10)
+    const obsLimpa = (params.observacoes || '').trim()
+
+    // Atualiza todos os registros da mesma pessoa (ou o registro específico)
+    // Para consistência, busca registros do mesmo colaborador
+    const colabAtual = await pb.collection('onboardings').getOne<Onboarding>(params.colaboradorId)
+    const registrosPessoa = await this.listByColaborador(
+      colabAtual.colaborador_nome,
+      colabAtual.colaborador_email,
+    )
+
+    const idsParaAtualizar =
+      registrosPessoa.length > 0 ? registrosPessoa.map((r) => r.id) : [params.colaboradorId]
+
+    let ultimoAtualizado: Onboarding = colabAtual
+
+    for (const rid of idsParaAtualizar) {
+      ultimoAtualizado = await pb.collection('onboardings').update<Onboarding>(
+        rid,
+        {
+          desligado: true,
+          desligado_em: dataYmd,
+          desligamento_motivo: params.motivo,
+          desligamento_obs: obsLimpa,
+          desligado_por: params.autor.id,
+        },
+        {
+          expand: 'gestor_id,setor_ref,desligado_por',
+        },
+      )
+    }
+
+    // Registrar na auditoria
+    await auditoriaService.registrar({
+      onboardingId: params.colaboradorId,
+      colaboradorNome: params.colaboradorNome,
+      usuarioId: params.autor.id,
+      usuarioNome: params.autor.nome,
+      usuarioRole: params.autor.role,
+      acao: 'Registro de Desligamento',
+      detalhes: `Desligamento registrado por ${params.autor.nome} (${params.autor.role.toUpperCase()}) com data em ${formatShortDate(dataYmd)}. Motivo: ${params.motivo}.${obsLimpa ? ` Observações: ${obsLimpa}` : ''}`,
+      foraPrazo: false,
+      metadata: {
+        data_desligamento: dataYmd,
+        motivo: params.motivo,
+        observacoes: obsLimpa,
+        registros_atualizados: idsParaAtualizar,
+      },
+    })
+
+    return ultimoAtualizado
+  },
+
+  /**
+   * Reverte o desligamento de um colaborador registrado por engano.
+   * Restrito exclusivamente a RH e Admin.
+   */
+  async reverterDesligamento(params: {
+    colaboradorId: string
+    colaboradorNome: string
+    motivoReversao?: string
+    autor: { id: string; nome: string; role: string }
+  }): Promise<Onboarding> {
+    const colabAtual = await pb.collection('onboardings').getOne<Onboarding>(params.colaboradorId)
+    const registrosPessoa = await this.listByColaborador(
+      colabAtual.colaborador_nome,
+      colabAtual.colaborador_email,
+    )
+
+    const idsParaAtualizar =
+      registrosPessoa.length > 0 ? registrosPessoa.map((r) => r.id) : [params.colaboradorId]
+
+    let ultimoAtualizado: Onboarding = colabAtual
+
+    for (const rid of idsParaAtualizar) {
+      ultimoAtualizado = await pb.collection('onboardings').update<Onboarding>(
+        rid,
+        {
+          desligado: false,
+          desligado_em: null,
+          desligamento_motivo: '',
+          desligamento_obs: '',
+          desligado_por: null,
+        },
+        {
+          expand: 'gestor_id,setor_ref',
+        },
+      )
+    }
+
+    // Registrar na auditoria
+    await auditoriaService.registrar({
+      onboardingId: params.colaboradorId,
+      colaboradorNome: params.colaboradorNome,
+      usuarioId: params.autor.id,
+      usuarioNome: params.autor.nome,
+      usuarioRole: params.autor.role,
+      acao: 'Reversão de Desligamento',
+      detalhes: `Desligamento revertido por ${params.autor.nome} (${params.autor.role.toUpperCase()}). Colaborador restabelecido ao quadro ativo.${params.motivoReversao ? ` Justificativa: ${params.motivoReversao}` : ''}`,
+      foraPrazo: false,
+      metadata: {
+        motivo_reversao: params.motivoReversao || '',
+        registros_atualizados: idsParaAtualizar,
+      },
+    })
+
+    return ultimoAtualizado
+  },
+
   async delete(id: string): Promise<boolean> {
     return pb.collection('onboardings').delete(id)
   },

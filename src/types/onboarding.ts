@@ -11,6 +11,20 @@ export type OnboardingStatus =
   | 'concluido'
   | 'nao_apto'
   | 'em_acompanhamento'
+  | 'sem_onboarding'
+
+export type MotivoDesligamento =
+  | 'Justa causa'
+  | 'Sem justa causa — iniciativa da empresa'
+  | 'Pedido de demissão do colaborador'
+  | 'Fim de contrato'
+
+export const MOTIVOS_DESLIGAMENTO: MotivoDesligamento[] = [
+  'Justa causa',
+  'Sem justa causa — iniciativa da empresa',
+  'Pedido de demissão do colaborador',
+  'Fim de contrato',
+]
 
 export type CandidatoStatus =
   | 'pre_selecionado'
@@ -268,12 +282,19 @@ export interface Onboarding extends RecordModel {
   questionario_id?: string
   data_admissao?: string
   ferias_vencimento?: string
+  sem_onboarding?: boolean
+  desligado?: boolean
+  desligado_em?: string
+  desligamento_motivo?: string
+  desligamento_obs?: string
+  desligado_por?: string
   expand?: {
     gestor_id?: User
     etapa1_concluida_por?: User
     etapa2_concluida_por?: User
     setor_ref?: SetorModel
     questionario_id?: QuestionarioModel
+    desligado_por?: User
   }
 }
 
@@ -910,5 +931,10 @@ export const STATUS_INFO: Record<
     nome: 'Em acompanhamento',
     corBg: 'bg-amber-50 text-amber-800 border-amber-300',
     corDot: 'bg-amber-500',
+  },
+  sem_onboarding: {
+    nome: 'Sem onboarding',
+    corBg: 'bg-slate-100 text-slate-700 border-slate-300',
+    corDot: 'bg-slate-400',
   },
 }
