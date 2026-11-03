@@ -1702,6 +1702,43 @@ export default function Manual() {
                 Gestão terminantemente impedido de visualizar essa aba.
               </p>
             </div>
+
+            {/* Subseção: Cadastro Direto de Colaborador (Sem Onboarding), Desligamento e Reativação */}
+            <div className="mt-4 p-4 rounded-xl border border-brand-200 bg-brand-50/50 space-y-2 text-xs sm:text-sm text-brand-950">
+              <h4 className="font-bold text-brand-900 uppercase tracking-wide flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-brand-600" />
+                Novas Operações Funcionais: Cadastro Direto, Desligamento e Reativação
+              </h4>
+              <ul className="list-disc list-inside space-y-1 text-gray-700 pl-1 text-xs sm:text-sm">
+                <li>
+                  <strong>Cadastro Direto de Colaborador (Sem Onboarding):</strong> Botão exclusivo
+                  para <strong>RH e Admin</strong> na lista de Colaboradores (/colaboradores).
+                  Permite integrar um técnico informando nome, e-mail, setor, cargo e data de
+                  admissão. O registro entra com badge <code>Sem onboarding</code> e possui perfil
+                  completo (Trajetória, Férias, Cursos da Grade, Certificados, Documentos, Anotações
+                  e botão direto <em>"Aplicar Prova"</em>).
+                </li>
+                <li>
+                  <strong>Ação "Iniciar Onboarding" no Perfil:</strong> Permite reaplicar ou iniciar
+                  um novo onboarding a qualquer momento (ex.: troca de área ou contratação
+                  posterior), abrindo o formulário já pré-preenchido com os dados cadastrais da
+                  pessoa e preservando todo o histórico anterior na Trajetória.
+                </li>
+                <li>
+                  <strong>Registro de Desligamento:</strong> Ação disponível para o Gestor do setor,
+                  RH e Admin no perfil do colaborador. Requer data e motivo (justa causa, sem justa
+                  causa, pedido de demissão, fim de contrato) com observações livres. O colaborador
+                  recebe o badge <code>Demitido</code>, é excluído dos alertas de férias da Visão
+                  Geral e tem o bloqueio automático para aplicação de novas provas e abertura de
+                  novos onboardings.
+                </li>
+                <li>
+                  <strong>Reativação Funcional:</strong> Restrita a <strong>RH e Admin</strong> pelo
+                  botão <em>"Reativar Colaborador"</em>. Reverte o status anterior, remove o
+                  bloqueio e registra justificativa na auditoria com retenção de 6 meses.
+                </li>
+              </ul>
+            </div>
           </div>
         </section>
 
@@ -2033,6 +2070,13 @@ export default function Manual() {
               'Carimbo de Leitura: primeiro acesso registra data/hora e IP na avaliação e log na auditoria → perfil exibe "Lido em [data/hora]";',
               'Regra de feedback vazio: ao registrar avaliação sem preencher o texto de feedback, confirmar que nenhum link ativo é gerado e perfil mostra "Sem feedback publicado";',
               'Botão "Copiar link do feedback" no Perfil do Colaborador copia URL funcional para envio ao técnico via WhatsApp/e-mail.',
+              'Cadastro Direto de Colaborador (/colaboradores): RH/Admin criam colaborador com nome, e-mail, setor, cargo e data de admissão → card exibe badge "Sem onboarding" e integra controle de férias;',
+              'Ficha Única sem Onboarding: abrir perfil de colaborador sem onboarding e validar acesso a Trajetória, Certificados, Cursos da Grade, Documentos, Férias e botão direto "Aplicar Prova";',
+              'Ação Iniciar Onboarding no Perfil: clicar no botão no perfil e conferir abertura de /onboardings/nova com nome, e-mail, cargo e setor pré-preenchidos;',
+              'Registro de Desligamento: gestor do setor, RH ou Admin registram data, motivo e observações → card e perfil exibem badge "Demitido", evento entra na Trajetória e bloqueia nova prova/onboarding;',
+              'Exclusão de Férias para Demitidos: confirmar que colaborador demitido não gera alertas de férias na Visão Geral e no perfil;',
+              'Reativação por RH/Admin: clicar em "Reativar Colaborador" com justificativa → perfil volta ao quadro ativo, remove badge Demitido e gera log na auditoria;',
+              'Resiliência de Rede no Login: validação de isNetworkError garantindo retentativa automática sem registro indevido de falha de login na auditoria.',
             ].map((item, idx) => (
               <div
                 key={idx}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useLocation } from 'react-router-dom'
 import {
   onboardingService,
   userService,
@@ -36,11 +36,21 @@ import { toast } from 'sonner'
 
 export default function NovoOnboarding() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const stateInicial =
+    (location.state as {
+      nome?: string
+      email?: string
+      cargo?: string
+      setor?: string
+      dataAdmissao?: string
+      colaboradorOrigemId?: string
+    } | null) || null
 
-  const [nome, setNome] = useState('')
-  const [email, setEmail] = useState('')
-  const [cargo, setCargo] = useState('')
-  const [setor, setSetor] = useState<Setor>('windows')
+  const [nome, setNome] = useState(stateInicial?.nome || '')
+  const [email, setEmail] = useState(stateInicial?.email || '')
+  const [cargo, setCargo] = useState(stateInicial?.cargo || '')
+  const [setor, setSetor] = useState<Setor>(stateInicial?.setor || 'windows')
   const [gestorId, setGestorId] = useState('')
   const [dataInicio, setDataInicio] = useState(() => {
     return new Date().toISOString().split('T')[0]
@@ -82,8 +92,21 @@ export default function NovoOnboarding() {
       .then(async (res: SetorModel[]) => {
         if (res.length > 0) {
           setSetoresList(res)
-          const firstKey = res[0].chave || res[0].nome
-          setSetor(firstKey)
+          if (!stateInicial?.setor) {
+            const firstKey = res[0].chave || res[0].nome
+            setSetor(firstKey)
+          } else {
+            // Se veio do state, confere se existe ou normaliza
+            const match = res.find(
+              (s) =>
+                s.chave === stateInicial.setor ||
+                s.nome.toLowerCase() === stateInicial.setor?.toLowerCase() ||
+                s.id === stateInicial.setor,
+            )
+            if (match) {
+              setSetor(match.chave || match.nome)
+            }
+          }
         }
       })
       .catch((err: unknown) => {

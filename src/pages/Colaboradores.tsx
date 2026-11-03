@@ -29,7 +29,8 @@ import { AvisoSetorGestor } from '@/components/AvisoSetorGestor'
 import { ModalExcluirColaborador } from '@/components/ModalExcluirColaborador'
 import { ModalEditarColaborador } from '@/components/ModalEditarColaborador'
 import { ModalSugestaoMudancaArea } from '@/components/ModalSugestaoMudancaArea'
-import { Edit, UserCog } from 'lucide-react'
+import { ModalNovoColaborador } from '@/components/ModalNovoColaborador'
+import { Edit, UserCog, UserPlus, UserX } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Questionario, SetorModel } from '@/types/onboarding'
 import { setorService } from '@/services/onboarding'
@@ -82,6 +83,9 @@ export default function Colaboradores() {
     email?: string
     onboardingId?: string
   } | null>(null)
+
+  // Estado do modal de cadastro direto de colaborador (RH/Admin)
+  const [modalNovoColaboradorOpen, setModalNovoColaboradorOpen] = useState(false)
 
   const fetchOnboardings = async () => {
     try {
@@ -195,15 +199,29 @@ export default function Colaboradores() {
           </p>
         </div>
 
-        <Button
-          asChild
-          className="bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm shrink-0"
-        >
-          <Link to="/onboardings/nova" className="flex items-center gap-2">
-            <Plus className="w-4 h-4" />
-            <span>Novo Onboarding</span>
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+          {(isAdmin || isRH) && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setModalNovoColaboradorOpen(true)}
+              className="border-brand-200 text-brand-700 hover:bg-brand-50 hover:text-brand-800 font-semibold rounded-lg shadow-2xs shrink-0 flex items-center gap-2"
+            >
+              <UserPlus className="w-4 h-4 text-brand-600" />
+              <span>Novo Colaborador</span>
+            </Button>
+          )}
+
+          <Button
+            asChild
+            className="bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm shrink-0"
+          >
+            <Link to="/onboardings/nova" className="flex items-center gap-2">
+              <Plus className="w-4 h-4" />
+              <span>Novo Onboarding</span>
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Busca & Filtro de Férias */}
@@ -352,14 +370,26 @@ export default function Colaboradores() {
                       </span>
                     </div>
 
-                    <span className="text-[11px] px-2.5 py-0.5 rounded-full border font-semibold shrink-0 bg-brand-50 text-brand-700 border-brand-200 inline-flex items-center gap-1.5">
-                      {' '}
-                      <span
-                        className="w-1.5 h-1.5 rounded-full shrink-0"
-                        style={{ backgroundColor: setor.cor }}
-                      />
-                      {setor.nome}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      {onb.desligado ? (
+                        <span className="text-[11px] px-2 py-0.5 rounded-full border font-bold shrink-0 bg-red-100 text-red-800 border-red-300 inline-flex items-center gap-1">
+                          <UserX className="w-3 h-3 text-red-600" />
+                          Demitido
+                        </span>
+                      ) : onb.sem_onboarding || onb.status === 'sem_onboarding' ? (
+                        <span className="text-[11px] px-2 py-0.5 rounded-full border font-semibold shrink-0 bg-slate-100 text-slate-700 border-slate-300 inline-flex items-center gap-1">
+                          Sem onboarding
+                        </span>
+                      ) : null}
+
+                      <span className="text-[11px] px-2.5 py-0.5 rounded-full border font-semibold shrink-0 bg-brand-50 text-brand-700 border-brand-200 inline-flex items-center gap-1.5">
+                        <span
+                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                          style={{ backgroundColor: setor.cor }}
+                        />
+                        {setor.nome}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Badge Visual de Férias 🟢 🟡 🔴 com Tooltip/Data */}
@@ -417,10 +447,30 @@ export default function Colaboradores() {
 
                 <div className="pt-4 mt-3 border-t border-gray-100 flex items-center justify-between gap-2">
                   <span
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${status.corBg}`}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                      onb.desligado
+                        ? 'bg-red-50 text-red-800 border-red-300'
+                        : onb.sem_onboarding || onb.status === 'sem_onboarding'
+                          ? 'bg-slate-100 text-slate-700 border-slate-300'
+                          : status.corBg
+                    }`}
                   >
-                    <span className={`w-1.5 h-1.5 rounded-full ${status.corDot}`} />
-                    {status.nome}
+                    {onb.desligado ? (
+                      <>
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-600" />
+                        Demitido
+                      </>
+                    ) : onb.sem_onboarding || onb.status === 'sem_onboarding' ? (
+                      <>
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                        Sem onboarding
+                      </>
+                    ) : (
+                      <>
+                        <span className={`w-1.5 h-1.5 rounded-full ${status.corDot}`} />
+                        {status.nome}
+                      </>
+                    )}
                   </span>
 
                   <div className="flex items-center gap-1.5">
@@ -519,6 +569,16 @@ export default function Colaboradores() {
           questionarioSugerido={dadosSugestao.questionarioSugerido}
         />
       )}
+
+      {/* Modal de Cadastro Direto de Colaborador (RH/Admin) */}
+      <ModalNovoColaborador
+        open={modalNovoColaboradorOpen}
+        onOpenChange={setModalNovoColaboradorOpen}
+        setoresList={setoresList}
+        onSucesso={() => {
+          fetchOnboardings()
+        }}
+      />
 
       {/* Modal de Exclusão Forte em Cascata */}
       {colaboradorParaExcluir && (

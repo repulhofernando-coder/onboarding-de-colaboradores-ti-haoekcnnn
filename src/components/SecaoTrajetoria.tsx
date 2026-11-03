@@ -59,6 +59,8 @@ export type TipoEventoTrajetoria =
   | 'documento_complementar'
   | 'anotacao_gestor'
   | 'ferias_concessao'
+  | 'desligamento'
+  | 'reativacao'
   | 'auditoria_geral'
 
 export interface EventoTrajetoria {
@@ -200,6 +202,60 @@ export function SecaoTrajetoria({
           autorRole: log.usuario_role || 'RH',
           badgeLabel: 'Contratação',
           badgeColor: 'bg-purple-100 text-purple-800 border-purple-300 font-bold',
+          linkOnboardingId: log.onboarding_id,
+        })
+        return
+      }
+
+      // Registro de Desligamento
+      if (acaoNorm.includes('desligamento') && !acaoNorm.includes('reversão')) {
+        lista.push({
+          id: `log-desligamento-${log.id}`,
+          dataHora: log.created,
+          tipo: 'desligamento',
+          titulo: 'Registro de Desligamento do Colaborador',
+          subtitulo: `Registrado por: ${log.usuario_nome || 'Gestão'} (${(log.usuario_role || 'gestao').toUpperCase()})`,
+          detalhes: log.detalhes || 'Desligamento formal registrado na ficha do colaborador.',
+          autorNome: log.usuario_nome,
+          autorRole: log.usuario_role,
+          badgeLabel: 'Demitido',
+          badgeColor: 'bg-red-100 text-red-800 border-red-300 font-bold',
+          linkOnboardingId: log.onboarding_id,
+        })
+        return
+      }
+
+      // Reversão de Desligamento / Reativação
+      if (acaoNorm.includes('reversão de desligamento') || acaoNorm.includes('reativação')) {
+        lista.push({
+          id: `log-reativacao-${log.id}`,
+          dataHora: log.created,
+          tipo: 'reativacao',
+          titulo: 'Reativação de Colaborador (Reversão de Desligamento)',
+          subtitulo: `Reativado por: ${log.usuario_nome || 'RH/Admin'} (${(log.usuario_role || 'rh').toUpperCase()})`,
+          detalhes: log.detalhes || 'Colaborador restabelecido ao quadro ativo da empresa.',
+          autorNome: log.usuario_nome,
+          autorRole: log.usuario_role,
+          badgeLabel: 'Reativado',
+          badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold',
+          linkOnboardingId: log.onboarding_id,
+        })
+        return
+      }
+
+      // Cadastro direto de Colaborador (Sem Onboarding)
+      if (acaoNorm.includes('sem onboarding')) {
+        lista.push({
+          id: `log-sem-onb-${log.id}`,
+          dataHora: log.created,
+          tipo: 'contratacao',
+          titulo: 'Cadastro Direto de Colaborador (Sem Onboarding)',
+          subtitulo: `Cadastrado por: ${log.usuario_nome || 'RH'} (${(log.usuario_role || 'rh').toUpperCase()})`,
+          detalhes: log.detalhes || 'Colaborador integrado diretamente ao quadro da equipe.',
+          autorNome: log.usuario_nome,
+          autorRole: log.usuario_role,
+          badgeLabel: 'Sem Onboarding',
+          badgeColor: 'bg-slate-100 text-slate-800 border-slate-300 font-semibold',
           linkOnboardingId: log.onboarding_id,
         })
         return
@@ -441,6 +497,10 @@ export function SecaoTrajetoria({
 
   const getIconeEvento = (tipo: TipoEventoTrajetoria) => {
     switch (tipo) {
+      case 'desligamento':
+        return <Briefcase className="w-4 h-4 text-red-600" />
+      case 'reativacao':
+        return <UserCheck className="w-4 h-4 text-emerald-600" />
       case 'contratacao':
         return <UserCheck className="w-4 h-4 text-purple-600" />
       case 'onboarding_inicio':

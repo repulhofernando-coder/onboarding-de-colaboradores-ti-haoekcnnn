@@ -67,11 +67,15 @@ import {
   AlertTriangle,
   Award,
   GraduationCap,
+  UserX,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ModalExcluirColaborador } from '@/components/ModalExcluirColaborador'
 import { ModalEditarColaborador } from '@/components/ModalEditarColaborador'
 import { ModalSugestaoMudancaArea } from '@/components/ModalSugestaoMudancaArea'
+import { ModalRegistrarDesligamento } from '@/components/ModalRegistrarDesligamento'
+import { ModalReverterDesligamento } from '@/components/ModalReverterDesligamento'
+import { ModalAplicarAvaliacao } from '@/components/ModalAplicarAvaliacao'
 import { SecaoAvaliacoesColaborador } from '@/components/SecaoAvaliacoesColaborador'
 import { SecaoTrajetoria } from '@/components/SecaoTrajetoria'
 import { SecaoCertificados } from '@/components/SecaoCertificados'
@@ -255,6 +259,13 @@ export default function DetalheOnboarding() {
     setorNovo: string
     questionarioSugerido: any
   } | null>(null)
+
+  // Modais de Desligamento e Reativação
+  const [modalDesligamentoOpen, setModalDesligamentoOpen] = useState(false)
+  const [modalReversaoDesligamentoOpen, setModalReversaoDesligamentoOpen] = useState(false)
+
+  // Modal direto de Aplicar Prova
+  const [modalAplicarProvaDiretoOpen, setModalAplicarProvaDiretoOpen] = useState(false)
 
   // Estado para fluxo "Não Apto" na Avaliação
   const [faseRetornoId, setFaseRetornoId] = useState<string>('')
@@ -1472,6 +1483,87 @@ export default function DetalheOnboarding() {
             </Badge>
           )}
 
+          {/* Botão APLICAR PROVA direto do perfil (bloqueado se demitido) */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!!onboarding.desligado}
+            onClick={() => setModalAplicarProvaDiretoOpen(true)}
+            className={`border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-semibold text-xs h-8 gap-1.5 shadow-2xs ${
+              onboarding.desligado ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+            title={
+              onboarding.desligado
+                ? 'Colaborador demitido: aplicação de provas bloqueada'
+                : 'Aplicar prova de conhecimento ou reciclagem diretamente do perfil'
+            }
+          >
+            <GraduationCap className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Aplicar Prova</span>
+          </Button>
+
+          {/* Botão INICIAR ONBOARDING (pré-preenchido, bloqueado se demitido) */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!!onboarding.desligado}
+            onClick={() => {
+              navigate('/onboardings/nova', {
+                state: {
+                  nome: onboarding.colaborador_nome,
+                  email: onboarding.colaborador_email,
+                  cargo: onboarding.cargo || '',
+                  setor: setorToString(onboarding.setor),
+                  colaboradorOrigemId: onboarding.id,
+                },
+              })
+            }}
+            className={`border-brand-200 text-brand-700 hover:bg-brand-50 font-semibold text-xs h-8 gap-1.5 shadow-2xs ${
+              onboarding.desligado ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+            title={
+              onboarding.desligado
+                ? 'Colaborador demitido: abertura de onboarding bloqueada'
+                : 'Iniciar novo onboarding pré-preenchido preservando o histórico anterior na Trajetória'
+            }
+          >
+            <Layers className="w-3.5 h-3.5 text-brand-600" />
+            <span>Iniciar Onboarding</span>
+          </Button>
+
+          {/* Ação de Desligamento / Reativação */}
+          {onboarding.desligado ? (
+            // Reativação permitida apenas para RH e Admin
+            (isAdmin || isRH) && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setModalReversaoDesligamentoOpen(true)}
+                className="border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-bold text-xs h-8 gap-1.5 shadow-2xs"
+                title="Reativar colaborador desligado e reverter para o quadro ativo"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Reativar Colaborador</span>
+              </Button>
+            )
+          ) : (
+            // Registro de Desligamento: Gestor do setor, RH e Admin
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setModalDesligamentoOpen(true)}
+              className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 font-semibold text-xs h-8 gap-1.5 shadow-2xs"
+              title="Registrar desligamento formal do colaborador"
+            >
+              <UserX className="w-3.5 h-3.5 text-red-600" />
+              <span>Registrar Desligamento</span>
+            </Button>
+          )}
+
           {/* Botão de Editar Colaborador (Exclusivo RH / Admin — Gestão não edita) */}
           {(isAdmin || isRH) && (
             <Button
@@ -1599,12 +1691,24 @@ export default function DetalheOnboarding() {
                   />
                   Área: {setorInfo.nome}
                 </span>
-                <span
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${statusInfo.corBg}`}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.corDot}`} />
-                  {statusInfo.nome}
-                </span>
+                {onboarding.desligado ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border bg-red-100 text-red-800 border-red-300">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-600" />
+                    Demitido
+                  </span>
+                ) : onboarding.sem_onboarding || onboarding.status === 'sem_onboarding' ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-slate-100 text-slate-700 border-slate-300">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                    Sem onboarding
+                  </span>
+                ) : (
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${statusInfo.corBg}`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.corDot}`} />
+                    {statusInfo.nome}
+                  </span>
+                )}
                 {todosOnboardings.length > 1 && (
                   <Badge
                     variant="outline"
@@ -4568,6 +4672,47 @@ export default function DetalheOnboarding() {
           questionarioSugerido={dadosSugestao.questionarioSugerido}
           onAvaliacaoCriada={() => {
             fetchData()
+          }}
+        />
+      )}
+
+      {/* Modal de Registro de Desligamento */}
+      {onboarding && (
+        <ModalRegistrarDesligamento
+          open={modalDesligamentoOpen}
+          onOpenChange={setModalDesligamentoOpen}
+          onboarding={onboarding}
+          onSucesso={(atualizado) => {
+            setOnboarding(atualizado)
+            fetchData()
+            carregarLogs()
+          }}
+        />
+      )}
+
+      {/* Modal de Reversão de Desligamento (Reativação - RH/Admin) */}
+      {onboarding && (
+        <ModalReverterDesligamento
+          open={modalReversaoDesligamentoOpen}
+          onOpenChange={setModalReversaoDesligamentoOpen}
+          onboarding={onboarding}
+          onSucesso={(atualizado) => {
+            setOnboarding(atualizado)
+            fetchData()
+            carregarLogs()
+          }}
+        />
+      )}
+
+      {/* Modal Direto de Aplicar Prova ao Colaborador */}
+      {onboarding && (
+        <ModalAplicarAvaliacao
+          open={modalAplicarProvaDiretoOpen}
+          onOpenChange={setModalAplicarProvaDiretoOpen}
+          onboarding={onboarding}
+          onSucesso={() => {
+            fetchData()
+            setAbaAtiva('avaliacoes')
           }}
         />
       )}

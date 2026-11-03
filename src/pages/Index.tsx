@@ -110,6 +110,7 @@ export default function Index() {
     let emDia = 0
 
     for (const o of Object.values(mapColabs)) {
+      if (o.desligado) continue
       const st = avaliarStatusFerias(o)
       if (st.status === 'vencido') vencidas++
       else if (st.status === 'vencendo') vencendo30d++

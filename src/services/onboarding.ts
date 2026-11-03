@@ -1,4 +1,6 @@
 import pb from '@/lib/pocketbase/client'
+import { calcularVencimentoFerias } from '@/services/ferias'
+import { formatShortDate } from '@/lib/dateUtils'
 import type {
   Onboarding,
   TarefaOnboarding,
@@ -1087,6 +1089,19 @@ export const onboardingService = {
    * Férias são calculadas automaticamente com base na data de admissão (admissão + 12 meses).
    * Registra log na coleção logs_auditoria.
    */
+  async criarColaboradorDireto(params: {
+    nome: string
+    email: string
+    setor: Setor
+    setor_ref?: string
+    cargo?: string
+    data_admissao: string // YYYY-MM-DD
+    gestor_id?: string
+    autor: { id: string; nome: string; role: string }
+  }): Promise<Onboarding> {
+    return this.criarColaboradorSemOnboarding(params)
+  },
+
   async criarColaboradorSemOnboarding(params: {
     nome: string
     email: string
