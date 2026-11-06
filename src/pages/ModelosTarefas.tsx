@@ -1152,212 +1152,216 @@ export default function ModelosTarefas() {
       {isQuestionarios ? (
         <GestaoQuestionarios setoresList={setoresList} />
       ) : isBiblioteca ? (
-        <div className="bg-white rounded-xl border border-gray-200/90 shadow-sm p-6 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
-                <Library className="w-5 h-5" />
+        <div className="space-y-4">
+          {(isAdmin || isRH) && <CardEspacoUtilizado />}
+          <div className="bg-white rounded-xl border border-gray-200/90 shadow-sm p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+                  <Library className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">
+                    Biblioteca Central de Materiais de TI
+                  </h3>
+                  <p className="text-xs text-gray-400">
+                    Arquivos únicos (.mp4, .pdf, .pptx, .docx) que podem ser associados a múltiplos
+                    modelos de tarefas
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-base font-bold text-gray-900">
-                  Biblioteca Central de Materiais de TI
-                </h3>
-                <p className="text-xs text-gray-400">
-                  Arquivos únicos (.mp4, .pdf, .pptx, .docx) que podem ser associados a múltiplos
-                  modelos de tarefas
-                </p>
+
+              <Button
+                onClick={() => openNewMaterialModal('manual')}
+                size="sm"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold h-8 rounded-lg shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                Novo Material
+              </Button>
+            </div>
+
+            {/* Barra de Filtros e Busca */}
+            <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+              <div className="relative w-full sm:w-72">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                <Input
+                  type="text"
+                  placeholder="Buscar material por título ou descrição..."
+                  value={buscaMaterial}
+                  onChange={(e) => setBuscaMaterial(e.target.value)}
+                  className="pl-9 text-xs h-9"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 w-full sm:w-auto self-start">
+                <Button
+                  variant={filtroTipoMaterial === 'todos' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFiltroTipoMaterial('todos')}
+                  className={`h-8 text-xs ${
+                    filtroTipoMaterial === 'todos'
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      : ''
+                  }`}
+                >
+                  Todos ({materiais.length})
+                </Button>
+                <Button
+                  variant={filtroTipoMaterial === 'video' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFiltroTipoMaterial('video')}
+                  className={`h-8 text-xs ${
+                    filtroTipoMaterial === 'video'
+                      ? 'bg-purple-600 text-white hover:bg-purple-700'
+                      : ''
+                  }`}
+                >
+                  <Video className="w-3 h-3 mr-1" />
+                  Vídeos ({materiais.filter((m) => m.tipo === 'video').length})
+                </Button>
+                <Button
+                  variant={filtroTipoMaterial === 'manual' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFiltroTipoMaterial('manual')}
+                  className={`h-8 text-xs ${
+                    filtroTipoMaterial === 'manual'
+                      ? 'bg-brand-600 text-white hover:bg-brand-700'
+                      : ''
+                  }`}
+                >
+                  <FileText className="w-3 h-3 mr-1" />
+                  Manuais ({materiais.filter((m) => m.tipo === 'manual').length})
+                </Button>
               </div>
             </div>
 
-            <Button
-              onClick={() => openNewMaterialModal('manual')}
-              size="sm"
-              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold h-8 rounded-lg shrink-0"
-            >
-              <Plus className="w-3.5 h-3.5 mr-1" />
-              Novo Material
-            </Button>
-          </div>
+            {/* Tabela / Lista de Materiais */}
+            <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden bg-gray-50/20">
+              {materiaisFiltrados.length === 0 ? (
+                <div className="p-10 text-center space-y-3">
+                  <Library className="w-10 h-10 text-gray-300 mx-auto" />
+                  <h4 className="text-sm font-semibold text-gray-700">
+                    {materiais.length === 0
+                      ? 'Nenhum material na biblioteca central ainda'
+                      : 'Nenhum material encontrado com este filtro'}
+                  </h4>
+                  <p className="text-xs text-gray-400 max-w-md mx-auto">
+                    {materiais.length === 0
+                      ? 'Adicione documentos e vídeos institucionais comuns (ex.: manual do Movidesk, Passportal, regras de conduta) para reutilizar em todos os setores.'
+                      : 'Tente alterar os termos de busca ou o filtro de tipo.'}
+                  </p>
+                  {materiais.length === 0 && (
+                    <Button
+                      onClick={() => openNewMaterialModal('manual')}
+                      size="sm"
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold"
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1" />
+                      Subir Primeiro Material
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                materiaisFiltrados.map((item) => {
+                  const setorOrigemStr = setorToString(item.setor_origem)
+                  const setorOrigemNome = setorOrigemStr
+                    ? setoresList.find(
+                        (s) => s.chave === setorOrigemStr || s.nome === setorOrigemStr,
+                      )?.nome || getSetorVisual(setorOrigemStr).nome
+                    : null
 
-          {/* Barra de Filtros e Busca */}
-          <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-            <div className="relative w-full sm:w-72">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
-              <Input
-                type="text"
-                placeholder="Buscar material por título ou descrição..."
-                value={buscaMaterial}
-                onChange={(e) => setBuscaMaterial(e.target.value)}
-                className="pl-9 text-xs h-9"
-              />
-            </div>
-
-            <div className="flex items-center gap-1.5 w-full sm:w-auto self-start">
-              <Button
-                variant={filtroTipoMaterial === 'todos' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setFiltroTipoMaterial('todos')}
-                className={`h-8 text-xs ${
-                  filtroTipoMaterial === 'todos'
-                    ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                    : ''
-                }`}
-              >
-                Todos ({materiais.length})
-              </Button>
-              <Button
-                variant={filtroTipoMaterial === 'video' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setFiltroTipoMaterial('video')}
-                className={`h-8 text-xs ${
-                  filtroTipoMaterial === 'video'
-                    ? 'bg-purple-600 text-white hover:bg-purple-700'
-                    : ''
-                }`}
-              >
-                <Video className="w-3 h-3 mr-1" />
-                Vídeos ({materiais.filter((m) => m.tipo === 'video').length})
-              </Button>
-              <Button
-                variant={filtroTipoMaterial === 'manual' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setFiltroTipoMaterial('manual')}
-                className={`h-8 text-xs ${
-                  filtroTipoMaterial === 'manual'
-                    ? 'bg-brand-600 text-white hover:bg-brand-700'
-                    : ''
-                }`}
-              >
-                <FileText className="w-3 h-3 mr-1" />
-                Manuais ({materiais.filter((m) => m.tipo === 'manual').length})
-              </Button>
-            </div>
-          </div>
-
-          {/* Tabela / Lista de Materiais */}
-          <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden bg-gray-50/20">
-            {materiaisFiltrados.length === 0 ? (
-              <div className="p-10 text-center space-y-3">
-                <Library className="w-10 h-10 text-gray-300 mx-auto" />
-                <h4 className="text-sm font-semibold text-gray-700">
-                  {materiais.length === 0
-                    ? 'Nenhum material na biblioteca central ainda'
-                    : 'Nenhum material encontrado com este filtro'}
-                </h4>
-                <p className="text-xs text-gray-400 max-w-md mx-auto">
-                  {materiais.length === 0
-                    ? 'Adicione documentos e vídeos institucionais comuns (ex.: manual do Movidesk, Passportal, regras de conduta) para reutilizar em todos os setores.'
-                    : 'Tente alterar os termos de busca ou o filtro de tipo.'}
-                </p>
-                {materiais.length === 0 && (
-                  <Button
-                    onClick={() => openNewMaterialModal('manual')}
-                    size="sm"
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold"
-                  >
-                    <Plus className="w-3.5 h-3.5 mr-1" />
-                    Subir Primeiro Material
-                  </Button>
-                )}
-              </div>
-            ) : (
-              materiaisFiltrados.map((item) => {
-                const setorOrigemStr = setorToString(item.setor_origem)
-                const setorOrigemNome = setorOrigemStr
-                  ? setoresList.find((s) => s.chave === setorOrigemStr || s.nome === setorOrigemStr)
-                      ?.nome || getSetorVisual(setorOrigemStr).nome
-                  : null
-
-                return (
-                  <div
-                    key={item.id}
-                    className="p-4 flex items-center justify-between gap-3 hover:bg-white transition-colors"
-                  >
-                    <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                      <div
-                        className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                          item.tipo === 'video'
-                            ? 'bg-purple-100 text-purple-700'
-                            : 'bg-brand-100 text-brand-700'
-                        }`}
-                      >
-                        {item.tipo === 'video' ? (
-                          <Video className="w-4 h-4" />
-                        ) : (
-                          <FileText className="w-4 h-4" />
-                        )}
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-xs text-gray-900 truncate">
-                            {item.titulo}
-                          </span>
-                          <span
-                            className={`text-[10px] font-medium px-2 py-0.5 rounded border ${
-                              item.tipo === 'video'
-                                ? 'bg-purple-50 text-purple-700 border-purple-200'
-                                : 'bg-brand-50 text-brand-700 border-brand-200'
-                            }`}
-                          >
-                            {item.tipo === 'video' ? 'Vídeo (MP4)' : 'Manual / PDF'}
-                          </span>
-                          {setorOrigemNome && (
-                            <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
-                              Origem: {setorOrigemNome}
-                            </span>
-                          )}
-                          {item.arquivo ? (
-                            <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-medium">
-                              Arquivo pronto
-                            </span>
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-4 flex items-center justify-between gap-3 hover:bg-white transition-colors"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                        <div
+                          className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                            item.tipo === 'video'
+                              ? 'bg-purple-100 text-purple-700'
+                              : 'bg-brand-100 text-brand-700'
+                          }`}
+                        >
+                          {item.tipo === 'video' ? (
+                            <Video className="w-4 h-4" />
                           ) : (
-                            <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
-                              Sem arquivo
-                            </span>
+                            <FileText className="w-4 h-4" />
                           )}
                         </div>
 
-                        {item.descricao && (
-                          <p className="text-[11px] text-gray-500 truncate mt-0.5 max-w-2xl">
-                            {item.descricao}
-                          </p>
-                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-xs text-gray-900 truncate">
+                              {item.titulo}
+                            </span>
+                            <span
+                              className={`text-[10px] font-medium px-2 py-0.5 rounded border ${
+                                item.tipo === 'video'
+                                  ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                  : 'bg-brand-50 text-brand-700 border-brand-200'
+                              }`}
+                            >
+                              {item.tipo === 'video' ? 'Vídeo (MP4)' : 'Manual / PDF'}
+                            </span>
+                            {setorOrigemNome && (
+                              <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                                Origem: {setorOrigemNome}
+                              </span>
+                            )}
+                            {item.arquivo ? (
+                              <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-medium">
+                                Arquivo pronto
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                Sem arquivo
+                              </span>
+                            )}
+                          </div>
+
+                          {item.descricao && (
+                            <p className="text-[11px] text-gray-500 truncate mt-0.5 max-w-2xl">
+                              {item.descricao}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openPreviewMaterial(item)}
+                          className="h-8 text-xs text-brand-600 hover:text-brand-700"
+                        >
+                          Visualizar
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openEditMaterialModal(item)}
+                          className="h-8 w-8 text-gray-500 hover:text-gray-800"
+                          aria-label="Editar material"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => promptDeleteMaterial(item)}
+                          className="h-8 w-8 text-gray-400 hover:text-red-600"
+                          aria-label="Excluir material"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openPreviewMaterial(item)}
-                        className="h-8 text-xs text-brand-600 hover:text-brand-700"
-                      >
-                        Visualizar
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEditMaterialModal(item)}
-                        className="h-8 w-8 text-gray-500 hover:text-gray-800"
-                        aria-label="Editar material"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => promptDeleteMaterial(item)}
-                        className="h-8 w-8 text-gray-400 hover:text-red-600"
-                        aria-label="Excluir material"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                )
-              })
-            )}
+                  )
+                })
+              )}
+            </div>
           </div>
         </div>
       ) : (

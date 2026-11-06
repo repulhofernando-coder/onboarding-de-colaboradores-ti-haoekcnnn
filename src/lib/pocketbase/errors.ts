@@ -27,38 +27,3 @@ export function getErrorMessage(error: unknown): string {
   const msgs = Object.values(extractFieldErrors(error))
   return msgs.length > 0 ? msgs.join(' ') : error.message || 'An unexpected error occurred.'
 }
-
-export function isNetworkError(error: unknown): boolean {
-  if (!error) return false
-  if (error instanceof ClientResponseError) {
-    if (error.status === 0) return true
-    const original = error.originalError
-    if (original instanceof Error) {
-      const msg = original.message.toLowerCase()
-      if (
-        msg.includes('failed to fetch') ||
-        msg.includes('networkerror') ||
-        msg.includes('network request failed') ||
-        msg.includes('connection refused') ||
-        msg.includes('load failed') ||
-        msg.includes('timeout')
-      ) {
-        return true
-      }
-    }
-  }
-  if (error instanceof Error) {
-    const msg = error.message.toLowerCase()
-    if (
-      msg.includes('failed to fetch') ||
-      msg.includes('networkerror') ||
-      msg.includes('network request failed') ||
-      msg.includes('connection refused') ||
-      msg.includes('load failed') ||
-      msg.includes('timeout')
-    ) {
-      return true
-    }
-  }
-  return false
-}

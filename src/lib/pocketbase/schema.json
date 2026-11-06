@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-03T14:14:40.912Z",
+  "generatedAt": "2026-11-06T14:17:41.614Z",
   "collections": [
     {
       "name": "users",
@@ -459,12 +459,6 @@
           "system": false
         },
         {
-          "name": "setor",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
           "name": "sem_onboarding",
           "type": "bool",
           "required": false,
@@ -500,6 +494,12 @@
           "required": false,
           "system": false,
           "collectionRef": "users"
+        },
+        {
+          "name": "setor",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
