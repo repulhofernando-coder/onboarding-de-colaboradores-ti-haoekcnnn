@@ -2121,8 +2121,30 @@ export const candidatoService = {
     return res
   },
 
+  /**
+   * Exclui o candidato e os registros ligados a ele (tentativas de prova técnica
+   * com as respostas gravadas nelas). A prova usa a mesma lógica da Limpeza de Ambiente.
+   */
   async excluir(candidatoId: string): Promise<boolean> {
     const cand = await pb.collection('candidatos').getOne<CandidatoModel>(candidatoId)
+
+    // 1. Apagar as tentativas de prova do pré-candidato (as respostas ficam no JSON da tentativa)
+    try {
+      const tentativas = await pb
+        .collection('teste_tentativas')
+        .getFullList({ filter: `candidato_id = "${candidatoId}"`, fields: 'id' })
+      for (const t of tentativas) {
+        try {
+          await pb.collection('teste_tentativas').delete(t.id)
+        } catch {
+          /* segue a exclusão do candidato mesmo se uma tentativa falhar */
+        }
+      }
+    } catch {
+      /* segue a exclusão do candidato */
+    }
+
+    // 2. Apagar o registro do candidato
     await pb.collection('candidatos').delete(candidatoId)
 
     await auditoriaService.registrar({
@@ -2131,8 +2153,8 @@ export const candidatoService = {
       usuarioNome: pb.authStore.record?.name || pb.authStore.record?.email || 'Admin',
       usuarioRole: pb.authStore.record?.role || 'admin',
       acao: 'Exclusão de Candidato Pré-selecionado',
-      detalhes: `Registro do candidato ${cand.nome} (${cand.cargo_pretendido}) removido do sistema.`,
-      metadata: { candidato_id: cand.id, nome: cand.nome },
+      detalhes: `Registro do candidato ${cand.nome} (${cand.cargo_pretendido}) removido do sistema, junto com suas tentativas de prova técnica.`,
+      metadata: { candidato_id: cand.id, nome: cand.nome, email: cand.email || '' },
     })
 
     return true

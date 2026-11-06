@@ -10,6 +10,7 @@ import {
   RefreshCw,
   CheckCircle2,
   Users,
+  UserPlus,
   FileText,
   Layers,
   FolderArchive,
@@ -56,6 +57,7 @@ export default function LimpezaAmbiente() {
   const [limparColabOnb, setLimparColabOnb] = useState(false)
   const [limparLogs, setLimparLogs] = useState(false)
   const [limparMateriais, setLimparMateriais] = useState(false)
+  const [limparCandidatos, setLimparCandidatos] = useState(false)
   const [limparModelos, setLimparModelos] = useState<
     'nenhum' | 'associados_materiais' | 'todos_itens'
   >('nenhum')
@@ -131,6 +133,7 @@ export default function LimpezaAmbiente() {
       limparColabOnb ||
       limparLogs ||
       limparMateriais ||
+      limparCandidatos ||
       limparModelos !== 'nenhum' ||
       (limparUsuarios && selectedUserIdsToDelete.length > 0)
     )
@@ -138,6 +141,7 @@ export default function LimpezaAmbiente() {
     limparColabOnb,
     limparLogs,
     limparMateriais,
+    limparCandidatos,
     limparModelos,
     limparUsuarios,
     selectedUserIdsToDelete,
@@ -178,6 +182,7 @@ export default function LimpezaAmbiente() {
         limparColaboradoresEOnboardings: limparColabOnb,
         limparLogsAuditoria: limparLogs,
         limparMateriais: limparMateriais,
+        limparCandidatos: limparCandidatos,
         limparModelosTarefas: limparModelos,
         limparUsuarios: limparUsuarios,
         userIdsParaExcluir: selectedUserIdsToDelete,
@@ -197,6 +202,7 @@ export default function LimpezaAmbiente() {
       setLimparColabOnb(false)
       setLimparLogs(false)
       setLimparMateriais(false)
+      setLimparCandidatos(false)
       setLimparModelos('nenhum')
       setLimparUsuarios(false)
       setSelectedUserIdsToDelete([])
@@ -567,6 +573,59 @@ export default function LimpezaAmbiente() {
               auditoria comece a contar a partir da entrada em produção.
             </div>
           </div>
+
+          {/* BLOCO 6: Pré-selecionados & Candidatos */}
+          <div
+            className={`p-5 rounded-xl border transition-all ${
+              limparCandidatos
+                ? 'bg-red-50/40 border-red-300 ring-2 ring-red-500/20'
+                : 'bg-white border-gray-200/90 shadow-sm'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
+                    <UserPlus className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-gray-900">
+                      Pré-selecionados & Candidatos
+                    </h4>
+                    <span className="text-[11px] text-gray-500 block">
+                      Registros de candidatos e provas técnicas enviadas
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <Switch
+                checked={limparCandidatos}
+                onCheckedChange={setLimparCandidatos}
+                aria-label="Selecionar limpeza de pré-selecionados e candidatos"
+              />
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-gray-100 text-xs text-gray-600 space-y-1.5">
+              <div className="flex justify-between">
+                <span>Candidatos pré-selecionados:</span>
+                <span className="font-bold text-gray-900">
+                  {loadingStats ? '...' : (stats?.candidatosCount ?? 0)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Tentativas de prova ligadas a candidatos:</span>
+                <span className="font-bold text-gray-900">
+                  {loadingStats ? '...' : (stats?.candidatosTentativasCount ?? 0)}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-3 text-[11px] text-gray-500 italic">
+              Apaga os registros de candidatos (em qualquer status, incluindo convertidos) e as
+              tentativas de prova técnica com suas respostas ligadas a eles.
+            </div>
+          </div>
         </div>
 
         {/* BLOCO 5: Gestão de Usuários (Proteção Estrita) */}
@@ -831,6 +890,17 @@ export default function LimpezaAmbiente() {
                   <div>
                     <strong>Logs de Auditoria:</strong> {stats?.logsAuditoriaCount} registros
                     históricos de homologação.
+                  </div>
+                </div>
+              )}
+
+              {limparCandidatos && (
+                <div className="flex items-start gap-2 text-gray-800">
+                  <Check className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong>Pré-selecionados &amp; Candidatos:</strong> {stats?.candidatosCount}{' '}
+                    candidatos (incluindo convertidos) e {stats?.candidatosTentativasCount}{' '}
+                    tentativas de prova com respostas ligadas.
                   </div>
                 </div>
               )}

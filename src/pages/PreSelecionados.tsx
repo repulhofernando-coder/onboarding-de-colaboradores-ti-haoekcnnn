@@ -1098,7 +1098,7 @@ export default function PreSelecionados() {
                         </Button>
                       )}
 
-                    {podeExcluir && item.status !== 'convertido' && (
+                    {podeExcluir && (
                       <Button
                         type="button"
                         variant="ghost"
@@ -1745,10 +1745,20 @@ export default function PreSelecionados() {
           <div className="py-2 text-xs text-gray-600 space-y-3">
             <p>
               Tem certeza que deseja remover o candidato{' '}
-              <strong>{candidatoParaExcluir?.nome}</strong> ({candidatoParaExcluir?.email})?
+              <strong>{candidatoParaExcluir?.nome}</strong> ({candidatoParaExcluir?.email})? Esta
+              ação também remove as tentativas de prova e respostas ligadas e não pode ser desfeita.
             </p>
+
+            {candidatoParaExcluir?.status === 'convertido' && (
+              <div className="text-amber-800 bg-amber-50 p-2.5 rounded border border-amber-200 font-semibold">
+                ⚠️ Atenção: este candidato foi <strong>convertido em colaborador</strong>. A
+                exclusão remove apenas o registro do candidato (o colaborador e o onboarding
+                permanecem), além das tentativas de prova ligadas a ele.
+              </div>
+            )}
+
             <p className="text-red-700 bg-red-50 p-2.5 rounded border border-red-200">
-              Esta ação removerá o registro e invalidará o link público da prova técnica. A operação
+              Esta ação removerá o registro, invalidará o link público da prova técnica. A operação
               será gravada nos logs de auditoria.
             </p>
           </div>

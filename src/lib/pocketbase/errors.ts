@@ -20,47 +20,28 @@ export function extractFieldErrors(error: unknown): FieldErrors {
   return errors
 }
 
-/**
- * Detecta falhas de rede/conexão (ex.: "Failed to fetch", backend reiniciando),
- * para que a UI possa retentar ou não tratá-las como credenciais inválidas.
- * Considera TypeError do fetch, status 0 do SDK PocketBase e mensagens típicas
- * de falha de conexão/rede.
- */
+/** True quando o erro indica falha de conexão de rede (offline, timeout, status 0). */
 export function isNetworkError(error: unknown): boolean {
-  if (error instanceof TypeError) return true
   if (error instanceof ClientResponseError) {
     if (error.status === 0) return true
     const msg = (error.message || '').toLowerCase()
-    const respMsg = (
-      (error.response as { message?: string } | undefined)?.message || ''
-    ).toLowerCase()
-    const padroes = [
-      'failed to fetch',
-      'networkerror',
-      'network error',
-      'network request failed',
-      'load failed',
-      'fetch failed',
-      'falha de conex',
-      'connection',
-      'timed out',
-      'timeout',
-      'erro ao tentar conectar',
-    ]
-    return padroes.some((p) => msg.includes(p) || respMsg.includes(p))
+    return (
+      msg.includes('network') ||
+      msg.includes('failed to fetch') ||
+      msg.includes('fetch failed') ||
+      msg.includes('timeout') ||
+      msg.includes('connection')
+    )
   }
-  if (error instanceof Error) {
-    const msg = (error.message || '').toLowerCase()
-    const padroes = [
-      'failed to fetch',
-      'networkerror',
-      'network error',
-      'fetch failed',
-      'load failed',
-    ]
-    return padroes.some((p) => msg.includes(p))
-  }
-  return false
+  if (error instanceof TypeError) return true
+  const msg = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+  return (
+    msg.includes('network') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('fetch failed') ||
+    msg.includes('timeout') ||
+    msg.includes('connection')
+  )
 }
 
 export function getErrorMessage(error: unknown): string {

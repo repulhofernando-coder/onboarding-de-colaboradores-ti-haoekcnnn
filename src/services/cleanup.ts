@@ -18,6 +18,8 @@ export interface CleanupStats {
   materiaisCount: number
   modeloTarefasCount: number
   modeloItensAssociadosCount: number // itens de modelo associados a material
+  candidatosCount: number
+  candidatosTentativasCount: number // tentativas de prova ligadas a candidatos
   usersCount: number
   usersList: User[]
 }
@@ -36,6 +38,7 @@ export interface CleanupPayload {
   limparModelosTarefas: 'nenhum' | 'associados_materiais' | 'todos_itens'
   limparUsuarios: boolean
   userIdsParaExcluir: string[] // IDs explícitos escolhidos para exclusão
+  limparCandidatos: boolean
   adminUsuario: {
     id: string
     nome: string
@@ -58,6 +61,8 @@ export const cleanupService = {
       materiais,
       modelos,
       users,
+      candidatos,
+      candidatosTentativas,
     ] = await Promise.all([
       pb
         .collection('onboardings')
@@ -91,6 +96,14 @@ export const cleanupService = {
         .collection('users')
         .getFullList<User>({ sort: 'name,email' })
         .catch(() => []),
+      pb
+        .collection('candidatos')
+        .getFullList<{ id: string }>({ fields: 'id' })
+        .catch(() => []),
+      pb
+        .collection('teste_tentativas')
+        .getFullList<{ id: string }>({ filter: "candidato_id != ''", fields: 'id' })
+        .catch(() => []),
     ])
 
     const nomesColaboradores = new Set(
@@ -109,6 +122,8 @@ export const cleanupService = {
       materiaisCount: materiais.length,
       modeloTarefasCount: modelos.length,
       modeloItensAssociadosCount: itensAssociados,
+      candidatosCount: candidatos.length,
+      candidatosTentativasCount: candidatosTentativas.length,
       usersCount: users.length,
       usersList: users,
     }
@@ -133,6 +148,7 @@ export const cleanupService = {
           ? `Usuários (${payload.userIdsParaExcluir.length} selecionados)`
           : null,
         payload.limparLogsAuditoria ? 'Logs de Auditoria' : null,
+        payload.limparCandidatos ? 'Pré-selecionados/Candidatos' : null,
       ]
         .filter(Boolean)
         .join(', ')
@@ -151,6 +167,7 @@ export const cleanupService = {
             materiais: payload.limparMateriais,
             modelosTarefas: payload.limparModelosTarefas,
             usuarios: payload.userIdsParaExcluir,
+            candidatos: payload.limparCandidatos,
           },
         },
       })
@@ -356,7 +373,61 @@ export const cleanupService = {
       })
     }
 
-    // 6. BLOCO 5: Logs de auditoria (executado por último para preservar rastreio até o fim)
+    // 6. BLOCO PRÉ-SELEÇONADOS/CANDIDATOS: tentativas ligadas + registros de candidatos
+    if (payload.limparCandidatos) {
+      let totalRemovidos = 0
+      const erros: string[] = []
+
+      try {
+        // 6.1 Apagar primeiro as tentativas de prova ligadas a candidatos
+        // (as respostas do pré-candidato ficam gravadas no campo JSON da tentativa)
+        const tentativas = await pb
+          .collection('teste_tentativas')
+          .getFullList({ filter: "candidato_id != ''", fields: 'id' })
+          .catch(() => [])
+
+        for (const t of tentativas) {
+          try {
+            await pb.collection('teste_tentativas').delete(t.id)
+            totalRemovidos++
+          } catch (e: unknown) {
+            erros.push(
+              `Falha ao excluir tentativa de prova ${t.id}: ${e instanceof Error ? e.message : String(e)}`,
+            )
+          }
+        }
+
+        // 6.2 Apagar os registros de candidatos
+        const cands = await pb
+          .collection('candidatos')
+          .getFullList({ fields: 'id' })
+          .catch(() => [])
+
+        for (const c of cands) {
+          try {
+            await pb.collection('candidatos').delete(c.id)
+            totalRemovidos++
+          } catch (e: unknown) {
+            erros.push(
+              `Falha ao excluir candidato ${c.id}: ${e instanceof Error ? e.message : String(e)}`,
+            )
+          }
+        }
+      } catch (e: unknown) {
+        erros.push(
+          `Erro geral ao processar pré-selecionados: ${e instanceof Error ? e.message : String(e)}`,
+        )
+      }
+
+      results.push({
+        bloco: 'Pré-selecionados & Candidatos',
+        sucesso: erros.length === 0,
+        itensRemovidos: totalRemovidos,
+        erros: erros.length > 0 ? erros.slice(0, 5) : undefined,
+      })
+    }
+
+    // 7. BLOCO 5: Logs de auditoria (executado por último para preservar rastreio até o fim)
     if (payload.limparLogsAuditoria) {
       let totalRemovidos = 0
       const erros: string[] = []
