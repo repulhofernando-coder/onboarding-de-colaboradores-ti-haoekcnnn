@@ -61,7 +61,8 @@ routerAdd('GET', '/backend/v1/espaco-utilizado', (e) => {
     try {
       const lista = fs.list(origem.prefixo) || []
       for (const obj of lista) {
-        if (obj && obj.size > 0) {
+        // ignora pseudo-diretórios (isDir) e objetos sem tamanho
+        if (obj && !obj.isDir && obj.size > 0) {
           bytes += Number(obj.size) || 0
           arquivos += 1
         }

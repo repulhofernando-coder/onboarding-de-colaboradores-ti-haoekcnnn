@@ -58,6 +58,7 @@ import { podeVisualizarSetor } from '@/lib/gestaoVisibility'
 import { AvisoSetorGestor } from '@/components/AvisoSetorGestor'
 
 import { GestaoQuestionarios } from '@/components/GestaoQuestionarios'
+import { CardEspacoUtilizado } from '@/components/CardEspacoUtilizado'
 import { HelpCircle } from 'lucide-react'
 
 type TabType = 'biblioteca' | 'etapa1' | 'questionarios' | string
