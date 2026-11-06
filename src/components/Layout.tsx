@@ -21,6 +21,7 @@ import {
   BookOpen,
   Trash2,
   GraduationCap,
+  DatabaseBackup,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -62,6 +63,12 @@ const navItems: NavItem[] = [
   { label: 'Auditoria & Logs', path: '/logs', icon: FileText, allowedRoles: ['admin'] },
   { label: 'Usuários', path: '/usuarios', icon: Shield, allowedRoles: ['admin', 'rh'] },
   { label: 'Limpeza de Ambiente', path: '/limpeza', icon: Trash2, allowedRoles: ['admin'] },
+  {
+    label: 'Backup Estrutural (SQL)',
+    path: '/backup-estrutural',
+    icon: DatabaseBackup,
+    allowedRoles: ['admin'],
+  },
 ]
 
 export default function Layout() {
@@ -101,6 +108,7 @@ export default function Layout() {
     if (p.startsWith('/logs')) return 'Logs de Auditoria'
     if (p.startsWith('/usuarios')) return 'Gestão de Usuários'
     if (p.startsWith('/limpeza')) return 'Limpeza de Ambiente (Transição para Produção)'
+    if (p.startsWith('/backup-estrutural')) return 'Backup Estrutural (SQL)'
     return 'Onboarding de Colaboradores'
   }
 

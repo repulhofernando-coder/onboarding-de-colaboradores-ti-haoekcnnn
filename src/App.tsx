@@ -29,6 +29,7 @@ import { ColaboradorDocumentoPublico } from './pages/ColaboradorDocumentoPublico
 import { ColaboradorFeedbackPublico } from './pages/ColaboradorFeedbackPublico'
 import PreSelecionados from './pages/PreSelecionados'
 import LimpezaAmbiente from './pages/LimpezaAmbiente'
+import BackupEstrutural from './pages/BackupEstrutural'
 import ImpressaoQuestionario from './pages/ImpressaoQuestionario'
 import NotFound from './pages/NotFound'
 
@@ -113,6 +114,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <LimpezaAmbiente />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/backup-estrutural"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <BackupEstrutural />
                 </ProtectedRoute>
               }
             />

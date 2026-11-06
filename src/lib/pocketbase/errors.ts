@@ -20,28 +20,17 @@ export function extractFieldErrors(error: unknown): FieldErrors {
   return errors
 }
 
-/** True quando o erro indica falha de conexão de rede (offline, timeout, status 0). */
+// Detecta falha de conexão (sem resposta do servidor). Usado em login e
+// carregamentos iniciais para exibir mensagens de rede ao usuário.
 export function isNetworkError(error: unknown): boolean {
   if (error instanceof ClientResponseError) {
-    if (error.status === 0) return true
-    const msg = (error.message || '').toLowerCase()
     return (
-      msg.includes('network') ||
-      msg.includes('failed to fetch') ||
-      msg.includes('fetch failed') ||
-      msg.includes('timeout') ||
-      msg.includes('connection')
+      error.status === 0 ||
+      /network|fetch|connection|failed|timeout|aborted/i.test(error.message || '')
     )
   }
-  if (error instanceof TypeError) return true
-  const msg = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
-  return (
-    msg.includes('network') ||
-    msg.includes('failed to fetch') ||
-    msg.includes('fetch failed') ||
-    msg.includes('timeout') ||
-    msg.includes('connection')
-  )
+  if (error instanceof TypeError) return true // fetch lança TypeError em falha de rede
+  return false
 }
 
 export function getErrorMessage(error: unknown): string {
