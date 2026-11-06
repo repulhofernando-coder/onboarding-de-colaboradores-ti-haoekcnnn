@@ -4,18 +4,21 @@
  * GET /backend/v1/espaco-utilizado
  *
  * Percorre o filesystem de uploads (storage do PocketBase) e soma os tamanhos
- * reais dos arquivos, agrupando por coleção de origem (cada upload é gravado em
- * `{nome_da_colecao}/{id_do_registro}/{arquivo}`, então o prefixo da coleção
- * identifica a origem):
- *  - materiais/            -> "Materiais (Biblioteca)" (inclui docs complementares)
- *  - certificados/         -> "Certificados"
- *  - tarefas_onboarding/   -> "Tarefas de onboarding (upload direto)"
- *  - modelo_tarefas/       -> "Modelos (upload direto)"
- *  - users/                -> "Avatares de usuários"
+ * reais dos arquivos, agrupando por coleção de origem. O PocketBase grava cada
+ * upload em `{collectionId}/{recordId}/{arquivo}`, usando o ID INTERNO da
+ * coleção (15 caracteres, ou o literal "_pb_users_auth_" para a coleção de
+ * usuários) — NÃO o nome dela. Por isso cada prefixo é resolvido via
+ * `app.findCollectionByNameOrId(nome).id` antes de listar o storage:
+ *  - materiais           -> "Materiais (Biblioteca)" (inclui docs complementares)
+ *  - certificados        -> "Certificados"
+ *  - tarefas_onboarding  -> "Tarefas de onboarding (upload direto)"
+ *  - modelo_tarefas      -> "Modelos (upload direto)"
+ *  - users               -> "Avatares de usuários"
  *
  * Acesso: apenas Admin e RH (eAuth). O papel Gestão recebe 403.
  * A contagem é feita sobre o storage físico, portanto reflete exatamente o que
  * está gravado (inclusive eventuais arquivos órfãos de registros removidos).
+ * Coleção inexistente é ignorada (origem fica zerada) sem quebrar o endpoint.
  */
 
 routerAdd('GET', '/backend/v1/espaco-utilizado', (e) => {
@@ -40,15 +43,15 @@ routerAdd('GET', '/backend/v1/espaco-utilizado', (e) => {
   }
 
   const origens = [
-    { chave: 'materiais', rotulo: 'Materiais (Biblioteca)', prefixo: 'materiais/' },
-    { chave: 'certificados', rotulo: 'Certificados', prefixo: 'certificados/' },
+    { chave: 'materiais', rotulo: 'Materiais (Biblioteca)', colecao: 'materiais' },
+    { chave: 'certificados', rotulo: 'Certificados', colecao: 'certificados' },
     {
       chave: 'tarefas_onboarding',
       rotulo: 'Tarefas de onboarding (upload direto)',
-      prefixo: 'tarefas_onboarding/',
+      colecao: 'tarefas_onboarding',
     },
-    { chave: 'modelo_tarefas', rotulo: 'Modelos (upload direto)', prefixo: 'modelo_tarefas/' },
-    { chave: 'users', rotulo: 'Avatares de usuários', prefixo: 'users/' },
+    { chave: 'modelo_tarefas', rotulo: 'Modelos (upload direto)', colecao: 'modelo_tarefas' },
+    { chave: 'users', rotulo: 'Avatares de usuários', colecao: 'users' },
   ]
 
   let totalBytes = 0
@@ -58,18 +61,29 @@ routerAdd('GET', '/backend/v1/espaco-utilizado', (e) => {
   for (const origem of origens) {
     let bytes = 0
     let arquivos = 0
+    let prefixo = null
+    // Resolve o ID interno real da coleção (é ele que compõe o caminho no storage).
     try {
-      const lista = fs.list(origem.prefixo) || []
-      for (const obj of lista) {
-        // ignora pseudo-diretórios (isDir) e objetos sem tamanho
-        if (obj && !obj.isDir && obj.size > 0) {
-          bytes += Number(obj.size) || 0
-          arquivos += 1
+      const col = app.findCollectionByNameOrId(origem.colecao)
+      prefixo = col.id + '/'
+    } catch (errCol) {
+      // Coleção não existe nesta base: origem zerada, endpoint segue de pé.
+      console.warn('[EspacoUtilizado] Coleção não encontrada, origem ignorada:', origem.colecao)
+    }
+    if (prefixo) {
+      try {
+        const lista = fs.list(prefixo) || []
+        for (const obj of lista) {
+          // ignora pseudo-diretórios (isDir) e objetos sem tamanho
+          if (obj && !obj.isDir && obj.size > 0) {
+            bytes += Number(obj.size) || 0
+            arquivos += 1
+          }
         }
+      } catch (errLista) {
+        // Prefixo pode não existir ainda (nenhum upload nessa origem) — segue com zero.
+        console.warn('[EspacoUtilizado] Falha ao listar prefixo:', prefixo, errLista)
       }
-    } catch (errLista) {
-      // Prefixo pode não existir ainda (nenhum upload nessa origem) — segue com zero.
-      console.warn('[EspacoUtilizado] Falha ao listar prefixo:', origem.prefixo, errLista)
     }
     totalBytes += bytes
     totalArquivos += arquivos
