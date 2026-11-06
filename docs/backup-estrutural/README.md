@@ -89,7 +89,16 @@ levar os dados, os caminhos são:
   ao migrar, os usuários terão de redefinir senha (ou use o fluxo de
   convite/reset do Supabase). A coluna existe só como referência.
 
-## Arquivos
+## Arquivos e downloads
 
-- `schema.sql` — script completo de criação da estrutura (uma transação).
-- `README.md` — este arquivo.
+O pacote é entregue dentro do sistema por DOIS downloads, ambos na página
+**Backup Estrutural** (só Admin; anônimo recebe 401 e RH/Gestão recebe 403):
+
+- **"Baixar backup estrutural (SQL)"** — entrega o `schema.sql` completo
+  (estrutura em uma transação), servido por `/backend/v1/backup-schema`.
+- **"Baixar README (instruções)"** — entrega este `README.md`, servido por
+  `/backend/v1/backup-readme`.
+
+Os dois cobrem apenas a **ESTRUTURA** do banco — os DADOS saem pelas
+exportações (CSV) e pela API do próprio sistema, como descrito na seção
+"Como exportar os DADOS" acima.

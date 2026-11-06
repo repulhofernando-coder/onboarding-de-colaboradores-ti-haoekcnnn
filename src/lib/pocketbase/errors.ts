@@ -21,21 +21,25 @@ export function extractFieldErrors(error: unknown): FieldErrors {
 }
 
 export function isNetworkError(error: unknown): boolean {
+  if (error instanceof ClientResponseError) {
+    if (error.status === 0) return true
+    const msg = (error.message || '').toLowerCase()
+    return (
+      msg.includes('fetch') ||
+      msg.includes('network') ||
+      msg.includes('failed to fetch') ||
+      msg.includes('networkerror')
+    )
+  }
   if (error instanceof TypeError) return true
-  const err = error as { status?: number; message?: string; response?: unknown }
-  if (err && typeof err === 'object') {
-    // status 0 = o SDK do PocketBase não obteve resposta do servidor (offline/DNS/CORS)
-    if (err.status === 0) return true
-    const msg = (err.message || '').toLowerCase()
-    if (
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase()
+    return (
       msg.includes('network') ||
       msg.includes('fetch') ||
       msg.includes('connection') ||
-      msg.includes('dns') ||
       msg.includes('offline')
-    ) {
-      return true
-    }
+    )
   }
   return false
 }

@@ -8,6 +8,7 @@ import {
   Database,
   Download,
   FileCode2,
+  FileText,
   Loader2,
   ShieldCheck,
   AlertTriangle,
@@ -17,57 +18,82 @@ import {
 /**
  * Página /backup-estrutural (só Admin).
  *
- * Permite baixar o backup estrutural SQL (docs/backup-estrutural/schema.sql),
- * servido pelo backend na rota restrita /backend/v1/backup-schema. O acesso é
- * bloqueado na tela (só admin vê) e reforçado no backend (403 para RH/Gestão).
+ * Dois downloads, ambos servidos por rotas restritas do backend:
+ * - "Baixar backup estrutural (SQL)" → /backend/v1/backup-schema
+ *   (docs/backup-estrutural/schema.sql)
+ * - "Baixar README (instruções)" → /backend/v1/backup-readme
+ *   (docs/backup-estrutural/README.md)
+ *
+ * O acesso é bloqueado na tela (só admin vê) e reforçado no backend
+ * (401 para anônimo, 403 para RH/Gestão).
  */
 export default function BackupEstrutural() {
   const { user } = useAuth()
-  const [baixando, setBaixando] = useState(false)
+  const [baixando, setBaixando] = useState<'sql' | 'readme' | null>(null)
   const [erro, setErro] = useState<string | null>(null)
-  const [ok, setOk] = useState(false)
+  const [ok, setOk] = useState<'sql' | 'readme' | null>(null)
 
-  const handleDownload = async () => {
-    setBaixando(true)
+  const baixarArquivo = async (
+    rota: '/backend/v1/backup-schema' | '/backend/v1/backup-readme',
+    nomeArquivo: string,
+    mimeType: string,
+    tamanhoMinimo: number,
+  ) => {
+    const resposta = await fetch(pb.buildUrl(rota), {
+      method: 'GET',
+      headers: { Authorization: pb.authStore.token },
+    })
+    if (!resposta.ok) {
+      const corpo = await resposta.text()
+      let msg = `Erro ${resposta.status}`
+      try {
+        msg = JSON.parse(corpo)?.error || msg
+      } catch (_) {
+        /* corpo não é JSON */
+      }
+      throw new Error(msg)
+    }
+    const texto = await resposta.text()
+    if (!texto || texto.length < tamanhoMinimo) {
+      throw new Error('Resposta vazia do servidor.')
+    }
+    const blob = new Blob([texto], { type: `${mimeType};charset=utf-8` })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = nomeArquivo
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleDownload = async (tipo: 'sql' | 'readme') => {
+    setBaixando(tipo)
     setErro(null)
-    setOk(false)
+    setOk(null)
     try {
-      const resposta = await fetch(pb.buildUrl('/backend/v1/backup-schema'), {
-        method: 'GET',
-        headers: { Authorization: pb.authStore.token },
-      })
-      if (!resposta.ok) {
-        const corpo = await resposta.text()
-        let msg = `Erro ${resposta.status}`
-        try {
-          msg = JSON.parse(corpo)?.error || msg
-        } catch (_) {
-          /* corpo não é JSON */
-        }
-        throw new Error(msg)
+      if (tipo === 'sql') {
+        await baixarArquivo(
+          '/backend/v1/backup-schema',
+          'backup-estrutural-gestao-colaboradores.sql',
+          'application/sql',
+          100,
+        )
+      } else {
+        await baixarArquivo('/backend/v1/backup-readme', 'README.md', 'text/markdown', 100)
       }
-      const texto = await resposta.text()
-      if (!texto || texto.length < 100) {
-        throw new Error('Resposta vazia do servidor.')
-      }
-      const blob = new Blob([texto], { type: 'application/sql;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'backup-estrutural-gestao-colaboradores.sql'
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
-      setOk(true)
+      setOk(tipo)
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { error?: string } } })?.response?.data?.error ||
         (e as Error)?.message ||
-        'Falha ao obter o backup estrutural.'
+        (tipo === 'sql'
+          ? 'Falha ao obter o backup estrutural.'
+          : 'Falha ao obter o README (instruções).')
       setErro(msg)
     } finally {
-      setBaixando(false)
+      setBaixando(null)
     }
   }
 
@@ -117,7 +143,8 @@ export default function BackupEstrutural() {
               <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
               <span>
                 <strong>Não inclui dados nem arquivos</strong> — é backup estrutural/documental.
-                Como exportar dados está descrito no README do pacote (docs/backup-estrutural).
+                Como exportar dados está descrito no README do pacote (disponível no segundo botão
+                de download, abaixo).
               </span>
             </li>
           </ul>
@@ -129,25 +156,48 @@ export default function BackupEstrutural() {
             </div>
           )}
 
-          <div className="flex items-center gap-3">
-            <Button onClick={handleDownload} disabled={baixando}>
-              {baixando ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={() => handleDownload('sql')} disabled={baixando !== null}>
+              {baixando === 'sql' ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
                 <Download className="w-4 h-4 mr-2" />
               )}
-              {baixando ? 'Gerando download…' : 'Baixar backup estrutural (SQL)'}
+              {baixando === 'sql' ? 'Gerando download…' : 'Baixar backup estrutural (SQL)'}
             </Button>
-            {ok && (
+            <Button
+              variant="outline"
+              onClick={() => handleDownload('readme')}
+              disabled={baixando !== null}
+            >
+              {baixando === 'readme' ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <FileText className="w-4 h-4 mr-2" />
+              )}
+              {baixando === 'readme' ? 'Gerando download…' : 'Baixar README (instruções)'}
+            </Button>
+            {ok === 'sql' && (
               <span className="text-sm text-green-700 flex items-center gap-1">
                 <CheckCircle2 className="w-4 h-4" /> Download concluído
               </span>
             )}
+            {ok === 'readme' && (
+              <span className="text-sm text-green-700 flex items-center gap-1">
+                <CheckCircle2 className="w-4 h-4" /> Download do README concluído
+              </span>
+            )}
           </div>
 
-          <p className="text-xs text-gray-400 flex items-center gap-1.5">
-            <FileCode2 className="w-3.5 h-3.5" />
-            O arquivo também está versionado no repositório em docs/backup-estrutural/schema.sql
+          <p className="text-xs text-gray-400 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className="flex items-center gap-1.5">
+              <FileCode2 className="w-3.5 h-3.5" />
+              O arquivo também está versionado no repositório em docs/backup-estrutural/schema.sql
+            </span>
+            <span className="flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5" />
+              README versionado em docs/backup-estrutural/README.md
+            </span>
             {user?.email ? ` · sessão: ${user.email}` : ''}
           </p>
         </CardContent>
