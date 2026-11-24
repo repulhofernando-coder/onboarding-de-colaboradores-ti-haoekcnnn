@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-06T16:36:10.391Z",
+  "generatedAt": "2026-11-24T17:47:11.256Z",
   "collections": [
     {
       "name": "users",
@@ -238,7 +238,8 @@
             "avaliacao_pendente",
             "concluido",
             "nao_apto",
-            "em_acompanhamento"
+            "em_acompanhamento",
+            "sem_onboarding"
           ]
         },
         {

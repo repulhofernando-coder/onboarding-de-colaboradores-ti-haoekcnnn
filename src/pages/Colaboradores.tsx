@@ -429,7 +429,9 @@ export default function Colaboradores() {
                     <div className="flex items-center gap-2">
                       <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                       <span>
-                        Admissão: {dataAdmissaoFormatada} • Onb: {formatShortDate(onb.data_fim)}
+                        Admissão: {dataAdmissaoFormatada}
+                        {!(onb.sem_onboarding || onb.status === 'sem_onboarding') &&
+                          ` • Onb: ${formatShortDate(onb.data_fim)}`}
                       </span>
                     </div>
                   </div>

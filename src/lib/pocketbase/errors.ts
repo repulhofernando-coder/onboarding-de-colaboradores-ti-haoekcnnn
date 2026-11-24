@@ -20,25 +20,36 @@ export function extractFieldErrors(error: unknown): FieldErrors {
   return errors
 }
 
+/**
+ * Detecta falhas de conexão/rede (backend fora do ar, "Failed to fetch",
+ * backend reiniciando em implantação). Usado para retry automático no login.
+ */
 export function isNetworkError(error: unknown): boolean {
   if (error instanceof ClientResponseError) {
+    // status 0 = requisição não completou ( rede / CORS / abort )
     if (error.status === 0) return true
     const msg = (error.message || '').toLowerCase()
+    const respMsg = String(
+      (error.response as { message?: string } | undefined)?.message || '',
+    ).toLowerCase()
     return (
-      msg.includes('fetch') ||
       msg.includes('network') ||
       msg.includes('failed to fetch') ||
-      msg.includes('networkerror')
+      msg.includes('fetch failed') ||
+      msg.includes('connection') ||
+      respMsg.includes('network') ||
+      respMsg.includes('failed to fetch') ||
+      respMsg.includes('connection')
     )
   }
-  if (error instanceof TypeError) return true
+  if (error instanceof TypeError) return true // fetch lança TypeError em falha de rede
   if (error instanceof Error) {
     const msg = error.message.toLowerCase()
     return (
       msg.includes('network') ||
-      msg.includes('fetch') ||
-      msg.includes('connection') ||
-      msg.includes('offline')
+      msg.includes('failed to fetch') ||
+      msg.includes('fetch failed') ||
+      msg.includes('connection')
     )
   }
   return false

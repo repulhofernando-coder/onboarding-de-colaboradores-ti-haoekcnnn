@@ -102,7 +102,8 @@ export default function OnboardingsList() {
       if (o.etapa3_concluida) progresso += 34
 
       const isConcluidoOuApto = o.status === 'concluido' || o.status === 'nao_apto'
-      const isAtrasado = !isConcluidoOuApto && prazo.isVencido
+      const isSemOnboarding = !!o.sem_onboarding || o.status === 'sem_onboarding'
+      const isAtrasado = !isConcluidoOuApto && !isSemOnboarding && prazo.isVencido
 
       return {
         ...o,
@@ -409,9 +410,13 @@ export default function OnboardingsList() {
 
                       {/* Prazo */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="text-xs font-medium text-gray-800">
-                          {formatShortDate(item.data_fim)}
-                        </div>
+                        {item.sem_onboarding || item.status === 'sem_onboarding' ? (
+                          <span className="text-xs text-gray-400">—</span>
+                        ) : (
+                          <div className="text-xs font-medium text-gray-800">
+                            {formatShortDate(item.data_fim)}
+                          </div>
+                        )}
                         {item.isAtrasado ? (
                           <div className="inline-flex items-center gap-1 text-[11px] font-bold text-red-600">
                             <Flame className="w-3 h-3" />

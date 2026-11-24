@@ -508,7 +508,11 @@ export default function DetalheOnboarding() {
       }
 
     const prazo = calcularDiasRestantes(onboarding.data_fim)
-    const isFinalizado = onboarding.status === 'concluido' || onboarding.status === 'nao_apto'
+    const isFinalizado =
+      onboarding.status === 'concluido' ||
+      onboarding.status === 'nao_apto' ||
+      onboarding.sem_onboarding ||
+      onboarding.status === 'sem_onboarding'
     const isAtrasado = !isFinalizado && prazo.isVencido
     const isCritico = !isFinalizado && prazo.isCritico
 
@@ -1476,12 +1480,14 @@ export default function DetalheOnboarding() {
         </Button>
 
         <div className="flex items-center gap-2">
-          {prazoInfo.isAtrasado && (
-            <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200 text-xs font-bold flex items-center gap-1">
-              <Flame className="w-3.5 h-3.5" />
-              Atrasado ({Math.abs(prazoInfo.diasRestantes)} dias além do limite)
-            </Badge>
-          )}
+          {prazoInfo.isAtrasado &&
+            !onboarding.sem_onboarding &&
+            onboarding.status !== 'sem_onboarding' && (
+              <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200 text-xs font-bold flex items-center gap-1">
+                <Flame className="w-3.5 h-3.5" />
+                Atrasado ({Math.abs(prazoInfo.diasRestantes)} dias além do limite)
+              </Badge>
+            )}
 
           {/* Botão APLICAR PROVA direto do perfil (bloqueado se demitido) */}
           <Button

@@ -176,9 +176,10 @@ create type public.tipo_conteudo as enum ('video', 'manual');
 comment on type public.tipo_conteudo is 'Tipo de material/tarefa: vídeo ou manual';
 
 create type public.status_onboarding as enum (
-  'novo', 'em_andamento', 'avaliacao_pendente', 'concluido', 'nao_apto', 'em_acompanhamento'
+  'novo', 'em_andamento', 'avaliacao_pendente', 'concluido', 'nao_apto', 'em_acompanhamento',
+  'sem_onboarding'
 );
-comment on type public.status_onboarding is 'Status do onboarding; nao_apto = reprovado na avaliação (teto de 2 reavaliações), em_acompanhamento = não apto ainda em acompanhamento';
+comment on type public.status_onboarding is 'Status do onboarding; nao_apto = reprovado na avaliação (teto de 2 reavaliações), em_acompanhamento = não apto ainda em acompanhamento, sem_onboarding = cadastro direto sem processo de onboarding';
 
 create type public.status_teste_conhecimento as enum (
   'bloqueado', 'liberado', 'aprovado', 'reprovado', 'reteste_liberado'

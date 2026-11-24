@@ -198,7 +198,13 @@ export default function Index() {
   // Próximos vencimentos (< 3 dias do prazo de 15 dias e não finalizados)
   const proximosVencimentos = useMemo(() => {
     return onboardings
-      .filter((o) => o.status !== 'concluido' && o.status !== 'nao_apto')
+      .filter(
+        (o) =>
+          o.status !== 'concluido' &&
+          o.status !== 'nao_apto' &&
+          !o.sem_onboarding &&
+          o.status !== 'sem_onboarding',
+      )
       .map((o) => {
         const prazo = calcularDiasRestantes(o.data_fim)
 
