@@ -21,10 +21,18 @@ export function extractFieldErrors(error: unknown): FieldErrors {
 }
 
 export function isNetworkError(error: unknown): boolean {
-  if (!(error instanceof ClientResponseError)) return false
-  // Erro de rede real: a requisição não chegou ao servidor (status 0).
-  // Respostas HTTP com status > 0 são erros do servidor, não de rede.
-  return error.status === 0 || error.isAbort === true
+  if (!(error instanceof ClientResponseError)) {
+    return error instanceof TypeError
+  }
+  // Erro HTTP real (o servidor respondeu) NÃO é erro de rede.
+  if (error.status > 0) return false
+  const msg = (error.message || '').toLowerCase()
+  return (
+    error.status === 0 ||
+    msg.includes('fetch') ||
+    msg.includes('network') ||
+    msg.includes('failed to fetch')
+  )
 }
 
 export function getErrorMessage(error: unknown): string {
