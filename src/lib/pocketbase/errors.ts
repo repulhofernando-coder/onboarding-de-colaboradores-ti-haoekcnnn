@@ -20,35 +20,33 @@ export function extractFieldErrors(error: unknown): FieldErrors {
   return errors
 }
 
+// Detecta erro de rede/fetch (sem resposta HTTP do backend): ex. "Failed to fetch",
+// backend indisponível ou reiniciando durante implantação. Usado para retentativa
+// automática de login e para NÃO registrar "Falha de login" na auditoria.
+export function isNetworkError(error: unknown): boolean {
+  if (error instanceof ClientResponseError) {
+    // Erro HTTP de verdade (4xx/5xx com resposta do servidor) não é erro de rede.
+    if (error.status > 0) return false
+    return true
+  }
+  if (error instanceof TypeError) return true // fetch lança TypeError ("Failed to fetch")
+  if (error instanceof Error) {
+    const msg = (error.message || '').toLowerCase()
+    return (
+      msg.includes('failed to fetch') ||
+      msg.includes('networkerror') ||
+      msg.includes('network request failed') ||
+      msg.includes('load failed') ||
+      msg.includes('fetch failed')
+    )
+  }
+  return false
+}
+
 export function getErrorMessage(error: unknown): string {
   if (!(error instanceof ClientResponseError)) {
     return error instanceof Error ? error.message : 'An unexpected error occurred.'
   }
   const msgs = Object.values(extractFieldErrors(error))
   return msgs.length > 0 ? msgs.join(' ') : error.message || 'An unexpected error occurred.'
-}
-
-/**
- * Detecta falha de REDE (a requisição nunca obteve resposta HTTP do servidor):
- * "Failed to fetch", backend reiniciando em implantação, timeout, DNS.
- *
- * ATENÇÃO — REGRESSÃO JÁ OCORRIDA 3x: NÃO REMOVER este export em nenhuma limpeza.
- * Dependem dele:
- *  - src/contexts/AuthContext.tsx (retentativa automática de login em erro de rede)
- *  - src/pages/Login.tsx (erro de rede NÃO deve ser registrado como "Falha de login" na auditoria)
- */
-export function isNetworkError(error: unknown): boolean {
-  if (error instanceof ClientResponseError) {
-    // status 0 = o pedido não chegou a obter resposta do servidor
-    if (error.status === 0) return true
-    const msg = String(error.message || '').toLowerCase()
-    return (
-      msg.includes('failed to fetch') ||
-      msg.includes('network error') ||
-      msg.includes('networkerror') ||
-      msg.includes('load failed')
-    )
-  }
-  // fetch() lança TypeError("Failed to fetch") quando a rede falha fora do SDK
-  return error instanceof TypeError
 }
