@@ -27,7 +27,13 @@ import type {
   TesteTentativa,
 } from '@/types/onboarding'
 import { itemIntegracaoModeloService } from '@/services/onboarding'
-import { SETORES_INFO, STATUS_INFO, getSetorVisual, setorToString } from '@/types/onboarding'
+import {
+  SETORES_INFO,
+  STATUS_INFO,
+  getSetorVisual,
+  setorToString,
+  ROLES_INFO,
+} from '@/types/onboarding'
 import { calcularDiasRestantes, formatShortDate, formatDateTime } from '@/lib/dateUtils'
 import {
   ArrowLeft,
@@ -88,6 +94,15 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Loader2 } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -103,6 +118,7 @@ import type {
   ColaboradorDocumento,
   ColaboradorAnotacao,
   FeriasConcessaoModel,
+  User,
 } from '@/types/onboarding'
 import {
   avaliacaoColaboradorService,
@@ -113,7 +129,7 @@ import {
 } from '@/services/onboarding'
 
 import { podeVisualizarSetor } from '@/lib/gestaoVisibility'
-import { ShieldAlert, Palmtree } from 'lucide-react'
+import { ShieldAlert, Palmtree, Link2 } from 'lucide-react'
 
 export default function DetalheOnboarding() {
   const { id } = useParams<{ id: string }>()
@@ -156,7 +172,7 @@ export default function DetalheOnboarding() {
   const [obsTemp, setObsTemp] = useState('')
   const [salvandoObs, setSalvandoObs] = useState(false)
 
-  // Abas do Perfil do Colaborador: 'trajetoria', 'onboarding', 'ferias', 'cursos', 'certificados', 'documentos', 'anotacoes', 'avaliacoes', 'auditoria'
+  // Abas do Perfil do Colaborador: 'trajetoria', 'onboarding', 'ferias', 'cursos', 'certificados', 'documentos', 'anotacoes', 'avaliacoes', 'auditoria', 'vinculo'
   const [abaAtiva, setAbaAtiva] = useState<
     | 'trajetoria'
     | 'onboarding'
@@ -167,6 +183,7 @@ export default function DetalheOnboarding() {
     | 'anotacoes'
     | 'avaliacoes'
     | 'auditoria'
+    | 'vinculo'
   >('trajetoria')
   const [cursosColaboradorList, setCursosColaboradorList] = useState<ColaboradorCurso[]>([])
   const [documentosComplementaresList, setDocumentosComplementaresList] = useState<
@@ -177,6 +194,14 @@ export default function DetalheOnboarding() {
   const [logsAuditoria, setLogsAuditoria] = useState<LogAuditoria[]>([])
   const [loadingLogs, setLoadingLogs] = useState(false)
   const [carregandoCertificadosAba, setCarregandoCertificadosAba] = useState(false)
+
+  // === Vínculo do Usuário (Item B3) ===
+  const [usuariosDisponiveisVinculo, setUsuariosDisponiveisVinculo] = useState<User[]>([])
+  const [carregandoUsuariosVinculo, setCarregandoUsuariosVinculo] = useState(false)
+  const [salvandoVinculo, setSalvandoVinculo] = useState(false)
+  const [usuarioSugerido, setUsuarioSugerido] = useState<User | null>(null)
+  const [buscandoSugestaoVinculo, setBuscandoSugestaoVinculo] = useState(false)
+  const [usuarioSelecionadoVinculo, setUsuarioSelecionadoVinculo] = useState<string>('')
 
   // Estados para atalho "Lançar como Certificado" a partir de curso concluído
   const [modalCertificadoAbertoExterno, setModalCertificadoAbertoExterno] = useState(false)
@@ -462,6 +487,96 @@ export default function DetalheOnboarding() {
     fetchData()
   }, [id])
 
+  // Carregar usuários assim que a ficha carregar (Item B3)
+  useEffect(() => {
+    if (onboarding) {
+      carregarSugestaoVinculo()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onboarding?.id])
+
+  const carregarSugestaoVinculo = async (colaboradorEmail?: string) => {
+    const email = (colaboradorEmail || onboarding?.colaborador_email || '').trim()
+    if (!email) {
+      setUsuarioSugerido(null)
+      return
+    }
+    try {
+      setBuscandoSugestaoVinculo(true)
+      const encontrado = await onboardingService.buscarUsuarioPorEmail(email)
+      setUsuarioSugerido(encontrado)
+    } catch (e) {
+      console.warn('Erro ao buscar sugestão de vínculo por e-mail:', e)
+      setUsuarioSugerido(null)
+    } finally {
+      setBuscandoSugestaoVinculo(false)
+    }
+  }
+
+  const carregarUsuariosVinculo = async () => {
+    try {
+      setCarregandoUsuariosVinculo(true)
+      const usuarios = await userService.getAllUsers()
+      setUsuariosDisponiveisVinculo(usuarios)
+    } catch (e) {
+      console.warn('Erro ao carregar usuários para vínculo:', e)
+      setUsuariosDisponiveisVinculo([])
+    } finally {
+      setCarregandoUsuariosVinculo(false)
+    }
+  }
+
+  const handleVincularUsuario = async (usuarioId: string) => {
+    if (!onboarding) return
+    try {
+      setSalvandoVinculo(true)
+      await onboardingService.vincularUsuario({
+        onboardingId: onboarding.id,
+        usuarioId,
+        autor: {
+          id: user?.id || '',
+          nome: user?.name || user?.email || 'Usuário',
+          role: role || 'gestao',
+        },
+        colaboradorNome: onboarding.colaborador_nome,
+      })
+      toast.success('Usuário vinculado com sucesso à ficha do colaborador.')
+      const atualizado = await onboardingService.getById(onboarding.id)
+      setOnboarding(atualizado)
+      carregarLogs()
+    } catch (e) {
+      console.error('Erro ao vincular usuário:', e)
+      toast.error(getErrorMessage(e))
+    } finally {
+      setSalvandoVinculo(false)
+    }
+  }
+
+  const handleDesvincularUsuario = async () => {
+    if (!onboarding?.usuario_id) return
+    try {
+      setSalvandoVinculo(true)
+      await onboardingService.desvincularUsuario({
+        onboardingId: onboarding.id,
+        autor: {
+          id: user?.id || '',
+          nome: user?.name || user?.email || 'Usuário',
+          role: role || 'gestao',
+        },
+        colaboradorNome: onboarding.colaborador_nome,
+      })
+      toast.success('Vínculo do usuário removido da ficha do colaborador.')
+      const atualizado = await onboardingService.getById(onboarding.id)
+      setOnboarding(atualizado)
+      carregarLogs()
+    } catch (e) {
+      console.error('Erro ao desvincular usuário:', e)
+      toast.error(getErrorMessage(e))
+    } finally {
+      setSalvandoVinculo(false)
+    }
+  }
+
   useEffect(() => {
     // Carregar logs também quando abrir auditoria ou trajetória
     if (abaAtiva === 'auditoria' || abaAtiva === 'trajetoria') {
@@ -471,6 +586,10 @@ export default function DetalheOnboarding() {
       recarregarDocumentosPerfil()
       recarregarAnotacoesPerfil()
       recarregarFeriasPerfil()
+    }
+    // Carregar usuários ao abrir a aba Vínculo do Usuário
+    if (abaAtiva === 'vinculo' && !carregandoUsuariosVinculo) {
+      carregarUsuariosVinculo()
     }
   }, [abaAtiva, id])
 
@@ -1922,6 +2041,33 @@ export default function DetalheOnboarding() {
             )}
           </button>
 
+          {/* Aba Vínculo do Usuário (leitura para todos os papéis, ação só Admin/RH) */}
+          <button
+            type="button"
+            onClick={() => {
+              setAbaAtiva('vinculo')
+              carregarSugestaoVinculo()
+              carregarUsuariosVinculo()
+            }}
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
+              abaAtiva === 'vinculo'
+                ? 'bg-orange-600 text-white shadow-xs'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <Link2 className="w-3.5 h-3.5" />
+            <span>Vínculo do Usuário</span>
+            {onboarding?.expand?.usuario_id && (
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  abaAtiva === 'vinculo' ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'
+                }`}
+              >
+                1
+              </span>
+            )}
+          </button>
+
           {/* Aba 4: Dossiê de Avaliações */}
           <button
             type="button"
@@ -1984,6 +2130,172 @@ export default function DetalheOnboarding() {
             anotacoes={anotacoesGestorList}
             concessoesFerias={concessoesFeriasList}
           />
+        </div>
+      )}
+
+      {/* ABA Vínculo do Usuário (leitura todos; ação só Admin/RH) */}
+      {abaAtiva === 'vinculo' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
+          <div className="border-b border-gray-100 pb-4">
+            <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+              <Link2 className="w-5 h-5 text-orange-600" />
+              <span>Vínculo do Usuário</span>
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Conecta a ficha do colaborador à conta de acesso ao sistema. Leitura para todos os
+              papéis; vincular e desvincular restrito a Admin/RH, com registro na trilha de auditoria.
+            </p>
+          </div>
+
+          {/* Vínculo atual */}
+          {buscandoSugestaoVinculo ? (
+            <div className="py-6 text-center text-xs text-gray-500">
+              <div className="w-6 h-6 border-2 border-orange-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+              Buscando usuário correspondente...
+            </div>
+          ) : onboarding?.usuario_id && onboarding.expand?.usuario_id ? (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-emerald-200 bg-emerald-50 rounded-xl p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                  {(onboarding.expand.usuario_id.name || '?').charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-gray-900">
+                    {onboarding.expand.usuario_id.name || 'Usuário'}
+                  </p>
+                  <p className="text-xs text-gray-600">
+                    {onboarding.expand.usuario_id.email || 'sem e-mail'} •{' '}
+                    {ROLES_INFO[onboarding.expand.usuario_id.role]?.label ||
+                      onboarding.expand.usuario_id.role ||
+                      'papel não definido'}
+                  </p>
+                </div>
+              </div>
+              {(isAdmin || isRH) && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={salvandoVinculo}
+                  onClick={handleDesvincularUsuario}
+                  className="text-red-600 border-red-300 hover:bg-red-50"
+                >
+                  {salvandoVinculo ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <UserX className="w-4 h-4" />
+                  )}
+                  <span>Desvincular</span>
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="border border-gray-200 bg-gray-50 rounded-xl p-4 text-xs text-gray-500">
+              Nenhum usuário do sistema vinculado a esta ficha ainda.
+            </div>
+          )}
+
+          {/* Sugestão de 1 clique por e-mail */}
+          {(isAdmin || isRH) &&
+            !onboarding?.usuario_id &&
+            usuarioSugerido &&
+            usuarioSugerido.id !== onboarding?.usuario_id && (
+              <div className="border border-amber-200 bg-amber-50 rounded-xl p-4 space-y-2">
+                <div className="flex items-start gap-2">
+                  <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-800">
+                    Encontramos um usuário do sistema com o mesmo e-mail do colaborador (
+                    <span className="font-semibold">{onboarding?.colaborador_email}</span>):
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pl-6">
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">
+                      {usuarioSugerido.name || 'Usuário'}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      {usuarioSugerido.email} •{' '}
+                      {ROLES_INFO[usuarioSugerido.role]?.label ||
+                        usuarioSugerido.role ||
+                        'papel não definido'}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={salvandoVinculo}
+                    onClick={() => handleVincularUsuario(usuarioSugerido.id)}
+                  >
+                    {salvandoVinculo ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Link2 className="w-4 h-4" />
+                    )}
+                    <span>
+                      Vincular a {usuarioSugerido.name || 'usuário'} (
+                      {ROLES_INFO[usuarioSugerido.role]?.label || usuarioSugerido.role || 'Gestão'})
+                    </span>
+                  </Button>
+                </div>
+              </div>
+            )}
+
+          {/* Vinculação manual (Admin/RH) */}
+          {(isAdmin || isRH) && (
+            <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+              <Label
+                htmlFor="vinculo-usuario-select"
+                className="text-xs font-semibold text-gray-700"
+              >
+                Vincular manualmente a outro usuário
+              </Label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Select
+                  value={usuarioSelecionadoVinculo}
+                  onValueChange={setUsuarioSelecionadoVinculo}
+                  disabled={carregandoUsuariosVinculo || salvandoVinculo}
+                >
+                  <SelectTrigger id="vinculo-usuario-select" className="flex-1">
+                    <SelectValue
+                      placeholder={
+                        carregandoUsuariosVinculo ? 'Carregando usuários...' : 'Selecione um usuário'
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {usuariosDisponiveisVinculo.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.name || u.email} ({u.email}) —{' '}
+                        {ROLES_INFO[u.role]?.label || u.role || 'sem papel'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={
+                    salvandoVinculo ||
+                    !usuarioSelecionadoVinculo ||
+                    usuarioSelecionadoVinculo === onboarding?.usuario_id
+                  }
+                  onClick={() => {
+                    if (usuarioSelecionadoVinculo) {
+                      handleVincularUsuario(usuarioSelecionadoVinculo)
+                      setUsuarioSelecionadoVinculo('')
+                    }
+                  }}
+                >
+                  {salvandoVinculo ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Link2 className="w-4 h-4" />
+                  )}
+                  <span>Vincular</span>
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

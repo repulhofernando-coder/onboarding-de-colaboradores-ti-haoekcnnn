@@ -18,10 +18,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { UserPlus, Calendar, Mail, User, Briefcase, Building2 } from 'lucide-react'
+import { UserPlus, Calendar, Mail, User, Briefcase, Building2, Link2, AlertTriangle } from 'lucide-react'
 import { onboardingService } from '@/services/onboarding'
 import { useAuth } from '@/contexts/AuthContext'
-import type { Onboarding, SetorModel } from '@/types/onboarding'
+import type { Onboarding, SetorModel, User as UserSistema } from '@/types/onboarding'
 
 export interface ModalNovoColaboradorProps {
   open: boolean
@@ -43,6 +43,29 @@ export function ModalNovoColaborador({
   const [setor, setSetor] = useState(setoresList[0]?.chave || setoresList[0]?.nome || 'windows')
   const [dataAdmissao, setDataAdmissao] = useState(() => new Date().toISOString().slice(0, 10))
   const [salvando, setSalvando] = useState(false)
+  const [usuarioExistente, setUsuarioExistente] = useState<UserSistema | null>(null)
+  const [verificandoEmail, setVerificandoEmail] = useState(false)
+
+  // Verifica (com debounce) se o e-mail digitado já pertence a um usuário do sistema
+  React.useEffect(() => {
+    const emailTrim = email.trim().toLowerCase()
+    if (!emailTrim || !emailTrim.includes('@')) {
+      setUsuarioExistente(null)
+      return
+    }
+    const timer = setTimeout(async () => {
+      try {
+        setVerificandoEmail(true)
+        const encontrado = await onboardingService.buscarUsuarioPorEmail(emailTrim)
+        setUsuarioExistente(encontrado)
+      } catch {
+        setUsuarioExistente(null)
+      } finally {
+        setVerificandoEmail(false)
+      }
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [email])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -73,6 +96,13 @@ export function ModalNovoColaborador({
 
     if (!user) {
       toast.error('Sessão expirada. Faça login novamente.')
+      return
+    }
+
+    if (usuarioExistente) {
+      toast.error(
+        'Este e-mail já pertence a um usuário do sistema. Use a ação "Vincular à ficha existente" em vez de criar uma segunda ficha.',
+      )
       return
     }
 
@@ -142,6 +172,80 @@ export function ModalNovoColaborador({
                 disabled={salvando}
               />
             </div>
+
+          {/* Aviso anti-duplicidade: e-mail já é usuário do sistema */}
+          {verificandoEmail && (
+            <p className="text-[11px] text-gray-500 flex items-center gap-1.5">
+              Verificando e-mail no sistema...
+            </p>
+          )}
+          {!verificandoEmail && usuarioExistente && (
+            <div className="border border-amber-200 bg-amber-50 rounded-lg p-3 space-y-2">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-amber-800">
+                  <p className="font-semibold">
+                    Já existe um usuário do sistema com este e-mail.
+                  </p>
+                  <p className="mt-0.5">
+                    {usuarioExistente.name || 'Usuário'} ({usuarioExistente.email}) •{' '}
+                    {usuarioExistente.role || 'sem papel'}. Prefira vincular à ficha existente em vez
+                    de cadastrar uma segunda ficha da mesma pessoa.
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white text-xs h-8 font-semibold"
+                disabled={salvando}
+                onClick={async () => {
+                  if (!user || !usuarioExistente) return
+                  try {
+                    setSalvando(true)
+                    const fichas = await onboardingService.listByColaborador(
+                      usuarioExistente.name || '',
+                      usuarioExistente.email || '',
+                    )
+                    if (fichas.length === 0) {
+                      toast.error(
+                        'Não foi possível localizar uma ficha existente para este e-mail. Cadastre normalmente.',
+                      )
+                      return
+                    }
+                    const ficha = fichas[0]
+                    await onboardingService.vincularUsuario({
+                      onboardingId: ficha.id,
+                      usuarioId: usuarioExistente.id,
+                      autor: {
+                        id: user.id,
+                        nome: user.name || user.email,
+                        role: user.role || 'rh',
+                      },
+                      colaboradorNome: ficha.colaborador_nome,
+                    })
+                    toast.success(
+                      `E-mail vinculado à ficha existente de ${ficha.colaborador_nome}. Nenhuma ficha duplicada foi criada.`,
+                    )
+                    onSucesso(ficha)
+                    onOpenChange(false)
+                    setNome('')
+                    setEmail('')
+                    setCargo('')
+                    setUsuarioExistente(null)
+                  } catch (err) {
+                    console.error('Erro ao vincular à ficha existente:', err)
+                    toast.error('Não foi possível vincular à ficha existente.')
+                  } finally {
+                    setSalvando(false)
+                  }
+                }}
+              >
+                <Link2 className="w-3.5 h-3.5" />
+                <span>Vincular à ficha existente</span>
+              </Button>
+            </div>
+          )}
 
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
