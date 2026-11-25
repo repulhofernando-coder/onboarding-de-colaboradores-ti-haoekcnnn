@@ -244,6 +244,22 @@ export const userService = {
   async delete(id: string): Promise<boolean> {
     return pb.collection('users').delete(id)
   },
+
+  /**
+   * Busca um usuário do sistema pelo e-mail (usado para sugerir vínculo
+   * usuário ↔ colaborador no perfil do colaborador).
+   */
+  async buscarPorEmail(email: string): Promise<User | null> {
+    const emailLimpo = (email || '').trim().toLowerCase()
+    if (!emailLimpo) return null
+    try {
+      return await pb
+        .collection('users')
+        .getFirstListItem<User>(`email = '${emailLimpo.replace(/'/g, "\\'")}'`)
+    } catch {
+      return null
+    }
+  },
 }
 
 export const materialService = {
@@ -531,6 +547,102 @@ export const onboardingService = {
         ? window.location.origin
         : 'https://onboarding-de-colaboradores-ti-8af12.goskip.app'
     return `${baseUrl}/colaborador/${token}`
+  },
+
+  /**
+   * Busca um usuário do sistema pelo e-mail do colaborador (sugestão de vínculo).
+   */
+  async buscarUsuarioPorEmail(email: string): Promise<User | null> {
+    return userService.buscarPorEmail(email)
+  },
+
+  /**
+   * Vincula um usuário do sistema à ficha do colaborador (RH/Admin).
+   * Registra auditoria e impede que o mesmo usuário fique vinculado a duas fichas.
+   */
+  async vincularUsuario(params: {
+    onboardingId: string
+    usuarioId: string
+    usuarioNome?: string
+    usuarioRole?: string
+    autor?: { id: string; nome: string; role?: string }
+    colaboradorNome?: string
+    emailColaborador?: string
+  }): Promise<Onboarding> {
+    const usuarioNome = params.usuarioNome || params.autor?.nome || ''
+    const usuarioRole = params.usuarioRole || params.autor?.role
+
+    // Anti-duplicidade: o usuário já está vinculado a outra ficha?
+    const existentes = await pb.collection('onboardings').getFullList<Onboarding>({
+      filter: `usuario_id = '${params.usuarioId}'`,
+    })
+    const outra = existentes.find((o) => o.id !== params.onboardingId)
+    if (outra) {
+      throw new Error(
+        `Este usuário já está vinculado à ficha de ${outra.colaborador_nome || 'outro colaborador'}. Desvincule antes de vincular novamente.`,
+      )
+    }
+
+    const atualizado = await pb.collection('onboardings').update<Onboarding>(params.onboardingId, {
+      usuario_id: params.usuarioId,
+    })
+
+    await auditoriaService.registrar({
+      onboardingId: params.onboardingId,
+      colaboradorNome: params.colaboradorNome || atualizado.colaborador_nome,
+      usuarioId: params.usuarioId,
+      usuarioNome,
+      usuarioRole,
+      acao: 'vinculo_usuario_colaborador',
+      detalhes: `Usuário ${usuarioNome} vinculado à ficha do colaborador${params.colaboradorNome ? ` ${params.colaboradorNome}` : ''}`,
+      metadata: {
+        operacao: 'vincular',
+        autor_id: params.autor?.id || null,
+        usuario_vinculado_id: params.usuarioId,
+        email_colaborador: params.emailColaborador || atualizado.colaborador_email,
+      },
+    })
+
+    return atualizado
+  },
+
+  /**
+   * Remove o vínculo usuário ↔ colaborador (RH/Admin). Registra auditoria.
+   */
+  async desvincularUsuario(params: {
+    onboardingId: string
+    usuarioId?: string
+    usuarioNome?: string
+    usuarioRole?: string
+    autor?: { id: string; nome: string; role?: string }
+    colaboradorNome?: string
+  }): Promise<Onboarding> {
+    const usuarioNome = params.usuarioNome || params.autor?.nome || ''
+    const usuarioRole = params.usuarioRole || params.autor?.role
+
+    const atual = await pb.collection('onboardings').getOne<Onboarding>(params.onboardingId)
+    const usuarioAnterior = params.usuarioId || atual.usuario_id
+
+    const atualizado = await pb.collection('onboardings').update<Onboarding>(params.onboardingId, {
+      usuario_id: null,
+    })
+
+    await auditoriaService.registrar({
+      onboardingId: params.onboardingId,
+      colaboradorNome: params.colaboradorNome || atualizado.colaborador_nome,
+      usuarioId: usuarioAnterior,
+      usuarioNome,
+      usuarioRole,
+      acao: 'vinculo_usuario_colaborador',
+      detalhes: `Vínculo do usuário removido da ficha do colaborador${params.colaboradorNome ? ` ${params.colaboradorNome}` : ''}`,
+      metadata: {
+        operacao: 'desvincular',
+        autor_id: params.autor?.id || null,
+        usuario_anterior_id: usuarioAnterior || null,
+      },
+    })
+
+    return atualizado
   },
 
   async create(data: {

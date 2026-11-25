@@ -36,7 +36,7 @@ export type CandidatoStatus =
   | 'desistiu'
   | 'convertido'
 
-export type TarefaTipo = 'video' | 'manual'
+export type TarefaTipo = 'manual' | 'video' | 'link' | 'documento'
 
 export type AvaliacaoDecisao = 'apto' | 'nao_apto'
 
@@ -57,22 +57,26 @@ export const ROLES_INFO: Record<
   UserRole,
   {
     nome: string
+    label?: string
     descricao: string
     badgeClass: string
   }
 > = {
   admin: {
     nome: 'Administrador',
+    label: 'Administrador',
     descricao: 'Acesso total a todas as configurações, usuários e etapas',
     badgeClass: 'bg-purple-50 text-purple-700 border-purple-200',
   },
   rh: {
     nome: 'RH',
+    label: 'RH',
     descricao: 'Cria usuários e onboardings, conduz e conclui a Etapa 1',
     badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   },
   gestao: {
     nome: 'Gestão',
+    label: 'Gestão',
     descricao: 'Acompanha desde a Etapa 1, conduz Etapa 2 e realiza Avaliação Final',
     badgeClass: 'bg-blue-50 text-blue-700 border-blue-200',
   },
@@ -288,6 +292,7 @@ export interface Onboarding extends RecordModel {
   desligamento_motivo?: string
   desligamento_obs?: string
   desligado_por?: string
+  usuario_id?: string
   expand?: {
     gestor_id?: User
     etapa1_concluida_por?: User
@@ -295,6 +300,7 @@ export interface Onboarding extends RecordModel {
     setor_ref?: SetorModel
     questionario_id?: QuestionarioModel
     desligado_por?: User
+    usuario_id?: User
   }
 }
 
@@ -507,10 +513,6 @@ export const SETORES_INFO: Record<
   },
 }
 
-/**
- * Retorna dados visuais para qualquer setor (cadastrado ou fallback).
- * Garante nunca quebrar a interface mesmo se uma nova área for cadastrada.
- */
 /**
  * Converte de forma tolerante qualquer valor de setor legado ou novo (string, array, JSON serializado)
  * em uma string simples, segura para comparações, lookup e toLowerCase().

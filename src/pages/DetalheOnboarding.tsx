@@ -26,13 +26,14 @@ import type {
   ItemChecklistIntegracao,
   TesteTentativa,
 } from '@/types/onboarding'
-import { itemIntegracaoModeloService } from '@/services/onboarding'
+import { itemIntegracaoModeloService, userService } from '@/services/onboarding'
 import {
   SETORES_INFO,
   STATUS_INFO,
   getSetorVisual,
   setorToString,
   ROLES_INFO,
+  CANDIDATO_STATUS_INFO,
 } from '@/types/onboarding'
 import { calcularDiasRestantes, formatShortDate, formatDateTime } from '@/lib/dateUtils'
 import {
@@ -2143,7 +2144,8 @@ export default function DetalheOnboarding() {
             </h3>
             <p className="text-xs text-gray-500 mt-0.5">
               Conecta a ficha do colaborador à conta de acesso ao sistema. Leitura para todos os
-              papéis; vincular e desvincular restrito a Admin/RH, com registro na trilha de auditoria.
+              papéis; vincular e desvincular restrito a Admin/RH, com registro na trilha de
+              auditoria.
             </p>
           </div>
 
@@ -2258,7 +2260,9 @@ export default function DetalheOnboarding() {
                   <SelectTrigger id="vinculo-usuario-select" className="flex-1">
                     <SelectValue
                       placeholder={
-                        carregandoUsuariosVinculo ? 'Carregando usuários...' : 'Selecione um usuário'
+                        carregandoUsuariosVinculo
+                          ? 'Carregando usuários...'
+                          : 'Selecione um usuário'
                       }
                     />
                   </SelectTrigger>
