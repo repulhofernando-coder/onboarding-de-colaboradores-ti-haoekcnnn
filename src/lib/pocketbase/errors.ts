@@ -20,27 +20,11 @@ export function extractFieldErrors(error: unknown): FieldErrors {
   return errors
 }
 
-// Detecta erro de rede/fetch (sem resposta HTTP do backend): ex. "Failed to fetch",
-// backend indisponível ou reiniciando durante implantação. Usado para retentativa
-// automática de login e para NÃO registrar "Falha de login" na auditoria.
 export function isNetworkError(error: unknown): boolean {
-  if (error instanceof ClientResponseError) {
-    // Erro HTTP de verdade (4xx/5xx com resposta do servidor) não é erro de rede.
-    if (error.status > 0) return false
-    return true
-  }
-  if (error instanceof TypeError) return true // fetch lança TypeError ("Failed to fetch")
-  if (error instanceof Error) {
-    const msg = (error.message || '').toLowerCase()
-    return (
-      msg.includes('failed to fetch') ||
-      msg.includes('networkerror') ||
-      msg.includes('network request failed') ||
-      msg.includes('load failed') ||
-      msg.includes('fetch failed')
-    )
-  }
-  return false
+  if (!(error instanceof ClientResponseError)) return false
+  // Erro de rede real: a requisição não chegou ao servidor (status 0).
+  // Respostas HTTP com status > 0 são erros do servidor, não de rede.
+  return error.status === 0 || error.isAbort === true
 }
 
 export function getErrorMessage(error: unknown): string {
